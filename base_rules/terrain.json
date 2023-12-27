@@ -1,0 +1,128 @@
+{
+  "bases": [
+    {
+      "name": "ocean",
+      "yields": {
+        "food": 1
+      },
+      "is_water": true
+    }, 
+    {
+      "name": "coast",
+      "yields": {
+        "food": 1
+      },
+      "is_water": true
+    },
+    {
+      "name": "lake",
+      "yields": {
+        "food": 2
+      },
+      "is_water": true
+    },
+    {
+      "name": "grassland",
+      "yields": {
+        "food": 2
+      }
+    },
+    {
+      "name": "plains",
+      "yields": {
+        "food": 1,
+        "production": 1
+      }
+    },
+    {
+      "name": "tundra",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "snow"
+    },
+    {
+      "name": "desert"
+    },
+    {
+      "name": "mountain",
+      "is_impassable": true
+    }
+  ],
+  "features": [
+    {
+      "name": "hill",
+      "bases": [
+        "grassland",
+        "plains",
+        "tundra",
+        "snow",
+        "desert"
+      ],
+      "yields": {
+        "production": 2
+      },
+      "is_rough": true
+    },
+    {
+      "name": "oasis",
+      "bases": [ "desert" ],
+      "yields": {
+        "food": 3,
+        "gold": 1
+      }
+    },
+    {
+      "name": "ice",
+      "bases": [ 
+        "ocean", 
+        "coast", 
+        "lake" 
+      ],
+      "is_impassable": true
+    },
+    {
+      "name": "atoll",
+      "bases": [ "ocean" ]
+    }
+  ],
+  "vegetation": [
+    {
+      "name": "forest",
+      "bases": [
+        "grassland",
+        "plains",
+        "tundra"
+      ],
+      "features": [ "hill" ],
+      "yields": {
+        "food": 1,
+        "production": 1
+      },
+      "is_rough": true
+    },
+    {
+      "name": "jungle",
+      "bases": [
+        "plains"
+      ],
+      "features": [ "hill" ],
+      "yields": {
+        "food": 2
+      },
+      "is_rough": true
+    },
+    {
+      "name": "marsh",
+      "bases": [
+        "grassland"
+      ],
+      "yields": {
+        "food": 2
+      },
+      "is_rough": true
+    }
+  ]
+}

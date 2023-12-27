@@ -1,6 +1,8 @@
 const Self = @This();
 const std = @import("std");
 
+const rules = @import("rules");
+
 pub const HexIdx = usize;
 
 pub fn idxX(self: Self, idx: HexIdx) usize {
@@ -205,7 +207,7 @@ pub const Resource = struct {
 };
 
 pub const Tile = packed struct {
-    terrain: Terrain,
+    terrain: rules.Terrain,
 
     freshwater: bool,
     river_access: bool,
@@ -218,36 +220,6 @@ pub const Tile = packed struct {
     comptime {
         std.debug.assert(@sizeOf(@This()) == 2);
     }
-};
-pub const Terrain = enum(u5) {
-    ocean = 0,
-    coast = 1,
-    lake = 2,
-    desert = 3,
-    plains = 4,
-    grassland = 5,
-    tundra = 6,
-    snow = 7,
-    mountain = 8,
-    desert_hill = 9,
-    plains_hill = 10,
-    grassland_hill = 11,
-    tundra_hill = 12,
-    snow_hill = 13,
-    desert_oasis = 14,
-    ocean_ice = 15,
-    coast_ice = 16,
-    lake_ice = 17,
-    ocean_atoll = 18,
-    plains_forest = 19,
-    grassland_forest = 20,
-    tundra_forest = 21,
-    plains_hill_forest = 22,
-    grassland_hill_forest = 23,
-    tundra_hill_forest = 24,
-    plains_jungle = 25,
-    plains_hill_jungle = 26,
-    grassland_marsh = 27,
 };
 const Improvement = enum(u5) {
     none,
