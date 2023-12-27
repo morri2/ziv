@@ -1,0 +1,242 @@
+{
+  "bonus": [
+    {
+      "name": "bananas",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "wheat",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "cattle",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "sheep",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "bison",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "deer",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "fish",
+      "yields": {
+        "food": 1
+      }
+    },
+    {
+      "name": "stone",
+      "yields": {
+        "food": 1
+      }
+    }
+  ],
+  "strategic": [
+    {
+      "name": "horses",
+      "yields": {
+        "production": 1
+      }
+    },
+    {
+      "name": "iron",
+      "yields": {
+        "production": 1
+      }
+    },
+    {
+      "name": "coal",
+      "yields": {
+        "production": 1
+      }
+    },
+    {
+      "name": "oil",
+      "yields": {
+        "production": 1
+      }
+    },
+    {
+      "name": "aluminum",
+      "yields": {
+        "production": 1
+      }
+    },
+    {
+      "name": "uranium",
+      "yields": {
+        "production": 1
+      }
+    }
+  ],
+  "luxury": [
+    {
+      "name": "cotton",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "spices",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "sugar",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "furs",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "ivory",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "silk",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "dyes",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "incense",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "wine",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "copper",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "gold",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "silver",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "marble",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "pearls",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "truffles",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "jewelry",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "porcelain",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "nutmeg",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "cloves",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "crab",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "salt",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "whales",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "citrus",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "cocoa",
+      "yields": {
+        "gold": 2
+      }
+    },
+    {
+      "name": "gems",
+      "yields": {
+        "gold": 3
+      }
+    }
+  ]
+}

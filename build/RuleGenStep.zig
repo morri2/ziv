@@ -77,6 +77,15 @@ fn bitsFittingMax(max: usize) usize {
 
 const Flags = std.StaticBitSet(128);
 
+const Yields = struct {
+    food: u8 = 0,
+    production: u8 = 0,
+    gold: u8 = 0,
+    culture: u8 = 0,
+    science: u8 = 0,
+    faith: u8 = 0,
+};
+
 fn startEnum(
     name: []const u8,
     num_elements: usize,
@@ -91,21 +100,33 @@ fn endStructEnumUnion(writer: anytype) !void {
     try writer.print("}};\n\n", .{});
 }
 
+fn emitYieldsFunc(comptime T: type, arr: []const T, writer: anytype) !void {
+    try writer.print(
+        \\pub fn yield(self: @This()) Yield {{
+        \\return switch(self) {{
+    , .{});
+    for (arr) |e| {
+        try writer.print(".{s} => .{{", .{e.name});
+        if (e.yields.food != 0) try writer.print(".food = {},", .{e.yields.food});
+        if (e.yields.production != 0) try writer.print(".production = {},", .{e.yields.production});
+        if (e.yields.gold != 0) try writer.print(".gold = {},", .{e.yields.gold});
+        if (e.yields.culture != 0) try writer.print(".culture = {},", .{e.yields.culture});
+        if (e.yields.science != 0) try writer.print(".science = {},", .{e.yields.science});
+        if (e.yields.faith != 0) try writer.print(".faith = {},", .{e.yields.faith});
+        try writer.print("}},", .{});
+    }
+    try writer.print(
+        \\}};
+        \\}}
+    , .{});
+}
+
 /// Internal build function.
 fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     _ = progress;
     const b = step.owner;
     const self = @fieldParentPtr(Self, "step", step);
     const cwd = std.fs.cwd();
-
-    const Yields = struct {
-        food: u8 = 0,
-        production: u8 = 0,
-        gold: u8 = 0,
-        culture: u8 = 0,
-        science: u8 = 0,
-        faith: u8 = 0,
-    };
 
     const Base = struct {
         name: []const u8,
@@ -124,8 +145,16 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         is_impassable: bool = false,
     };
 
+    const Resource = struct {
+        name: []const u8,
+        yields: Yields = .{},
+        bases: []const []const u8 = &.{},
+        features: []const []const u8 = &.{},
+        vegetation: []const []const u8 = &.{},
+    };
+
     // Parse all JSON files and return structures
-    const terrain_parsed, const hash = blk: {
+    const terrain_parsed, const resources_parsed, const hash = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
@@ -137,12 +166,20 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             vegetation: []const Feature,
         }, rules_dir, "terrain.json", &hasher, b.allocator);
 
+        const resources = try readAndParse(struct {
+            bonus: []const Resource,
+            strategic: []const Resource,
+            luxury: []const Resource,
+        }, rules_dir, "resources.json", &hasher, b.allocator);
+
         break :blk .{
             terrain,
+            resources,
             digest(&hasher),
         };
     };
     defer terrain_parsed.deinit();
+    defer resources_parsed.deinit();
 
     const rules_zig_dir = try b.cache_root.join(
         b.allocator,
@@ -287,26 +324,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             try writer.print("{s} = {},", .{ combo.name, i });
         }
 
-        try writer.print(
-            \\
-            \\
-            \\pub fn yield(self: @This()) Yield {{
-            \\return switch(self) {{
-        , .{});
-        for (terrain_combos.items) |combo| {
-            try writer.print(".{s} => .{{", .{combo.name});
-            if (combo.yields.food != 0) try writer.print(".food = {},", .{combo.yields.food});
-            if (combo.yields.production != 0) try writer.print(".production = {},", .{combo.yields.production});
-            if (combo.yields.gold != 0) try writer.print(".gold = {},", .{combo.yields.gold});
-            if (combo.yields.culture != 0) try writer.print(".culture = {},", .{combo.yields.culture});
-            if (combo.yields.science != 0) try writer.print(".science = {},", .{combo.yields.science});
-            if (combo.yields.faith != 0) try writer.print(".faith = {},", .{combo.yields.faith});
-            try writer.print("}},", .{});
-        }
-        try writer.print(
-            \\}};
-            \\}}
-        , .{});
+        try emitYieldsFunc(TerrainCombo, terrain_combos.items, writer);
 
         // Emit isSomething functions
         inline for (
@@ -334,6 +352,54 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
                 try writer.print("else => false,", .{});
             }
             try writer.print(
+                \\}};
+                \\}}
+            , .{});
+        }
+
+        try endStructEnumUnion(writer);
+    }
+
+    // Parse and output resources
+    {
+        const resources = resources_parsed.value;
+        try startEnum(
+            "ResourceType",
+            resources.bonus.len + resources.strategic.len + resources.luxury.len,
+            writer,
+        );
+
+        const all_resources = try std.mem.concat(b.allocator, Resource, &.{
+            resources.bonus,
+            resources.luxury,
+            resources.strategic,
+        });
+        defer b.allocator.free(all_resources);
+
+        for (all_resources) |resource| {
+            try writer.print("{s},", .{resource.name});
+        }
+
+        try writer.print("\n\n", .{});
+
+        try emitYieldsFunc(Resource, all_resources, writer);
+
+        inline for (
+            [_][]const u8{ "bonus", "strategic", "luxury" },
+            [_][]const u8{ "isBonus", "isStrategic", "isLuxury" },
+        ) |field_name, func_name| {
+            try writer.print(
+                \\
+                \\
+                \\pub fn {s}(self: @This()) bool {{
+                \\return switch(self) {{
+            , .{func_name});
+            for (@field(resources, field_name)) |resource| {
+                try writer.print(".{s},", .{resource.name});
+            }
+            try writer.print(
+                \\=> true,
+                \\else => false,
                 \\}};
                 \\}}
             , .{});

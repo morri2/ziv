@@ -156,53 +156,7 @@ pub const NaturalWonder = enum {
 };
 
 pub const Resource = struct {
-    type: enum(u8) {
-        // generic
-        bananas,
-        bison,
-        cattle,
-        deer,
-        fish,
-        sheep,
-        stone,
-        wheat,
-        // stratigic
-        aluminum,
-        coal,
-        horses,
-        iron,
-        oil,
-        uranium,
-        // luxaries
-        citrus,
-        cocoa,
-        copper,
-        cotton,
-        crab,
-        dyes,
-        furs,
-        gems,
-        gold,
-        incense,
-        ivory,
-        marble,
-        pearls,
-        salt,
-        silk,
-        silver,
-        spices,
-        sugar,
-        truffles,
-        whales,
-        wine,
-        // city-state luxaries
-        jewelry,
-        porcelain,
-        // special luxaries
-        nutmeg,
-        pepper,
-        cloves,
-    },
+    type: rules.ResourceType,
     amount: u8,
 };
 
