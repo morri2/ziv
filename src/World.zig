@@ -3,21 +3,66 @@ const std = @import("std");
 
 pub const HexIdx = usize;
 
+pub fn idxX(self: Self, idx: HexIdx) usize {
+    return idx % self.width;
+}
+pub fn idxY(self: Self, idx: HexIdx) usize {
+    return idx / self.width;
+}
+
 width: usize, // <= 128
 height: usize, // <= 80
 wrap_around: bool = false,
 
 tiles: []Tile,
 
+allocator: std.mem.Allocator,
 // the global shit
-resources: std.AutoArrayHashMap(HexIdx, Resource),
-wonders: std.AutoArrayHashMap(HexIdx, NaturalWonder),
-work_in_progress: std.AutoArrayHashMap(HexIdx, WorkInProgress),
-rivers: std.AutoArrayHashMap(Edge, void),
+resources: std.AutoArrayHashMapUnmanaged(HexIdx, Resource),
+wonders: std.AutoArrayHashMapUnmanaged(HexIdx, NaturalWonder),
+work_in_progress: std.AutoArrayHashMapUnmanaged(HexIdx, WorkInProgress),
+rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
 
 pub fn coordToIdx(self: Self, x: usize, y: usize) HexIdx {
     return y * self.width + x;
 }
+
+/// like coordToIdx but takes signed shit and also allows wraparound
+pub fn signedCoordToIdx(self: Self, x: isize, y: isize) ?HexIdx {
+    const uy: usize = @intCast(@mod(y, @as(isize, @intCast(self.height))));
+    const ux: usize = @intCast(@mod(x, @as(isize, @intCast(self.width))));
+
+    // y-wrap around, idk if this is ever needed
+    if (y >= self.height or y < 0) return null;
+
+    // x-wrap around, we like doing this
+    if ((x >= self.height or x < 0) and !self.wrap_around) return null;
+
+    return uy * self.width + ux;
+}
+
+pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_around: bool) !Self {
+    return Self{
+        .width = width,
+        .height = height,
+        .resources = .{},
+        .rivers = .{},
+        .wonders = .{},
+        .work_in_progress = .{},
+        .wrap_around = wrap_around,
+        .tiles = try allocator.alloc(Tile, width * height),
+        .allocator = allocator,
+    };
+}
+
+pub fn deinit(self: *Self) void {
+    self.resources.deinit(self.allocator);
+    self.allocator.free(self.tiles);
+    self.rivers.deinit(self.allocator);
+    self.wonders.deinit(self.allocator);
+    self.work_in_progress.deinit(self.allocator);
+}
+
 //   ----HOW TO COORDS----
 //   |0,0|1,0|2,0|3,0|4,0|
 //    \ / \ / \ / \ / \ / \
@@ -30,6 +75,41 @@ pub const Edge = struct {
     low: HexIdx,
     high: HexIdx,
 };
+
+const NE = 0;
+const E = 1;
+const SE = 2;
+const SW = 3;
+const W = 4;
+const NW = 5;
+/// Returns an array of HexIdx:s adjacent to the current tile, will be null if no tile exists in that direction.
+/// Index is the direction: 0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW
+pub fn neighbours(self: Self, src: HexIdx) [6]?HexIdx {
+    const x: isize = @intCast(self.idxX(src));
+    const y: isize = @intCast(self.idxY(src));
+
+    var ns: [6]?HexIdx = [_]?HexIdx{null} ** 6;
+
+    // we assume wrap around, then yeet them if not
+    ns[E] = self.signedCoordToIdx(x + 1, y);
+    ns[W] = self.signedCoordToIdx(x - 1, y);
+
+    if (@mod(y, 2) == 0) {
+        ns[NE] = self.signedCoordToIdx(x, y - 1);
+        ns[SE] = self.signedCoordToIdx(x, y + 1);
+
+        ns[NW] = self.signedCoordToIdx(x - 1, y - 1);
+        ns[SW] = self.signedCoordToIdx(x - 1, y + 1);
+    } else {
+        ns[NW] = self.signedCoordToIdx(x, y - 1);
+        ns[SW] = self.signedCoordToIdx(x, y + 1);
+
+        ns[NE] = self.signedCoordToIdx(x + 1, y - 1);
+        ns[SE] = self.signedCoordToIdx(x + 1, y + 1);
+    }
+
+    return ns;
+}
 
 pub const WorkInProgress = struct {
     work_type: union(enum) {
@@ -74,7 +154,7 @@ pub const NaturalWonder = enum {
 };
 
 pub const Resource = struct {
-    type: enum(u3) {
+    type: enum(u8) {
         // generic
         bananas,
         bison,
@@ -165,9 +245,9 @@ pub const Terrain = enum(u5) {
     plains_hill_forest = 22,
     grassland_hill_forest = 23,
     tundra_hill_forest = 24,
-    plains_jungle = 23,
-    plains_hill_jungle = 24,
-    grassland_marsh = 25,
+    plains_jungle = 25,
+    plains_hill_jungle = 26,
+    grassland_marsh = 27,
 };
 const Improvement = enum(u5) {
     none,
@@ -181,3 +261,29 @@ const Transport = enum(u2) {
     road,
     rail,
 };
+
+test "neighbour test" {
+    var world = try Self.init(std.testing.allocator, 128, 80, true);
+
+    defer world.deinit();
+    //try std.testing.expect(false);
+    try std.testing.expectEqual(
+        world.coordToIdx(1, 0),
+        world.neighbours(world.coordToIdx(0, 0))[E].?,
+    ); // EAST
+    try std.testing.expectEqual(
+        world.coordToIdx(127, 0),
+        world.neighbours(world.coordToIdx(0, 0))[W].?,
+    ); // WEST wrap
+    try std.testing.expect(
+        null == world.neighbours(world.coordToIdx(0, 0))[NE],
+    ); // NE (is null)
+    try std.testing.expectEqual(
+        world.coordToIdx(0, 1),
+        world.neighbours(world.coordToIdx(0, 0))[SE].?,
+    ); // SE
+    try std.testing.expectEqual(
+        world.coordToIdx(127, 1),
+        world.neighbours(world.coordToIdx(0, 0))[3].?,
+    ); // SW wrap
+}

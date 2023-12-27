@@ -18,7 +18,7 @@ pub const YieldAccumulator = packed struct {
 };
 
 pub const terrain_base_yield: [26]Yield = blk: {
-    var ys: [26]Yield = [_]Yield{};
+    var ys: [26]Yield = [_]Yield{Yield{}} ** 26;
 
     for (0..26) |i| {
         ys[i] = Yield{ .production = 1, .food = 1 };
