@@ -37,6 +37,7 @@
 * Specialists
 * Great peeps
 * World congress
+* continious productions (hammers for science / hammers for gold / hammers for world fair)
 
 ## Modern build (0.6.x)
 * Airplanes
