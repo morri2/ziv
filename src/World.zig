@@ -5,28 +5,78 @@ const rules = @import("rules");
 
 pub const HexIdx = usize;
 
-pub fn idxX(self: Self, idx: HexIdx) usize {
-    return idx % self.width;
-}
-pub fn idxY(self: Self, idx: HexIdx) usize {
-    return idx / self.width;
-}
+pub const NE = 0;
+pub const E = 1;
+pub const SE = 2;
+pub const SW = 3;
+pub const W = 4;
+pub const NW = 5;
 
 width: usize, // <= 128
 height: usize, // <= 80
 wrap_around: bool = false,
 
+allocator: std.mem.Allocator,
+
+// Per tile data
 tiles: []Tile,
 
-allocator: std.mem.Allocator,
-// the global shit
+// Tile lookup data
 resources: std.AutoArrayHashMapUnmanaged(HexIdx, Resource),
 wonders: std.AutoArrayHashMapUnmanaged(HexIdx, NaturalWonder),
 work_in_progress: std.AutoArrayHashMapUnmanaged(HexIdx, WorkInProgress),
+
+// Tile edge data
 rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
 
+pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_around: bool) !Self {
+    const tiles = try allocator.alloc(Tile, width * height);
+    errdefer allocator.free(tiles);
+    @memset(tiles, .{});
+
+    const yields = try allocator.alloc(rules.Yield, width * height);
+    errdefer allocator.free(yields);
+    @memset(yields, .{});
+
+    return Self{
+        .width = width,
+        .height = height,
+        .wrap_around = wrap_around,
+
+        .allocator = allocator,
+
+        .tiles = tiles,
+
+        .resources = .{},
+        .wonders = .{},
+        .work_in_progress = .{},
+        .rivers = .{},
+    };
+}
+
+pub fn deinit(self: *Self) void {
+    self.rivers.deinit(self.allocator);
+    self.work_in_progress.deinit(self.allocator);
+    self.wonders.deinit(self.allocator);
+    self.resources.deinit(self.allocator);
+    self.allocator.free(self.tiles);
+}
+
+//   ----HOW TO COORDS----
+//   |0,0|1,0|2,0|3,0|4,0|
+//    \ / \ / \ / \ / \ / \
+//     |0,1|1,1|2,1|3,1|4,1|
+//    / \ / \ / \ / \ / \ /
+//   |0,2|1,2|2,2|3,2|4,2|
 pub fn coordToIdx(self: Self, x: usize, y: usize) HexIdx {
     return y * self.width + x;
+}
+
+pub fn idxToX(self: Self, idx: HexIdx) usize {
+    return idx % self.width;
+}
+pub fn idxToY(self: Self, idx: HexIdx) usize {
+    return idx / self.width;
 }
 
 /// like coordToIdx but takes signed shit and also allows wraparound
@@ -43,52 +93,11 @@ pub fn signedCoordToIdx(self: Self, x: isize, y: isize) ?HexIdx {
     return uy * self.width + ux;
 }
 
-pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_around: bool) !Self {
-    return Self{
-        .width = width,
-        .height = height,
-        .resources = .{},
-        .rivers = .{},
-        .wonders = .{},
-        .work_in_progress = .{},
-        .wrap_around = wrap_around,
-        .tiles = try allocator.alloc(Tile, width * height),
-        .allocator = allocator,
-    };
-}
-
-pub fn deinit(self: *Self) void {
-    self.resources.deinit(self.allocator);
-    self.allocator.free(self.tiles);
-    self.rivers.deinit(self.allocator);
-    self.wonders.deinit(self.allocator);
-    self.work_in_progress.deinit(self.allocator);
-}
-
-//   ----HOW TO COORDS----
-//   |0,0|1,0|2,0|3,0|4,0|
-//    \ / \ / \ / \ / \ / \
-//     |0,1|1,1|2,1|3,1|4,1|
-//    / \ / \ / \ / \ / \ /
-//   |0,2|1,2|2,2|3,2|4,2|
-
-/// The lowest index is always in low :))
-pub const Edge = struct {
-    low: HexIdx,
-    high: HexIdx,
-};
-
-const NE = 0;
-const E = 1;
-const SE = 2;
-const SW = 3;
-const W = 4;
-const NW = 5;
 /// Returns an array of HexIdx:s adjacent to the current tile, will be null if no tile exists in that direction.
 /// Index is the direction: 0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW
 pub fn neighbours(self: Self, src: HexIdx) [6]?HexIdx {
-    const x: isize = @intCast(self.idxX(src));
-    const y: isize = @intCast(self.idxY(src));
+    const x: isize = @intCast(self.idxToX(src));
+    const y: isize = @intCast(self.idxToY(src));
 
     var ns: [6]?HexIdx = [_]?HexIdx{null} ** 6;
 
@@ -112,6 +121,12 @@ pub fn neighbours(self: Self, src: HexIdx) [6]?HexIdx {
 
     return ns;
 }
+
+/// The lowest index is always in low :))
+pub const Edge = struct {
+    low: HexIdx,
+    high: HexIdx,
+};
 
 pub const WorkInProgress = struct {
     work_type: union(enum) {
@@ -161,15 +176,14 @@ pub const Resource = struct {
 };
 
 pub const Tile = packed struct {
-    terrain: rules.Terrain,
+    terrain: rules.Terrain = @enumFromInt(0),
+    freshwater: bool = false,
+    river_access: bool = false,
 
-    freshwater: bool,
-    river_access: bool,
-
-    improvement: Improvement,
-    transport: Transport,
-    pillaged_improvements: bool,
-    pillaged_transport: bool,
+    improvement: Improvement = .none,
+    transport: Transport = .none,
+    pillaged_improvements: bool = false,
+    pillaged_transport: bool = false,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 2);
