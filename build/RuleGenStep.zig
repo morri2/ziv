@@ -102,21 +102,21 @@ fn endStructEnumUnion(writer: anytype) !void {
 
 fn emitYieldsFunc(comptime T: type, arr: []const T, writer: anytype) !void {
     try writer.print(
-        \\pub fn yield(self: @This()) Yield {{
-        \\return switch(self) {{
+        \\pub fn addYield(self: @This(), yield: *Yield) void {{
+        \\switch(self) {{
     , .{});
     for (arr) |e| {
-        try writer.print(".{s} => .{{", .{e.name});
-        if (e.yields.food != 0) try writer.print(".food = {},", .{e.yields.food});
-        if (e.yields.production != 0) try writer.print(".production = {},", .{e.yields.production});
-        if (e.yields.gold != 0) try writer.print(".gold = {},", .{e.yields.gold});
-        if (e.yields.culture != 0) try writer.print(".culture = {},", .{e.yields.culture});
-        if (e.yields.science != 0) try writer.print(".science = {},", .{e.yields.science});
-        if (e.yields.faith != 0) try writer.print(".faith = {},", .{e.yields.faith});
+        try writer.print(".{s} => {{", .{e.name});
+        if (e.yields.food != 0) try writer.print("yield.food += {};", .{e.yields.food});
+        if (e.yields.production != 0) try writer.print("yield.production += {};", .{e.yields.production});
+        if (e.yields.gold != 0) try writer.print("yield.gold += {};", .{e.yields.gold});
+        if (e.yields.culture != 0) try writer.print("yield.culture += {};", .{e.yields.culture});
+        if (e.yields.science != 0) try writer.print("yield.science += {};", .{e.yields.science});
+        if (e.yields.faith != 0) try writer.print("yield.faith += {};", .{e.yields.faith});
         try writer.print("}},", .{});
     }
     try writer.print(
-        \\}};
+        \\}}
         \\}}
     , .{});
 }
@@ -324,6 +324,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             try writer.print("{s} = {},", .{ combo.name, i });
         }
 
+        try writer.print("\n\n", .{});
         try emitYieldsFunc(TerrainCombo, terrain_combos.items, writer);
 
         // Emit isSomething functions
