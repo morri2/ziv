@@ -31,6 +31,7 @@
 * City strenght modification
 * Puppets & annexation
 * City-states
+* bridges
 
 ## Industrial build (0.5.x)
 * Specialists
