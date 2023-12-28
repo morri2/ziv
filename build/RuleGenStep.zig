@@ -77,7 +77,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const cwd = std.fs.cwd();
 
     // Read all JSON files
-    const terrain_text, const resources_text, const improvements_text, const hash = blk: {
+    const terrain_text, const resources_text, const improvements_text, const promotion_text, const hash = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
@@ -92,16 +92,21 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         const improvements = try readAndHash(rules_dir, "improvements.json", &hasher, b.allocator);
         errdefer b.allocator.free(improvements);
 
+        const promotions = try readAndHash(rules_dir, "promotions.json", &hasher, b.allocator);
+        errdefer b.allocator.free(promotions);
+
         break :blk .{
             terrain,
             resources,
             improvements,
+            promotions,
             digest(&hasher),
         };
     };
     defer b.allocator.free(resources_text);
     defer b.allocator.free(terrain_text);
     defer b.allocator.free(improvements_text);
+    defer b.allocator.free(promotion_text);
 
     const rules_zig_dir = try b.cache_root.join(
         b.allocator,
@@ -168,6 +173,17 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         b.allocator,
     );
 
+    var prom_flag_map = try FlagIndexMap.init(b.allocator);
+    defer prom_flag_map.deinit();
+
+    const unit_module = @import("units.zig");
+    try unit_module.parseAndOutputPromotions(
+        promotion_text,
+        &prom_flag_map,
+        writer,
+        b.allocator,
+    );
+
     try rules_zig_contents.append(0);
     const src = rules_zig_contents.items[0 .. rules_zig_contents.items.len - 1 :0];
     const tree = try std.zig.Ast.parse(b.allocator, src, .zig);
@@ -184,6 +200,8 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     }
     const formatted = try tree.render(b.allocator);
     defer b.allocator.free(formatted);
+
+    std.debug.print("{s}", .{formatted});
 
     try cwd.writeFile(rules_out_path, formatted);
     self.generated_file.path = rules_out_path;

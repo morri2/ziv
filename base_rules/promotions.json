@@ -1,0 +1,61 @@
+{
+	"promotions": [
+		{
+			"name": "CannotMelee",
+			"requires": [
+				"CannotMelee"
+			]
+		},
+		{
+			"name": "SettleCity",
+			"requires": [
+				"SettleCity"
+			]
+		},
+		{
+			"name": "Fortify",
+			"requires": [
+				"Fortify"
+			]
+		},
+		{
+			"name": "IgnoreTerrain",
+			"requires": ["IgnoreTerrain"]
+		},
+
+		{
+			"name": "ShockI"
+		},
+		{
+			"name": "ShockII",
+			"requires": [
+				"ShockI"
+			],
+			"replaces": "ShockI"
+		},
+		{
+			"name": "ShockIII",
+			"requires": [
+				"ShockII"
+			],
+			"replaces": "ShockII"
+		},
+		{
+			"name": "DrillI"
+		},
+		{
+			"name": "DrillII",
+			"requires": [
+				"DrillI"
+			],
+			"replaces": "DrillI"
+		},
+		{
+			"name": "DrillIII",
+			"requires": [
+				"DrillII"
+			],
+			"replaces": "DrillII"
+		}
+	]
+}
