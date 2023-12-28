@@ -28,16 +28,11 @@ gold_mult: f32 = 1.0,
 food_til_growth: f32 = 10, // random placeholder value
 culture_til_expansion: f32 = 10, // random placeholder value
 
-//  // stuff for bookkeeping only :)))
-// total_production: u32,
-// total_food_production: u32,
-// total_culture_production: u32,
-
 current_production_project: WorkInProgressProductionProject,
 
 halted_production_projects: []WorkInProgressProductionProject,
 
-pub fn process_yields(self: Self, tile_yields: *const YieldAccumumlator) void {
+pub fn processYields(self: Self, tile_yields: *const YieldAccumumlator) void {
     // yields from tiles
     var food: f32 = @as(f32, @floatFromInt(tile_yields.food));
 
@@ -54,7 +49,7 @@ pub fn process_yields(self: Self, tile_yields: *const YieldAccumumlator) void {
 }
 
 /// checks and updates the city if it is growing or starving
-pub fn check_growth(self: Self) GrowthResult {
+pub fn checkGrowth(self: Self) GrowthResult {
     // new pop
     if (self.food_stockpile >= self.food_til_growth) {
         self.food_stockpile -= self.food_til_growth * (1.0 - self.retained_food_fraction);
@@ -64,7 +59,7 @@ pub fn check_growth(self: Self) GrowthResult {
     }
     // dead pop
     if (self.food_stockpile < 0) {
-        self.food_til_growth *= @round(self.food_stockpile * 0.667); // :)) shut up ((:
+        self.food_til_growth *= @round(self.food_stockpile * 0.666); // :)) shut up ((:
         self.food_stockpile = 0;
         self.population -= 1;
         return .starvation;
