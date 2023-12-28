@@ -24,6 +24,8 @@ pub fn main() !void {
     const screen_width = 1920;
     const screen_height = 1080;
 
+    raylib.SetTraceLogLevel(raylib.LOG_WARNING);
+
     raylib.InitWindow(screen_width, screen_height, "ziv");
     defer raylib.CloseWindow();
 
