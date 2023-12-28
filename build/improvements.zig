@@ -47,6 +47,8 @@ pub fn parseAndOutput(
 
     const improvements = parsed.value;
 
+    try writer.print("\npub const ImprovementAllowed = enum {{ not_allowed, allowed, allowed_after_clear }};\n", .{});
+
     try util.startEnum(
         "ImprovementType",
         improvements.improvements.len,
@@ -57,23 +59,49 @@ pub fn parseAndOutput(
         try writer.print("{s},\n", .{improvement.name});
     }
 
-    // public check allow function
+    // connects resource function
     try writer.print(
         \\
-        \\pub fn checkAllowedOn(self: @This(), terrain: Terrain, freshwater: bool) bool {{
-        \\  var ok: bool = false;
-        \\  ok = switch (self) {{
+        \\pub fn connectsResource(self: @This(), resource: Resource) bool {{
+        \\ return switch (self) {{
         \\
     , .{});
 
     for (improvements.improvements) |imp| {
-        try writer.print("       .{s} => {s}AllowedOn(terrain, freshwater), \n", .{ imp.name, imp.name });
+        try writer.print(".{s} => switch (resource) {{", .{imp.name});
+        for (imp.allow_on.resources) |res| {
+            try writer.print(".{s}, ", .{res});
+        }
+        if (imp.allow_on.resources.len > 0) {
+            try writer.print("=> true,", .{});
+        }
+        try writer.print("else => false, }},\n     ", .{});
+    }
+
+    try writer.print(
+        \\
+        \\  }};
+        \\}}
+        \\
+    , .{});
+
+    // public check allow function
+    try writer.print(
+        \\
+        \\pub fn checkAllowedOn(self: @This(), terrain: Terrain, freshwater: bool) ImprovementAllowed  {{
+        \\  var res: ImprovementAllowed  = false;
+        \\  res = switch (self) {{
+        \\
+    , .{});
+
+    for (improvements.improvements) |imp| {
+        try writer.print(".{s} => {s}AllowedOn(terrain, freshwater), \n", .{ imp.name, imp.name });
     }
 
     try writer.print(
         \\
         \\   }};
-        \\   return ok;
+        \\   return res;
         \\ }}
         \\
     , .{});
@@ -82,16 +110,20 @@ pub fn parseAndOutput(
     for (improvements.improvements) |imp| {
         try writer.print(
             \\
-            \\fn {s}AllowedOn(terrain: Terrain, freshwater: bool) bool {{
+            \\fn {s}AllowedOn(terrain: Terrain, freshwater: bool) ImprovementAllowed  {{
             \\  if (freshwater and false) {{}} // STUPID, but needed
             \\  const feature = terrain.feature();
             \\  const base = terrain.base();
             \\  const vegetation = terrain.vegetation();
             \\  var ok = false;
             \\  
+        , .{imp.name});
+
+        try writer.print(
+            \\ 
             \\  ok = switch (base) {{ // check if base makes valid
             \\
-        , .{imp.name});
+        , .{});
 
         for (imp.allow_on.bases) |base| {
             try writer.print(".{s} => true ", .{base.name});
@@ -107,6 +139,11 @@ pub fn parseAndOutput(
         try writer.print(
             \\      else => false,   
             \\  }};
+            \\
+        , .{});
+
+        try writer.print(
+            \\  
             \\  ok = ok or switch (feature) {{ // check if feature makes valid
             \\
         , .{});
@@ -122,7 +159,20 @@ pub fn parseAndOutput(
         try writer.print(
             \\      else => false,   
             \\  }};
-            \\  ok = ok or switch (vegetation) {{// vegetation?
+        , .{});
+
+        // ADD RESOURCE CHECK HERE!! - WHEN TILE IS ARGUMENT
+        // maybe disallow non relavant improvements?
+        // try writer.print(
+        //     \\
+        //     \\  ok = ok or self.connectsResource(resource);
+        //     \\
+        // , .{});
+        // END RESOURCE THING
+
+        try writer.print(
+            \\
+            \\  const veg_ok = switch (vegetation) {{// vegetation?
             \\
         , .{});
 
@@ -141,7 +191,12 @@ pub fn parseAndOutput(
         , .{});
 
         try writer.print(
-            \\  return ok;
+            \\  if (veg_ok or (ok and vegetation == .none)) {{
+            \\      return .allowed;
+            \\    }} else if (ok) {{
+            \\      return .allowed_after_clear;
+            \\    }} else {{ return .not_allowed; }}
+            \\
             \\  }}
             \\
         , .{});

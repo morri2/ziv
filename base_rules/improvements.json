@@ -28,6 +28,9 @@
             "name": "hill",
             "need_freshwater": true
           }
+        ],
+        "resources": [
+          "wheat"
         ]
       }
     },
@@ -39,6 +42,17 @@
           {
             "name": "hill"
           }
+        ],
+        "resources": [
+          "iron",
+          "silver",
+          "gold",
+          "copper",
+          "uranium",
+          "aluminum",
+          "salt",
+          "coal",
+          "gems"
         ]
       }
     },
@@ -52,6 +66,60 @@
         "vegetation": [
           {
             "name": "forest"
+          }
+        ]
+      }
+    },
+    {
+      "name": "fort",
+      "build_turns": 3,
+      "allow_on": {
+        "bases": [
+          {
+            "name": "desert"
+          },
+          {
+            "name": "plains"
+          },
+          {
+            "name": "grassland"
+          },
+          {
+            "name": "tundra"
+          },
+          {
+            "name": "snow"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeing_post",
+      "build_turns": 3,
+      "allow_on": {
+        "bases": [
+          {
+            "name": "desert"
+          },
+          {
+            "name": "plains"
+          },
+          {
+            "name": "grassland"
+          },
+          {
+            "name": "tundra"
+          },
+          {
+            "name": "snow"
+          }
+        ],
+        "vegetation": [
+          {
+            "name": "forest"
+          },
+          {
+            "name": "jungle"
           }
         ]
       }
