@@ -156,6 +156,17 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     try rules_zig_contents.append(0);
     const src = rules_zig_contents.items[0 .. rules_zig_contents.items.len - 1 :0];
     const tree = try std.zig.Ast.parse(b.allocator, src, .zig);
+    if (tree.errors.len != 0) {
+        const stderr = std.io.getStdErr();
+        const stderr_writer = stderr.writer();
+        for (tree.errors) |err| {
+            const location = tree.tokenLocation(0, err.token);
+            try stderr_writer.print("{}:{}: error: ", .{ location.line, location.column });
+            try tree.renderError(err, stderr_writer);
+            try stderr_writer.writeByte('\n');
+        }
+        return error.ZigSyntaxError;
+    }
     const formatted = try tree.render(b.allocator);
     defer b.allocator.free(formatted);
 
