@@ -3,6 +3,11 @@ const std = @import("std");
 
 const rules = @import("rules");
 
+const Tile = rules.Tile;
+const Improvement = rules.Improvement;
+const Transport = rules.Transport;
+const Resource = rules.Resource;
+
 pub const HexIdx = usize;
 
 pub const NE = 0;
@@ -167,35 +172,8 @@ pub const NaturalWonder = enum {
 };
 
 pub const ResourceAndAmount = struct {
-    type: rules.Resource,
+    type: Resource,
     amount: u8,
-};
-
-pub const Tile = packed struct {
-    terrain: rules.Terrain = @enumFromInt(0),
-    freshwater: bool = false,
-    river_access: bool = false,
-
-    improvement: Improvement = .none,
-    transport: Transport = .none,
-    pillaged_improvements: bool = false,
-    pillaged_transport: bool = false,
-
-    comptime {
-        std.debug.assert(@sizeOf(@This()) == 2);
-    }
-};
-const Improvement = enum(u5) {
-    none,
-    farm,
-    mine,
-    pasture,
-};
-
-const Transport = enum(u2) {
-    none,
-    road,
-    rail,
 };
 
 test "neighbour test" {

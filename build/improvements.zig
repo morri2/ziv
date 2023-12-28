@@ -52,10 +52,12 @@ pub fn parseAndOutput(
     try writer.print("\npub const ImprovementAllowed = enum {{ not_allowed, allowed, allowed_after_clear }};\n", .{});
 
     try util.startEnum(
-        "ImprovementType",
+        "Improvement",
         improvements.improvements.len,
         writer,
     );
+
+    try writer.print("none,\n", .{});
 
     for (improvements.improvements) |improvement| {
         try writer.print("{s},\n", .{improvement.name});
@@ -90,20 +92,18 @@ pub fn parseAndOutput(
     // public check allow function
     try writer.print(
         \\
-        \\pub fn checkAllowedOn(self: @This(), terrain: Terrain, freshwater: bool) ImprovementAllowed  {{
-        \\  var res: ImprovementAllowed  = false;
-        \\  res = switch (self) {{
+        \\pub fn checkAllowedOn(self: @This(), tile: Tile, maybe_resource: ?Resource) ImprovementAllowed  {{
+        \\  return switch (self) {{
         \\
     , .{});
 
     for (improvements.improvements) |imp| {
-        try writer.print(".{s} => {s}AllowedOn(terrain, freshwater), \n", .{ imp.name, imp.name });
+        try writer.print(".{s} => {s}AllowedOn(tile, maybe_resource), \n", .{ imp.name, imp.name });
     }
 
     try writer.print(
-        \\
+        \\       .none => unreachable, 
         \\   }};
-        \\   return res;
         \\ }}
         \\
     , .{});
@@ -112,9 +112,9 @@ pub fn parseAndOutput(
     for (improvements.improvements) |imp| {
         try writer.print(
             \\
-            \\fn {s}AllowedOn(terrain: Terrain, freshwater: bool) ImprovementAllowed  {{
-            \\if (freshwater and false) {{}} // STUPID, but needed
-            \\return switch(terrain) {{ 
+            \\fn {s}AllowedOn(tile: Tile, maybe_resource: ?Resource) ImprovementAllowed  {{
+            \\if(maybe_resource) |_| {{}}
+            \\return switch(tile.terrain) {{ 
         , .{imp.name});
 
         const veg_flags = blk: {
@@ -125,6 +125,18 @@ pub fn parseAndOutput(
             break :blk flags;
         };
 
+        var found = std.ArrayList(struct {
+            name: []const u8,
+            tag: enum {
+                allowed,
+                allowed_after_clear,
+                allowed_if_freshwater,
+                allowed_after_clear_if_freshwater,
+                has_vegetation_resource,
+            },
+        }).init(allocator);
+        defer found.deinit();
+
         terrain_loop: for (terrain) |terr| {
             for (imp.allow_on.bases) |base| {
                 const base_flag = flag_index_map.get(base.name) orelse return error.UnknownBase;
@@ -132,14 +144,17 @@ pub fn parseAndOutput(
 
                 if (terr.has_feature and base.no_feature) continue;
 
-                try writer.print(".{s} => ", .{terr.name});
-                if (base.need_freshwater) try writer.print("if(freshwater) ", .{});
-
                 const has_allowed_vegegation = veg_flags.intersectWith(terr.flags).count() != 0;
                 if (terr.has_vegetation and !has_allowed_vegegation) {
-                    try writer.print(".allowed_after_clear,", .{});
+                    try found.append(.{
+                        .name = terr.name,
+                        .tag = if (base.need_freshwater) .allowed_after_clear_if_freshwater else .allowed_after_clear,
+                    });
                 } else {
-                    try writer.print(".allowed,", .{});
+                    try found.append(.{
+                        .name = terr.name,
+                        .tag = if (base.need_freshwater) .allowed_if_freshwater else .allowed,
+                    });
                 }
 
                 continue :terrain_loop;
@@ -149,13 +164,17 @@ pub fn parseAndOutput(
                 const feature_flag = flag_index_map.get(feature.name) orelse return error.UnknownFeature;
                 if (!terr.flags.isSet(feature_flag)) continue;
 
-                try writer.print(".{s} => ", .{terr.name});
-                if (feature.need_freshwater) try writer.print("if(freshwater) ", .{});
                 const has_allowed_vegegation = veg_flags.intersectWith(terr.flags).count() != 0;
                 if (terr.has_vegetation and !has_allowed_vegegation) {
-                    try writer.print(".allowed_after_clear,", .{});
+                    try found.append(.{
+                        .name = terr.name,
+                        .tag = if (feature.need_freshwater) .allowed_after_clear_if_freshwater else .allowed_after_clear,
+                    });
                 } else {
-                    try writer.print(".allowed,", .{});
+                    try found.append(.{
+                        .name = terr.name,
+                        .tag = if (feature.need_freshwater) .allowed_if_freshwater else .allowed,
+                    });
                 }
                 continue :terrain_loop;
             }
@@ -164,14 +183,87 @@ pub fn parseAndOutput(
                 const vegetation_flag = flag_index_map.get(vegetation.name) orelse return error.UnknownFeature;
                 if (!terr.flags.isSet(vegetation_flag)) continue;
 
-                try writer.print(".{s} => ", .{terr.name});
-                if (vegetation.need_freshwater) try writer.print("if(freshwater) ", .{});
-                try writer.print(".allowed,", .{});
+                try found.append(.{
+                    .name = terr.name,
+                    .tag = if (vegetation.need_freshwater) .allowed_if_freshwater else .allowed,
+                });
 
                 continue :terrain_loop;
             }
+
+            if (terr.has_vegetation and imp.allow_on.resources.len != 0) {
+                try found.append(.{
+                    .name = terr.name,
+                    .tag = .has_vegetation_resource,
+                });
+            }
         }
-        try writer.print("else => .not_allowed,", .{});
+
+        inline for (&.{
+            .allowed,
+            .allowed_after_clear,
+            .allowed_if_freshwater,
+            .allowed_after_clear_if_freshwater,
+            .has_vegetation_resource,
+        }) |tag| {
+            var count: usize = 0;
+            for (found.items) |f| {
+                if (f.tag != tag) continue;
+                try writer.print(".{s},", .{f.name});
+                count += 1;
+            }
+
+            if (count != 0) {
+                try writer.print("=>", .{});
+                switch (tag) {
+                    .allowed_if_freshwater,
+                    .allowed_after_clear_if_freshwater,
+                    => try writer.print("if(tile.freshwater)", .{}),
+                    else => {},
+                }
+                switch (tag) {
+                    .allowed_if_freshwater,
+                    .allowed,
+                    => try writer.print(".allowed,", .{}),
+                    .allowed_after_clear_if_freshwater,
+                    .allowed_after_clear,
+                    => try writer.print(".allowed_after_clear,", .{}),
+                    .has_vegetation_resource => {
+                        try writer.print(
+                            \\if(maybe_resource) |resource| switch(resource) {{
+                        , .{});
+                        for (imp.allow_on.resources) |resource| {
+                            try writer.print(".{s},", .{resource});
+                        }
+                        try writer.print(
+                            \\=> .allowed_after_clear,
+                            \\else => .not_allowed,
+                            \\}} else .not_allowed,
+                        , .{});
+                    },
+                    else => {},
+                }
+            }
+        }
+        if (found.items.len != terrain.len) {
+            try writer.print("else =>", .{});
+
+            if (imp.allow_on.resources.len != 0) {
+                try writer.print(
+                    \\if(maybe_resource) |resource| switch(resource) {{
+                , .{});
+                for (imp.allow_on.resources) |resource| {
+                    try writer.print(".{s},", .{resource});
+                }
+                try writer.print(
+                    \\=> .allowed_after_clear,
+                    \\else => .not_allowed,
+                    \\}} else .not_allowed,
+                , .{});
+            } else {
+                try writer.print(".not_allowed,", .{});
+            }
+        }
 
         try writer.print(
             \\}};

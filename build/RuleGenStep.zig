@@ -132,6 +132,8 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     // Output base stuff
     {
         try writer.print(
+            \\const std = @import("std");
+            \\
             \\pub const Yield = packed struct {{
             \\    food: u5 = 0,
             \\    production: u5 = 0,
@@ -139,6 +141,26 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             \\    culture: u5 = 0,
             \\    faith: u5 = 0,
             \\    science: u5 = 0,
+            \\}};
+            \\
+            \\pub const Transport = enum(u2) {{
+            \\    none,
+            \\    road,
+            \\    rail,
+            \\}};
+            \\
+            \\pub const Tile = packed struct {{
+            \\    terrain: Terrain = @enumFromInt(0),
+            \\    freshwater: bool = false,
+            \\    river_access: bool = false,
+            \\    improvement: Improvement = .none,
+            \\    transport: Transport = .none,
+            \\    pillaged_improvements: bool = false,
+            \\    pillaged_transport: bool = false,
+            \\
+            \\    comptime {{
+            \\        std.debug.assert(@sizeOf(@This()) == 2);
+            \\    }}
             \\}};
         , .{});
     }
