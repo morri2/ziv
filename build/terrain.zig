@@ -23,12 +23,23 @@ const Feature = struct {
     is_impassable: bool = false,
 };
 
+pub const Terrain = struct {
+    name: []const u8,
+    yields: Yields,
+    flags: Flags,
+    has_feature: bool = false,
+    has_vegetation: bool = false,
+    is_water: bool,
+    is_rough: bool,
+    is_impassable: bool,
+};
+
 pub fn parseAndOutput(
     text: []const u8,
     flag_index_map: *FlagIndexMap,
     writer: anytype,
     allocator: std.mem.Allocator,
-) !void {
+) ![]const Terrain {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
 
@@ -61,17 +72,8 @@ pub fn parseAndOutput(
     }
     try util.endStructEnumUnion(writer);
 
-    const TerrainCombo = struct {
-        name: []const u8,
-        yields: Yields,
-        flags: Flags,
-        is_water: bool,
-        is_rough: bool,
-        is_impassable: bool,
-    };
-
-    var terrain_combos = std.ArrayList(TerrainCombo).init(allocator);
-    defer terrain_combos.deinit();
+    var terrain_tiles = std.ArrayList(Terrain).init(allocator);
+    defer terrain_tiles.deinit();
 
     // Add all base tiles to terrain combinations
     for (terrain.bases) |base| {
@@ -80,7 +82,7 @@ pub fn parseAndOutput(
         var flags = Flags.initEmpty();
         flags.set(base_index);
 
-        try terrain_combos.append(.{
+        try terrain_tiles.append(.{
             .name = base.name,
             .yields = base.yields,
             .flags = flags,
@@ -90,7 +92,7 @@ pub fn parseAndOutput(
         });
     }
 
-    inline for ([_][]const u8{ "features", "vegetation" }) |field_name| {
+    inline for ([_][]const u8{ "features", "vegetation" }, 0..) |field_name, i| {
         for (@field(terrain, field_name)) |feature| {
             const feature_index = try flag_index_map.add(feature.name);
 
@@ -98,36 +100,38 @@ pub fn parseAndOutput(
                 flag_index_map.flagsFromKeys(feature.features),
             );
 
-            for (0..terrain_combos.items.len) |combo_index| {
-                const combo = terrain_combos.items[combo_index];
-                if (!combo.flags.intersectWith(allowed_flags).eql(combo.flags)) continue;
+            for (0..terrain_tiles.items.len) |tile_index| {
+                const tile = terrain_tiles.items[tile_index];
+                if (!tile.flags.intersectWith(allowed_flags).eql(tile.flags)) continue;
 
-                var new_flags = combo.flags;
+                var new_flags = tile.flags;
                 new_flags.set(feature_index);
 
-                try terrain_combos.append(.{
+                try terrain_tiles.append(.{
                     .name = try std.mem.concat(arena.allocator(), u8, &.{
-                        combo.name,
+                        tile.name,
                         "_",
                         feature.name,
                     }),
                     .yields = feature.yields,
                     .flags = new_flags,
-                    .is_water = combo.is_water,
-                    .is_rough = combo.is_rough or feature.is_rough,
-                    .is_impassable = combo.is_impassable or feature.is_impassable,
+                    .has_feature = if (i == 0) true else tile.has_feature,
+                    .has_vegetation = if (i == 1) true else tile.has_vegetation,
+                    .is_water = tile.is_water,
+                    .is_rough = tile.is_rough or feature.is_rough,
+                    .is_impassable = tile.is_impassable or feature.is_impassable,
                 });
             }
         }
     }
 
-    try util.startEnum("Terrain", terrain_combos.items.len, writer);
-    for (terrain_combos.items, 0..) |combo, i| {
-        try writer.print("{s} = {},", .{ combo.name, i });
+    try util.startEnum("Terrain", terrain_tiles.items.len, writer);
+    for (terrain_tiles.items, 0..) |tile, i| {
+        try writer.print("{s} = {},", .{ tile.name, i });
     }
 
     try writer.print("\n\n", .{});
-    try util.emitYieldsFunc(TerrainCombo, terrain_combos.items, writer);
+    try util.emitYieldsFunc(Terrain, terrain_tiles.items, writer);
 
     // Emit base()
     {
@@ -136,11 +140,11 @@ pub fn parseAndOutput(
             \\return switch(self) {{
         , .{});
         for (terrain.bases) |base| {
-            for (terrain_combos.items) |combo| {
-                if (combo.flags.isSet(flag_index_map.get(base.name).?)) {
+            for (terrain_tiles.items) |tile| {
+                if (tile.flags.isSet(flag_index_map.get(base.name).?)) {
                     try writer.print(
                         \\.{s},
-                    , .{combo.name});
+                    , .{tile.name});
                 }
             }
             try writer.print(
@@ -164,11 +168,11 @@ pub fn parseAndOutput(
             \\return switch(self) {{
         , .{ func_name, enum_name });
         for (@field(terrain, field_name)) |feature| {
-            for (terrain_combos.items) |combo| {
-                if (combo.flags.isSet(flag_index_map.get(feature.name).?)) {
+            for (terrain_tiles.items) |tile| {
+                if (tile.flags.isSet(flag_index_map.get(feature.name).?)) {
                     try writer.print(
                         \\.{s},
-                    , .{combo.name});
+                    , .{tile.name});
                 }
             }
             try writer.print(
@@ -193,16 +197,16 @@ pub fn parseAndOutput(
         , .{func_name});
 
         var count: usize = 0;
-        for (terrain_combos.items) |combo| {
-            if (@field(combo, field_name)) {
-                try writer.print(".{s},", .{combo.name});
+        for (terrain_tiles.items) |tile| {
+            if (@field(tile, field_name)) {
+                try writer.print(".{s},", .{tile.name});
                 count += 1;
             }
         }
         if (count != 0) {
             try writer.print("=> true,", .{});
         }
-        if (count != terrain_combos.items.len) {
+        if (count != terrain_tiles.items.len) {
             try writer.print("else => false,", .{});
         }
         try writer.print(
@@ -212,4 +216,6 @@ pub fn parseAndOutput(
     }
 
     try util.endStructEnumUnion(writer);
+
+    return try terrain_tiles.toOwnedSlice();
 }
