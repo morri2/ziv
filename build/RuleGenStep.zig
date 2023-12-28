@@ -146,7 +146,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     var flag_index_map = try FlagIndexMap.init(b.allocator);
     defer flag_index_map.deinit();
 
-    try @import("terrain.zig").parseAndOutput(
+    const terrain = try @import("terrain.zig").parseAndOutput(
         terrain_text,
         &flag_index_map,
         writer,
@@ -162,6 +162,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
 
     try @import("improvements.zig").parseAndOutput(
         improvements_text,
+        terrain,
         &flag_index_map,
         writer,
         b.allocator,
