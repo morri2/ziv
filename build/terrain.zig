@@ -48,13 +48,15 @@ pub fn parseAndOutput(
     try util.endStructEnumUnion(writer);
 
     try util.startEnum("Feature", terrain.features.len, writer);
-    for (terrain.features, 0..) |feature, i| {
+    try writer.print("none = 0,", .{});
+    for (terrain.features, 1..) |feature, i| {
         try writer.print("{s} = {},", .{ feature.name, i });
     }
     try util.endStructEnumUnion(writer);
 
     try util.startEnum("Vegetation", terrain.vegetation.len, writer);
-    for (terrain.vegetation, 0..) |vegetation, i| {
+    try writer.print("none = 0,", .{});
+    for (terrain.vegetation, 1..) |vegetation, i| {
         try writer.print("{s} = {},", .{ vegetation.name, i });
     }
     try util.endStructEnumUnion(writer);
@@ -127,11 +129,35 @@ pub fn parseAndOutput(
     try writer.print("\n\n", .{});
     try util.emitYieldsFunc(TerrainCombo, terrain_combos.items, writer);
 
-    // Emit hasBase, hasFeature, hasVegetation
+    // Emit base()
+    {
+        try writer.print(
+            \\pub fn base(self: @This()) Base {{
+            \\return switch(self) {{
+        , .{});
+        for (terrain.bases) |base| {
+            for (terrain_combos.items) |combo| {
+                if (combo.flags.isSet(flag_index_map.get(base.name).?)) {
+                    try writer.print(
+                        \\.{s},
+                    , .{combo.name});
+                }
+            }
+            try writer.print(
+                \\=> .{s},
+            , .{base.name});
+        }
+        try writer.print(
+            \\}};
+            \\}}
+        , .{});
+    }
+
+    // Emit feature(), vegetation()
     inline for (
-        [_][]const u8{ "bases", "features", "vegetation" },
-        [_][]const u8{ "base", "feature", "vegetation" },
-        [_][]const u8{ "Base", "Feature", "Vegetation" },
+        [_][]const u8{ "features", "vegetation" },
+        [_][]const u8{ "feature", "vegetation" },
+        [_][]const u8{ "Feature", "Vegetation" },
     ) |field_name, func_name, enum_name| {
         try writer.print(
             \\pub fn {s}(self: @This()) {s} {{
@@ -150,6 +176,7 @@ pub fn parseAndOutput(
             , .{feature.name});
         }
         try writer.print(
+            \\else => .none,
             \\}};
             \\}}
         , .{});
