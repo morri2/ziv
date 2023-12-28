@@ -1,0 +1,60 @@
+{
+  "improvements": [
+    {
+      "name": "farm",
+      "build_turns": 3,
+      "allow_on": {
+        "bases": [
+          {
+            "name": "desert",
+            "no_feature": true
+          },
+          {
+            "name": "plains",
+            "no_feature": true
+          },
+          {
+            "name": "grassland",
+            "no_feature": true
+          },
+          {
+            "name": "tundra",
+            "no_feature": true,
+            "need_freshwater": true
+          }
+        ],
+        "features": [
+          {
+            "name": "hill",
+            "need_freshwater": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "mine",
+      "build_turns": 3,
+      "allow_on": {
+        "features": [
+          {
+            "name": "hill"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sawmill",
+      "dont_clear": [
+        "forest"
+      ],
+      "build_turns": 3,
+      "allow_on": {
+        "vegetation": [
+          {
+            "name": "forest"
+          }
+        ]
+      }
+    }
+  ]
+}
