@@ -1,6 +1,8 @@
 const std = @import("std");
 const util = @import("util.zig");
 
+const Terrain = @import("terrain.zig").Terrain;
+
 const Yields = util.Yields;
 
 const FlagIndexMap = @import("FlagIndexMap.zig");
@@ -35,11 +37,11 @@ const Removal = struct {
 
 pub fn parseAndOutput(
     text: []const u8,
-    flag_index_map: *FlagIndexMap,
+    terrain: []const Terrain,
+    flag_index_map: *const FlagIndexMap,
     writer: anytype,
     allocator: std.mem.Allocator,
 ) !void {
-    _ = flag_index_map;
     const parsed = try std.json.parseFromSlice(struct {
         improvements: []Improvement,
     }, allocator, text, .{});
@@ -111,94 +113,69 @@ pub fn parseAndOutput(
         try writer.print(
             \\
             \\fn {s}AllowedOn(terrain: Terrain, freshwater: bool) ImprovementAllowed  {{
-            \\  if (freshwater and false) {{}} // STUPID, but needed
-            \\  const feature = terrain.feature();
-            \\  const base = terrain.base();
-            \\  const vegetation = terrain.vegetation();
-            \\  var ok = false;
-            \\  
+            \\if (freshwater and false) {{}} // STUPID, but needed
+            \\return switch(terrain) {{ 
         , .{imp.name});
 
-        try writer.print(
-            \\ 
-            \\  ok = switch (base) {{ // check if base makes valid
-            \\
-        , .{});
+        const veg_flags = blk: {
+            var flags = Flags.initEmpty();
+            for (imp.allow_on.vegetation) |vegetation| {
+                flags.set(flag_index_map.get(vegetation.name) orelse return error.UnknownVegetation);
+            }
+            break :blk flags;
+        };
 
-        for (imp.allow_on.bases) |base| {
-            try writer.print(".{s} => true ", .{base.name});
-            if (base.need_freshwater) {
-                try writer.print("and freshwater ", .{});
+        terrain_loop: for (terrain) |terr| {
+            for (imp.allow_on.bases) |base| {
+                const base_flag = flag_index_map.get(base.name) orelse return error.UnknownBase;
+                if (!terr.flags.isSet(base_flag)) continue;
+
+                if (terr.has_feature and base.no_feature) continue;
+
+                try writer.print(".{s} => ", .{terr.name});
+                if (base.need_freshwater) try writer.print("if(freshwater) ", .{});
+
+                const has_allowed_vegegation = veg_flags.intersectWith(terr.flags).count() != 0;
+                if (terr.has_vegetation and !has_allowed_vegegation) {
+                    try writer.print(".allowed_after_clear,", .{});
+                } else {
+                    try writer.print(".allowed,", .{});
+                }
+
+                continue :terrain_loop;
             }
-            if (base.no_feature) {
-                try writer.print(" and feature == .none", .{});
+
+            for (imp.allow_on.features) |feature| {
+                const feature_flag = flag_index_map.get(feature.name) orelse return error.UnknownFeature;
+                if (!terr.flags.isSet(feature_flag)) continue;
+
+                try writer.print(".{s} => ", .{terr.name});
+                if (feature.need_freshwater) try writer.print("if(freshwater) ", .{});
+                const has_allowed_vegegation = veg_flags.intersectWith(terr.flags).count() != 0;
+                if (terr.has_vegetation and !has_allowed_vegegation) {
+                    try writer.print(".allowed_after_clear,", .{});
+                } else {
+                    try writer.print(".allowed,", .{});
+                }
+                continue :terrain_loop;
             }
-            try writer.print(",\n", .{});
+
+            for (imp.allow_on.vegetation) |vegetation| {
+                const vegetation_flag = flag_index_map.get(vegetation.name) orelse return error.UnknownFeature;
+                if (!terr.flags.isSet(vegetation_flag)) continue;
+
+                try writer.print(".{s} => ", .{terr.name});
+                if (vegetation.need_freshwater) try writer.print("if(freshwater) ", .{});
+                try writer.print(".allowed,", .{});
+
+                continue :terrain_loop;
+            }
         }
+        try writer.print("else => .not_allowed,", .{});
 
         try writer.print(
-            \\      else => false,   
-            \\  }};
-            \\
-        , .{});
-
-        try writer.print(
-            \\  
-            \\  ok = ok or switch (feature) {{ // check if feature makes valid
-            \\
-        , .{});
-
-        for (imp.allow_on.features) |feature| {
-            try writer.print(".{s} => true ", .{feature.name});
-            if (feature.need_freshwater) {
-                try writer.print(" and freshwater ", .{});
-            }
-            try writer.print(",\n", .{});
-        }
-
-        try writer.print(
-            \\      else => false,   
-            \\  }};
-        , .{});
-
-        // ADD RESOURCE CHECK HERE!! - WHEN TILE IS ARGUMENT
-        // maybe disallow non relavant improvements?
-        // try writer.print(
-        //     \\
-        //     \\  ok = ok or self.connectsResource(resource);
-        //     \\
-        // , .{});
-        // END RESOURCE THING
-
-        try writer.print(
-            \\
-            \\  const veg_ok = switch (vegetation) {{// vegetation?
-            \\
-        , .{});
-
-        for (imp.allow_on.vegetation) |vegetation| {
-            try writer.print(".{s} => true ", .{vegetation.name});
-            if (vegetation.need_freshwater) {
-                try writer.print(" and freshwater ", .{});
-            }
-            try writer.print(",\n", .{});
-        }
-
-        try writer.print(
-            \\      else => false,   
-            \\  }};
-            \\
-        , .{});
-
-        try writer.print(
-            \\  if (veg_ok or (ok and vegetation == .none)) {{
-            \\      return .allowed;
-            \\    }} else if (ok) {{
-            \\      return .allowed_after_clear;
-            \\    }} else {{ return .not_allowed; }}
-            \\
-            \\  }}
-            \\
+            \\}};
+            \\}}
         , .{});
     }
 
