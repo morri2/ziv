@@ -32,6 +32,9 @@
         "resources": [
           "wheat"
         ]
+      },
+      "yields": {
+        "food": 1
       }
     },
     {
@@ -54,13 +57,13 @@
           "coal",
           "gems"
         ]
+      },
+      "yields": {
+        "production": 1
       }
     },
     {
-      "name": "sawmill",
-      "dont_clear": [
-        "forest"
-      ],
+      "name": "lumber_mill",
       "build_turns": 3,
       "allow_on": {
         "vegetation": [
@@ -68,6 +71,9 @@
             "name": "forest"
           }
         ]
+      },
+      "yields": {
+        "production": 1
       }
     },
     {
@@ -94,7 +100,7 @@
       }
     },
     {
-      "name": "tradeing_post",
+      "name": "trading_post",
       "build_turns": 3,
       "allow_on": {
         "bases": [
@@ -122,6 +128,9 @@
             "name": "jungle"
           }
         ]
+      },
+      "yields": {
+        "gold": 1
       }
     }
   ]
