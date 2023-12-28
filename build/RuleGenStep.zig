@@ -111,6 +111,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         b.allocator,
         &.{ rules_zig_dir, "rules.zig" },
     );
+
     // // uncomment when the gen code is done ish
     // cache_check: {
     //     std.fs.accessAbsolute(rules_out_path, .{}) catch |err| switch (err) {
@@ -120,7 +121,8 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     //     self.generated_file.path = rules_out_path;
     //     return;
     // }
-    // try cwd.makePath(rules_zig_dir);
+
+    try cwd.makePath(rules_zig_dir);
 
     var rules_zig_contents = std.ArrayList(u8).init(b.allocator);
     defer rules_zig_contents.deinit();
