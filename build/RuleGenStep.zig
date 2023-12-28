@@ -77,7 +77,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const cwd = std.fs.cwd();
 
     // Read all JSON files
-    const terrain_text, const resources_text, const hash = blk: {
+    const terrain_text, const resources_text, const improvements_text, const hash = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
@@ -89,14 +89,19 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         const resources = try readAndHash(rules_dir, "resources.json", &hasher, b.allocator);
         errdefer b.allocator.free(resources);
 
+        const improvements = try readAndHash(rules_dir, "improvements.json", &hasher, b.allocator);
+        errdefer b.allocator.free(improvements);
+
         break :blk .{
             terrain,
             resources,
+            improvements,
             digest(&hasher),
         };
     };
     defer b.allocator.free(resources_text);
     defer b.allocator.free(terrain_text);
+    defer b.allocator.free(improvements_text);
 
     const rules_zig_dir = try b.cache_root.join(
         b.allocator,
@@ -106,16 +111,16 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         b.allocator,
         &.{ rules_zig_dir, "rules.zig" },
     );
-
-    cache_check: {
-        std.fs.accessAbsolute(rules_out_path, .{}) catch |err| switch (err) {
-            error.FileNotFound => break :cache_check,
-            else => |e| return e,
-        };
-        self.generated_file.path = rules_out_path;
-        return;
-    }
-    try cwd.makePath(rules_zig_dir);
+    // // uncomment when the gen code is done ish
+    // cache_check: {
+    //     std.fs.accessAbsolute(rules_out_path, .{}) catch |err| switch (err) {
+    //         error.FileNotFound => break :cache_check,
+    //         else => |e| return e,
+    //     };
+    //     self.generated_file.path = rules_out_path;
+    //     return;
+    // }
+    // try cwd.makePath(rules_zig_dir);
 
     var rules_zig_contents = std.ArrayList(u8).init(b.allocator);
     defer rules_zig_contents.deinit();
@@ -148,6 +153,13 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
 
     try @import("resources.zig").parseAndOutput(
         resources_text,
+        &flag_index_map,
+        writer,
+        b.allocator,
+    );
+
+    try @import("improvements.zig").parseAndOutput(
+        improvements_text,
         &flag_index_map,
         writer,
         b.allocator,
