@@ -34,10 +34,6 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_arou
     errdefer allocator.free(tiles);
     @memset(tiles, .{});
 
-    const yields = try allocator.alloc(rules.Yield, width * height);
-    errdefer allocator.free(yields);
-    @memset(yields, .{});
-
     return Self{
         .width = width,
         .height = height,
