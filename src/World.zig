@@ -22,7 +22,7 @@ allocator: std.mem.Allocator,
 tiles: []Tile,
 
 // Tile lookup data
-resources: std.AutoArrayHashMapUnmanaged(HexIdx, Resource),
+resources: std.AutoArrayHashMapUnmanaged(HexIdx, ResourceAndAmount),
 wonders: std.AutoArrayHashMapUnmanaged(HexIdx, NaturalWonder),
 work_in_progress: std.AutoArrayHashMapUnmanaged(HexIdx, WorkInProgress),
 
@@ -170,8 +170,8 @@ pub const NaturalWonder = enum {
     mt_everest, // cut from the real civ. Cool idea: 3 tile faith wonder, give mountain-climbing promotion
 };
 
-pub const Resource = struct {
-    type: rules.ResourceType,
+pub const ResourceAndAmount = struct {
+    type: rules.Resource,
     amount: u8,
 };
 

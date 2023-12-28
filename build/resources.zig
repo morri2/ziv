@@ -31,7 +31,7 @@ pub fn parseAndOutput(
     const resources = parsed.value;
 
     try util.startEnum(
-        "ResourceType",
+        "Resource",
         resources.bonus.len + resources.strategic.len + resources.luxury.len,
         writer,
     );
@@ -49,24 +49,30 @@ pub fn parseAndOutput(
 
     try util.emitYieldsFunc(Resource, all_resources, writer);
 
-    inline for (
-        [_][]const u8{ "bonus", "strategic", "luxury" },
-        [_][]const u8{ "isBonus", "isStrategic", "isLuxury" },
-    ) |field_name, func_name| {
-        try writer.print(
-            \\pub fn {s}(self: @This()) bool {{
-            \\return switch(self) {{
-        , .{func_name});
+    try writer.print(
+        \\pub const Kind = enum (u2) {{
+        \\bonus = 0,
+        \\strategic = 1,
+        \\luxury = 2,
+        \\}};
+    , .{});
+
+    try writer.print(
+        \\pub fn kind(self: @This()) Kind {{
+        \\return switch(self) {{
+    , .{});
+    inline for ([_][]const u8{ "bonus", "strategic", "luxury" }) |field_name| {
         for (@field(resources, field_name)) |resource| {
             try writer.print(".{s},", .{resource.name});
         }
         try writer.print(
-            \\=> true,
-            \\else => false,
-            \\}};
-            \\}}
-        , .{});
+            \\=> .{s},
+        , .{field_name});
     }
+    try writer.print(
+        \\}};
+        \\}}
+    , .{});
 
     try util.endStructEnumUnion(writer);
 }
