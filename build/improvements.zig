@@ -11,7 +11,6 @@ const Flags = FlagIndexMap.Flags;
 const Improvement = struct {
     name: []const u8,
     build_turns: u8,
-    dont_clear: []const []const u8 = &.{},
     allow_on: struct {
         resources: []const []const u8 = &.{},
         bases: []struct {
@@ -28,6 +27,7 @@ const Improvement = struct {
             need_freshwater: bool = false,
         } = &.{},
     },
+    yields: Yields = .{},
 };
 
 const Removal = struct {
@@ -270,6 +270,26 @@ pub fn parseAndOutput(
             \\}}
         , .{});
     }
+
+    try writer.print(
+        \\pub fn addYield(self: @This(), yield: *Yield) void {{
+        \\switch(self) {{
+    , .{});
+    for (improvements.improvements) |e| {
+        try writer.print(".{s} => {{", .{e.name});
+        if (e.yields.food != 0) try writer.print("yield.food += {};", .{e.yields.food});
+        if (e.yields.production != 0) try writer.print("yield.production += {};", .{e.yields.production});
+        if (e.yields.gold != 0) try writer.print("yield.gold += {};", .{e.yields.gold});
+        if (e.yields.culture != 0) try writer.print("yield.culture += {};", .{e.yields.culture});
+        if (e.yields.science != 0) try writer.print("yield.science += {};", .{e.yields.science});
+        if (e.yields.faith != 0) try writer.print("yield.faith += {};", .{e.yields.faith});
+        try writer.print("}},", .{});
+    }
+    try writer.print(
+        \\.none => .{{}},
+        \\}}
+        \\}}
+    , .{});
 
     try util.endStructEnumUnion(writer);
 }
