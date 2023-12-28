@@ -1,19 +1,33 @@
 const std = @import("std");
 const World = @import("World.zig");
-const yield = @import("yield.zig");
+
+const raylib = @cImport({
+    @cInclude("raylib.h");
+});
+
 pub fn main() !void {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    var world = try World.init(
+        gpa.allocator(),
+        128,
+        80,
+        false,
+    );
+    defer world.deinit();
 
-    try bw.flush(); // don't forget to flush!
-}
+    const screen_width = 1920;
+    const screen_height = 1080;
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+    raylib.InitWindow(screen_width, screen_height, "ziv");
+    defer raylib.CloseWindow();
+
+    raylib.SetTargetFPS(60);
+
+    while (!raylib.WindowShouldClose()) {
+        raylib.BeginDrawing();
+        raylib.ClearBackground(raylib.BLACK);
+        raylib.EndDrawing();
+    }
 }

@@ -10,6 +10,9 @@ pub fn build(b: *std.Build) void {
         .{ .cwd_relative = "base_rules" },
     );
 
+    const raylib_dep = b.dependency("raylib", .{});
+    const raylib_lib = raylib_dep.artifact("raylib");
+
     const exe = b.addExecutable(.{
         .name = "ziv",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -18,6 +21,8 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
     exe.addModule("rules", rule_gen_step.getModule());
+    exe.linkLibrary(raylib_lib);
+    exe.addIncludePath(raylib_dep.path("src"));
     exe.step.dependOn(&rule_gen_step.step);
 
     const run_cmd = b.addRunArtifact(exe);
