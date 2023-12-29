@@ -77,7 +77,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const cwd = std.fs.cwd();
 
     // Read all JSON files
-    const terrain_text, const resources_text, const improvements_text, const promotion_text, const hash = blk: {
+    const terrain_text, const resources_text, const improvements_text, const promotion_text, const unit_text, const hash = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
@@ -95,11 +95,15 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         const promotions = try readAndHash(rules_dir, "promotions.json", &hasher, b.allocator);
         errdefer b.allocator.free(promotions);
 
+        const units = try readAndHash(rules_dir, "units.json", &hasher, b.allocator);
+        errdefer b.allocator.free(units);
+
         break :blk .{
             terrain,
             resources,
             improvements,
             promotions,
+            units,
             digest(&hasher),
         };
     };
@@ -206,6 +210,13 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         b.allocator,
     );
 
+    try unit_module.parseAndOutputUnits(
+        unit_text,
+        &prom_flag_map,
+        writer,
+        b.allocator,
+    );
+
     try rules_zig_contents.append(0);
     const src = rules_zig_contents.items[0 .. rules_zig_contents.items.len - 1 :0];
     const tree = try std.zig.Ast.parse(b.allocator, src, .zig);
@@ -217,6 +228,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             try stderr_writer.print("{}:{}: error: ", .{ location.line, location.column });
             try tree.renderError(err, stderr_writer);
             try stderr_writer.writeByte('\n');
+            std.debug.print("{s}", .{src});
         }
         return error.ZigSyntaxError;
     }
