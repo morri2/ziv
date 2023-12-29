@@ -286,7 +286,7 @@ pub fn parseAndOutput(
         try writer.print("}},", .{});
     }
     try writer.print(
-        \\.none => .{{}},
+        \\.none => {{}},
         \\}}
         \\}}
     , .{});

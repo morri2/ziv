@@ -41,23 +41,70 @@ pub fn main() !void {
     };
 
     // Load resources
-    const base_textures, const hex_radius = blk: {
+    const base_textures, const texture_height = blk: {
         const enum_fields = @typeInfo(rules.Base).Enum.fields;
-        var base_textures = [_]raylib.Texture2D{undefined} ** enum_fields.len;
-        var texture_heigth: c_int = 0;
+        var textures = [_]raylib.Texture2D{undefined} ** enum_fields.len;
+        var texture_height: c_int = 0;
 
         inline for (enum_fields, 0..) |field, i| {
-            const img = raylib.LoadImage("resources/" ++ field.name ++ ".png");
+            const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
             defer raylib.UnloadImage(img);
 
-            if (i == 0) texture_heigth = img.height else {
-                if (img.height != texture_heigth) return error.InvalidResources;
+            if (i == 0) texture_height = img.height else {
+                if (img.height != texture_height) return error.InvalidResources;
             }
 
-            base_textures[i] = raylib.LoadTextureFromImage(img);
+            textures[i] = raylib.LoadTextureFromImage(img);
         }
-        break :blk .{ base_textures, @as(f32, @floatFromInt(texture_heigth)) * 0.5 };
+        break :blk .{ textures, texture_height };
     };
+    defer {
+        for (base_textures) |texture| {
+            raylib.UnloadTexture(texture);
+        }
+    }
+
+    const feature_textures = blk: {
+        const enum_fields = @typeInfo(rules.Feature).Enum.fields;
+        var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
+
+        inline for (enum_fields[1..], 0..) |field, i| {
+            const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
+            defer raylib.UnloadImage(img);
+
+            if (img.height != texture_height) return error.InvalidResources;
+
+            textures[i] = raylib.LoadTextureFromImage(img);
+        }
+        break :blk textures;
+    };
+    defer {
+        for (feature_textures) |texture| {
+            raylib.UnloadTexture(texture);
+        }
+    }
+
+    const vegetation_textures = blk: {
+        const enum_fields = @typeInfo(rules.Vegetation).Enum.fields;
+        var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
+
+        inline for (enum_fields[1..], 0..) |field, i| {
+            const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
+            defer raylib.UnloadImage(img);
+
+            if (img.height != texture_height) return error.InvalidResources;
+
+            textures[i] = raylib.LoadTextureFromImage(img);
+        }
+        break :blk textures;
+    };
+    defer {
+        for (vegetation_textures) |texture| {
+            raylib.UnloadTexture(texture);
+        }
+    }
+
+    const hex_radius = @as(f32, @floatFromInt(texture_height)) * 0.5;
 
     while (!raylib.WindowShouldClose()) {
         updateCamera(&camera, 16.0);
@@ -107,8 +154,11 @@ pub fn main() !void {
                 const index = world.coordToIdx(x, y);
                 const real_x = hex.tilingPosX(x, y, hex_radius);
 
+                const tile = world.tiles[index];
+                const terrain = tile.terrain;
+
                 raylib.DrawTextureEx(
-                    base_textures[@intFromEnum(world.tiles[index].terrain.base())],
+                    base_textures[@intFromEnum(terrain.base())],
                     raylib.Vector2{
                         .x = real_x,
                         .y = real_y,
@@ -117,6 +167,32 @@ pub fn main() !void {
                     1.0,
                     raylib.WHITE,
                 );
+
+                if (terrain.feature() != .none) {
+                    raylib.DrawTextureEx(
+                        feature_textures[@intFromEnum(terrain.feature()) - 1],
+                        raylib.Vector2{
+                            .x = real_x,
+                            .y = real_y,
+                        },
+                        0.0,
+                        1.0,
+                        raylib.WHITE,
+                    );
+                }
+
+                if (terrain.vegetation() != .none) {
+                    raylib.DrawTextureEx(
+                        vegetation_textures[@intFromEnum(terrain.vegetation()) - 1],
+                        raylib.Vector2{
+                            .x = real_x,
+                            .y = real_y,
+                        },
+                        0.0,
+                        1.0,
+                        raylib.WHITE,
+                    );
+                }
             }
         }
         raylib.EndMode2D();
