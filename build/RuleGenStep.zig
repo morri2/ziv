@@ -77,7 +77,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const cwd = std.fs.cwd();
 
     // Read all JSON files
-    const terrain_text, const resources_text, const improvements_text, const promotion_text, const hash = blk: {
+    const terrain_text, const resources_text, const improvements_text, const natural_wonders_text, const promotion_text, const hash = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
@@ -92,6 +92,9 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         const improvements = try readAndHash(rules_dir, "improvements.json", &hasher, b.allocator);
         errdefer b.allocator.free(improvements);
 
+        const natural_wonders = try readAndHash(rules_dir, "natural_wonders.json", &hasher, b.allocator);
+        errdefer b.allocator.free(improvements);
+
         const promotions = try readAndHash(rules_dir, "promotions.json", &hasher, b.allocator);
         errdefer b.allocator.free(promotions);
 
@@ -99,6 +102,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             terrain,
             resources,
             improvements,
+            natural_wonders,
             promotions,
             digest(&hasher),
         };
@@ -106,6 +110,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     defer b.allocator.free(resources_text);
     defer b.allocator.free(terrain_text);
     defer b.allocator.free(improvements_text);
+    defer b.allocator.free(natural_wonders_text);
     defer b.allocator.free(promotion_text);
 
     const rules_zig_dir = try b.cache_root.join(
@@ -190,6 +195,13 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     try @import("improvements.zig").parseAndOutput(
         improvements_text,
         terrain,
+        &flag_index_map,
+        writer,
+        b.allocator,
+    );
+
+    try @import("natural_wonders.zig").parseAndOutput(
+        natural_wonders_text,
         &flag_index_map,
         writer,
         b.allocator,
