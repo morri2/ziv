@@ -1,0 +1,79 @@
+{
+	"civilian": [
+		{
+			"name": "Worker",
+			"production_cost": 70,
+			"moves": 2,
+			"domain": "LAND",
+			"starting_promotions": [
+				"CannotMelee",
+				"BuildImprovements"
+			]
+		},
+		{
+			"name": "Settler",
+			"production_cost": 106,
+			"moves": 2,
+			"domain": "LAND",
+			"starting_promotions": [
+				"SettleCity",
+				"CannotMelee"
+			]
+		},
+		{
+			"name": "WorkBoat",
+			"production_cost": 30,
+			"moves": 4,
+			"domain": "SEA",
+			"starting_promotions": [
+				"CannotMelee",
+				"BuildImprovements"
+			]
+		}
+	],
+	"land": [
+		{
+			"name": "Warrior",
+			"production_cost": 40,
+			"moves": 2,
+			"combat_strength": 8,
+			"domain": "LAND",
+			"starting_promotions": [
+				"Fortify"
+			]
+		},
+		{
+			"name": "Archer",
+			"production_cost": 40,
+			"moves": 2,
+			"combat_strength": 5,
+			"ranged_strength": 7,
+			"range": 2,
+			"domain": "LAND",
+			"starting_promotions": [
+				"CannotMelee"
+			]
+		},
+		{
+			"name": "Scout",
+			"production_cost": 25,
+			"moves": 2,
+			"combat_strength": 5,
+			"domain": "LAND",
+			"starting_promotions": [
+				"IgnoreTerrain",
+				"Fortify"
+			]
+		}
+	],
+	"naval": [
+			{
+			"name": "Trireme",
+			"production_cost": 45,
+			"moves": 4,
+			"combat_strength": 10,
+			"domain": "SEA",
+			"starting_promotions": []
+		}
+	]
+}

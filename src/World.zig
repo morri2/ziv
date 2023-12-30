@@ -5,6 +5,7 @@ const rules = @import("rules");
 
 const Tile = rules.Tile;
 const Improvement = rules.Improvement;
+const NaturalWonder = rules.NaturalWonder;
 const Transport = rules.Transport;
 const Resource = rules.Resource;
 
@@ -19,6 +20,25 @@ pub const SE = 2;
 pub const SW = 3;
 pub const W = 4;
 pub const NW = 5;
+
+/// The lowest index is always in low :))
+pub const WorkInProgress = struct {
+    work_type: union(enum) {
+        build_improvement: Improvement,
+        remove_vegetation_build_improvement: Improvement,
+        build_transport: Transport,
+        remove_fallout,
+        repair,
+        remove_vegetation,
+    },
+
+    progress: u8,
+};
+
+pub const ResourceAndAmount = struct {
+    type: Resource,
+    amount: u8,
+};
 
 width: usize, // <= 128
 height: usize, // <= 80
@@ -61,54 +81,6 @@ pub fn deinit(self: *Self) void {
     self.resources.deinit(self.allocator);
     self.tiles.deinit();
 }
-
-pub const WorkInProgress = struct {
-    work_type: union(enum) {
-        build_improvement: Improvement,
-        remove_vegetation_build_improvement: Improvement,
-        build_transport: Transport,
-        remove_fallout,
-        repair,
-        remove_vegetation,
-    },
-
-    progress: u8,
-};
-
-pub const NaturalWonder = enum {
-    cerro_de_potosi,
-    el_dorado,
-    fountain_of_youth,
-    king_solomons_mines,
-    krakatoa,
-    lake_victoria,
-    mt_fuji,
-    mt_kailash,
-    mt_kilimanjaro,
-    mt_sinai,
-    old_faithful,
-    rock_of_gibraltar,
-    sri_pada,
-    the_barringer_crater,
-    the_grand_mesa,
-    the_great_barrier_reef,
-    uluru,
-    belize_barrier_reef,
-    chimborazo,
-    lake_titicaca,
-    mt_tlaloc,
-    tsoodzil,
-    cappadocia,
-    mount_ararat,
-    mount_olympus,
-    mt_everest, // cut from the real civ. Cool idea: 3 tile faith wonder, give mountain-climbing promotion
-};
-
-pub const ResourceAndAmount = struct {
-    type: Resource,
-    amount: u8,
-};
-
 test "neighbour test" {
     var world = try Self.init(std.testing.allocator, 128, 80, true);
 

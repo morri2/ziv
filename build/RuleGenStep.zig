@@ -77,7 +77,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const cwd = std.fs.cwd();
 
     // Read all JSON files
-    const terrain_text, const resources_text, const improvements_text, const promotion_text, const hash = blk: {
+    const terrain_text, const resources_text, const improvements_text, const natural_wonders_text, const promotion_text, const unit_text, const hash = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
@@ -92,21 +92,31 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         const improvements = try readAndHash(rules_dir, "improvements.json", &hasher, b.allocator);
         errdefer b.allocator.free(improvements);
 
+        const natural_wonders = try readAndHash(rules_dir, "natural_wonders.json", &hasher, b.allocator);
+        errdefer b.allocator.free(improvements);
+
         const promotions = try readAndHash(rules_dir, "promotions.json", &hasher, b.allocator);
         errdefer b.allocator.free(promotions);
+
+        const units = try readAndHash(rules_dir, "units.json", &hasher, b.allocator);
+        errdefer b.allocator.free(units);
 
         break :blk .{
             terrain,
             resources,
             improvements,
+            natural_wonders,
             promotions,
+            units,
             digest(&hasher),
         };
     };
     defer b.allocator.free(resources_text);
     defer b.allocator.free(terrain_text);
     defer b.allocator.free(improvements_text);
+    defer b.allocator.free(natural_wonders_text);
     defer b.allocator.free(promotion_text);
+    defer b.allocator.free(unit_text);
 
     const rules_zig_dir = try b.cache_root.join(
         b.allocator,
@@ -195,12 +205,26 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         b.allocator,
     );
 
+    try @import("natural_wonders.zig").parseAndOutput(
+        natural_wonders_text,
+        &flag_index_map,
+        writer,
+        b.allocator,
+    );
+
     var prom_flag_map = try FlagIndexMap.init(b.allocator);
     defer prom_flag_map.deinit();
 
     const unit_module = @import("units.zig");
     try unit_module.parseAndOutputPromotions(
         promotion_text,
+        &prom_flag_map,
+        writer,
+        b.allocator,
+    );
+
+    try unit_module.parseAndOutputUnits(
+        unit_text,
         &prom_flag_map,
         writer,
         b.allocator,
@@ -217,6 +241,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             try stderr_writer.print("{}:{}: error: ", .{ location.line, location.column });
             try tree.renderError(err, stderr_writer);
             try stderr_writer.writeByte('\n');
+            std.debug.print("{s}", .{src});
         }
         return error.ZigSyntaxError;
     }

@@ -22,6 +22,10 @@
 			"name": "IgnoreTerrain",
 			"requires": ["IgnoreTerrain"]
 		},
+		{
+			"name": "BuildImprovements",
+			"requires": ["BuildImprovements"]
+		},
 
 		{
 			"name": "ShockI"
