@@ -13,10 +13,12 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
+    const WIDTH = 56;
+    const HEIGHT = 36;
     var world = try World.init(
         gpa.allocator(),
-        128,
-        80,
+        WIDTH,
+        HEIGHT,
         false,
     );
     defer world.deinit();
@@ -123,12 +125,12 @@ pub fn main() !void {
             const fheight: f32 = @floatFromInt(world.height);
 
             const min_x: usize = @intFromFloat(std.math.clamp(
-                @round(top_left.x / hex.width(hex_radius)) - 2.0,
+                @round(top_left.x / hex.hexWidth(hex_radius)) - 2.0,
                 0.0,
                 fwidth,
             ));
             const max_x: usize = @intFromFloat(std.math.clamp(
-                @round(bottom_right.x / hex.width(hex_radius)) + 2.0,
+                @round(bottom_right.x / hex.hexWidth(hex_radius)) + 2.0,
                 0.0,
                 fwidth,
             ));
@@ -151,10 +153,10 @@ pub fn main() !void {
             const real_y = hex.tilingPosY(y, hex_radius);
 
             for (min_x..max_x) |x| {
-                const index = world.coordToIdx(x, y);
+                const index = world.tiles.coordToIdx(x, y);
                 const real_x = hex.tilingPosX(x, y, hex_radius);
 
-                const tile = world.tiles[index];
+                const tile = world.tiles.get(index);
                 const terrain = tile.terrain;
 
                 raylib.DrawTextureEx(
