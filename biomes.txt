@@ -1,0 +1,15 @@
+.........J 4000
+........JJ 3500
+.......JJJ 3000
+......JJSS 2500
+.....BFFSS 2000
+....BBFFSS 1500
+...TBBFFDD 1000
+IITTDDDDDD 500
+
+
+// Each column is 5 degrees. First col: -20 tru -15. Last col: 25 tru 30.
+// Each row is the most rainfall to fall in that category
+
+Key: J - jungle, S - Savanna, D - Desert, F - Forest, B - Boreal (tundra forest),  T - Tundra, 
+

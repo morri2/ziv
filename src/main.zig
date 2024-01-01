@@ -1,8 +1,10 @@
 const std = @import("std");
 const rules = @import("rules");
 const hex = @import("hex.zig");
-
+const ScalarMap = @import("mapgen/ScalarMap.zig");
 const World = @import("World.zig");
+
+const testgen = @import("mapgen/testgen.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -23,6 +25,20 @@ pub fn main() !void {
     );
     defer world.deinit();
 
+    // smoll
+    var gen_logs = try testgen.generate(WIDTH, HEIGHT, gpa.allocator());
+    gen_logs.iter_start();
+
+    const bi = try testgen.constructBiomeIndex("biomes.txt");
+
+    for (0..9) |i| {
+        std.debug.print("\nRAINFALL {d:.1}\n", .{bi.rainfall_categories[i]});
+    }
+
+    std.debug.print("TEST {c}\n", .{bi.getBiome(-15, 100)});
+    std.debug.print("TEST {c}\n", .{bi.getBiome(25, 2000)});
+    std.debug.print("TEST {c}\n", .{bi.getBiome(25, 3000)});
+
     const screen_width = 1920;
     const screen_height = 1080;
 
@@ -34,13 +50,15 @@ pub fn main() !void {
     raylib.SetTargetFPS(60);
 
     var camera = raylib.Camera2D{
-        .target = raylib.Vector2{ .x = 0.0, .y = 0.0 },
+        .target = raylib.Vector2{ .x = @floatFromInt(WIDTH / 2), .y = @floatFromInt(HEIGHT / 2) },
         .offset = raylib.Vector2{
             .x = @floatFromInt(screen_width / 2),
             .y = @floatFromInt(screen_height / 2),
         },
-        .zoom = 0.5,
+        .zoom = 0.25,
     };
+    camera.target.x *= 75;
+    camera.target.y *= 75;
 
     // Load resources
     const base_textures, const texture_height = blk: {
@@ -110,6 +128,10 @@ pub fn main() !void {
 
     while (!raylib.WindowShouldClose()) {
         updateCamera(&camera, 16.0);
+        // mapgen debug
+        if (raylib.IsKeyPressed(raylib.KEY_D)) gen_logs.next();
+        if (raylib.IsKeyPressed(raylib.KEY_A)) gen_logs.prev();
+
         raylib.BeginDrawing();
         raylib.ClearBackground(raylib.BLACK);
 
@@ -159,6 +181,56 @@ pub fn main() !void {
                 const tile = world.tiles.get(index);
                 const terrain = tile.terrain;
 
+                // SCUFFED TEST
+                if (true) {
+                    const log = gen_logs.logs[gen_logs.i] orelse unreachable;
+                    const map = log.map;
+                    const vals = log.map.values;
+                    var r: f32 = 0.0;
+                    var g: f32 = 0.0;
+                    var b: f32 = 0.0;
+                    switch (gen_logs.logs[gen_logs.i].?.scale) {
+                        .fraction => {
+                            r = vals.getXY(x, y);
+                            g = vals.getXY(x, y);
+                            b = vals.getXY(x, y);
+                        },
+                        .temperature => {
+                            const temp: f32 = @min(1.0, @max(0.0, (vals.getXY(x, y) + 20.0) / 70.0)); // -20 to +50
+
+                            r = temp;
+                            g = 0.25 - @max(temp, 1.0 - temp) / 2;
+                            b = 1.0 - temp;
+                        },
+                        .norm_fraction => {
+                            var norm_map = try map.clone();
+                            norm_map.normalize();
+
+                            r = norm_map.values.getXY(x, y) - 0.1;
+                            g = norm_map.values.getXY(x, y);
+                            b = norm_map.values.getXY(x, y) - 0.1;
+                        },
+                        .distinct => {
+                            const seed: u64 = @bitCast(@as(f64, @floatCast(vals.getXY(x, y))));
+                            var rand = std.rand.DefaultPrng.init(seed);
+
+                            r = rand.random().float(f32);
+                            g = rand.random().float(f32);
+                            b = rand.random().float(f32);
+                        },
+                    }
+
+                    raylib.DrawTextureEx(base_textures[@intFromEnum(rules.Terrain.snow)], raylib.Vector2{
+                        .x = real_x,
+                        .y = real_y,
+                    }, 0.0, 1.0, raylib.Color{
+                        .a = 255,
+                        .r = @intFromFloat(255 * @min(1.0, @max(0.0, r))),
+                        .g = @intFromFloat(255 * @min(1.0, @max(0.0, g))),
+                        .b = @intFromFloat(255 * @min(1.0, @max(0.0, b))),
+                    });
+                    continue;
+                }
                 raylib.DrawTextureEx(
                     base_textures[@intFromEnum(terrain.base())],
                     raylib.Vector2{
