@@ -66,7 +66,8 @@ pub fn HexGrid(comptime T: type) type {
         width: usize,
         height: usize,
         wrap_around: bool,
-        allocator: ?std.mem.Allocator,
+        len: usize,
+        allocator: std.mem.Allocator,
 
         pub fn init(
             width: usize,
@@ -76,39 +77,24 @@ pub fn HexGrid(comptime T: type) type {
         ) !Self {
             const hex_data = try allocator.alloc(T, width * height);
             errdefer allocator.free(hex_data);
-            @memset(hex_data, .{});
+
+            // if (@typeInfo(T) == .Float or @typeInfo(T) == .Int) {
+            //     @memset(hex_data, 0);
+            // } else {
+            //     @memset(hex_data, .{});
+            // }
 
             return Self{
                 .width = width,
                 .height = height,
+                .len = width * height,
                 .wrap_around = wrap_around,
                 .hex_data = hex_data,
-                .allocator = null,
+                .allocator = allocator,
             };
         }
-
-        /// DO NOT USE FOR NON DEBUG PURPOSES!
-        /// A potentialy wasteful version of init, do not use for anything performance sensetive.
-        pub fn new(
-            width: usize,
-            height: usize,
-            wrap_around: bool,
-        ) !Self {
-            const big_wasteful_array: [128 * 80]T = undefined; // defines maximum possible map size
-            const hex_data: []T = &big_wasteful_array;
-            @memset(hex_data, .{});
-
-            return Self{
-                .hexWidth = width,
-                .height = height,
-                .wrap_around = wrap_around,
-                .hex_data = hex_data,
-                .allocator = null,
-            };
-        }
-
         pub fn deinit(self: *Self) void {
-            const allocator = self.allocator orelse unreachable;
+            const allocator = self.allocator;
             allocator.free(self.hex_data);
         }
 
@@ -120,9 +106,6 @@ pub fn HexGrid(comptime T: type) type {
         }
         pub fn idxToY(self: Self, idx: HexIdx) usize {
             return idx / self.width;
-        }
-        pub fn len(self: Self) usize {
-            return self.width * self.height;
         }
         pub fn get(self: Self, idx: HexIdx) T {
             return self.hex_data[idx];
@@ -140,12 +123,12 @@ pub fn HexGrid(comptime T: type) type {
         /// like coordToIdx but takes signed shit and also allows wraparound
         pub fn xyToIdxSigned(self: Self, x: isize, y: isize) ?HexIdx {
             const uy: usize = @intCast(@mod(y, @as(isize, @intCast(self.height))));
-            const ux: usize = @intCast(@mod(x, @as(isize, @intCast(self.hexWidth))));
+            const ux: usize = @intCast(@mod(x, @as(isize, @intCast(self.width))));
             // y-wrap around, idk if this is ever needed
             if (y >= self.height or y < 0) return null;
             // x-wrap around, we like doing this
             if ((x >= self.height or x < 0) and !self.wrap_around) return null;
-            return uy * self.hexWidth + ux;
+            return uy * self.width + ux;
         }
         pub fn getNeighbour(self: Self, src: HexIdx, dir: HexDir) ?HexIdx {
             return self.neighbours(src)[dir.int()];
