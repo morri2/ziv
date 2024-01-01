@@ -14,13 +14,6 @@ const HexIdx = hex.HexIdx;
 const HexDir = hex.HexDir;
 const HexGrid = hex.HexGrid(Tile);
 
-pub const NE = 0;
-pub const E = 1;
-pub const SE = 2;
-pub const SW = 3;
-pub const W = 4;
-pub const NW = 5;
-
 /// The lowest index is always in low :))
 pub const WorkInProgress = struct {
     work_type: union(enum) {
