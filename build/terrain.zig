@@ -42,6 +42,7 @@ const ExtraAttribute = struct {
 pub const Tile = struct {
     name: []const u8,
     yields: Yields,
+    happiness: u8,
 
     base: usize,
     feature: ?usize = null,
@@ -114,6 +115,7 @@ pub fn parseAndOutput(
         try tiles.append(.{
             .name = base.name,
             .yields = base.yields,
+            .happiness = base.happiness,
             .base = base_index,
             .attributes = try maps.attributes.addAndGetFlagsFromKeys(base.attributes),
         });
@@ -318,6 +320,24 @@ pub fn parseAndOutput(
 
         try writer.print(
             \\else => .{{}},
+            \\}};
+            \\}}
+        , .{});
+    }
+
+    // happiness()
+    {
+        try writer.print(
+            \\pub fn happiness(self: @This()) u8 {{
+            \\return switch(self) {{
+        , .{});
+        for (tiles.items) |tile| {
+            if (tile.happiness == 0) continue;
+
+            try writer.print(".{s} => {},", .{ tile.name, tile.happiness });
+        }
+        try writer.print(
+            \\else => 0,
             \\}};
             \\}}
         , .{});
