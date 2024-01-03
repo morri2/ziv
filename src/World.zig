@@ -5,7 +5,6 @@ const rules = @import("rules");
 
 const Tile = rules.Tile;
 const Improvement = rules.Improvement;
-const NaturalWonder = rules.NaturalWonder;
 const Transport = rules.Transport;
 const Resource = rules.Resource;
 
@@ -44,7 +43,6 @@ tiles: HexGrid,
 
 // Tile lookup data
 resources: std.AutoArrayHashMapUnmanaged(HexIdx, ResourceAndAmount),
-wonders: std.AutoArrayHashMapUnmanaged(HexIdx, NaturalWonder),
 work_in_progress: std.AutoArrayHashMapUnmanaged(HexIdx, WorkInProgress),
 
 // Tile edge data
@@ -61,7 +59,6 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_arou
         .tiles = try HexGrid.init(width, height, wrap_around, allocator),
 
         .resources = .{},
-        .wonders = .{},
         .work_in_progress = .{},
         .rivers = .{},
     };
@@ -70,7 +67,6 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_arou
 pub fn deinit(self: *Self) void {
     self.rivers.deinit(self.allocator);
     self.work_in_progress.deinit(self.allocator);
-    self.wonders.deinit(self.allocator);
     self.resources.deinit(self.allocator);
     self.tiles.deinit();
 }

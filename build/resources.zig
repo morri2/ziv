@@ -16,11 +16,9 @@ const Resource = struct {
 
 pub fn parseAndOutput(
     text: []const u8,
-    flag_index_map: *FlagIndexMap,
     writer: anytype,
     allocator: std.mem.Allocator,
 ) !void {
-    _ = flag_index_map;
     const parsed = try std.json.parseFromSlice(struct {
         bonus: []const Resource,
         strategic: []const Resource,
@@ -47,7 +45,7 @@ pub fn parseAndOutput(
         try writer.print("{s},", .{resource.name});
     }
 
-    try util.emitYieldsFunc(Resource, all_resources, writer);
+    try util.emitYieldsFunc(Resource, all_resources, allocator, writer, false);
 
     try writer.print(
         \\pub const Kind = enum (u2) {{

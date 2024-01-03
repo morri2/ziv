@@ -77,7 +77,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const cwd = std.fs.cwd();
 
     // Read all JSON files
-    const terrain_text, const resources_text, const improvements_text, const natural_wonders_text, const promotion_text, const unit_text, const hash = blk: {
+    const text = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
@@ -92,9 +92,6 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         const improvements = try readAndHash(rules_dir, "improvements.json", &hasher, b.allocator);
         errdefer b.allocator.free(improvements);
 
-        const natural_wonders = try readAndHash(rules_dir, "natural_wonders.json", &hasher, b.allocator);
-        errdefer b.allocator.free(improvements);
-
         const promotions = try readAndHash(rules_dir, "promotions.json", &hasher, b.allocator);
         errdefer b.allocator.free(promotions);
 
@@ -102,25 +99,23 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         errdefer b.allocator.free(units);
 
         break :blk .{
-            terrain,
-            resources,
-            improvements,
-            natural_wonders,
-            promotions,
-            units,
-            digest(&hasher),
+            .terrain = terrain,
+            .resources = resources,
+            .improvements = improvements,
+            .promotions = promotions,
+            .units = units,
+            .hash = digest(&hasher),
         };
     };
-    defer b.allocator.free(resources_text);
-    defer b.allocator.free(terrain_text);
-    defer b.allocator.free(improvements_text);
-    defer b.allocator.free(natural_wonders_text);
-    defer b.allocator.free(promotion_text);
-    defer b.allocator.free(unit_text);
+    defer b.allocator.free(text.resources);
+    defer b.allocator.free(text.terrain);
+    defer b.allocator.free(text.improvements);
+    defer b.allocator.free(text.promotions);
+    defer b.allocator.free(text.units);
 
     const rules_zig_dir = try b.cache_root.join(
         b.allocator,
-        &.{ "rules", &hash },
+        &.{ "rules", &text.hash },
     );
     const rules_out_path = try std.fs.path.join(
         b.allocator,
@@ -166,8 +161,6 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             \\
             \\pub const Tile = packed struct {{
             \\    terrain: Terrain = @enumFromInt(0),
-            \\    freshwater: bool = false,
-            \\    river_access: bool = false,
             \\    improvement: Improvement = .none,
             \\    transport: Transport = .none,
             \\    pillaged_improvements: bool = false,
@@ -180,34 +173,21 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         , .{});
     }
 
-    var flag_index_map = try FlagIndexMap.init(b.allocator);
-    defer flag_index_map.deinit();
-
     const terrain = try @import("terrain.zig").parseAndOutput(
-        terrain_text,
-        &flag_index_map,
+        text.terrain,
         writer,
         b.allocator,
     );
 
     try @import("resources.zig").parseAndOutput(
-        resources_text,
-        &flag_index_map,
+        text.resources,
         writer,
         b.allocator,
     );
 
     try @import("improvements.zig").parseAndOutput(
-        improvements_text,
-        terrain,
-        &flag_index_map,
-        writer,
-        b.allocator,
-    );
-
-    try @import("natural_wonders.zig").parseAndOutput(
-        natural_wonders_text,
-        &flag_index_map,
+        text.improvements,
+        &terrain,
         writer,
         b.allocator,
     );
@@ -217,14 +197,14 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
 
     const unit_module = @import("units.zig");
     try unit_module.parseAndOutputPromotions(
-        promotion_text,
+        text.promotions,
         &prom_flag_map,
         writer,
         b.allocator,
     );
 
     try unit_module.parseAndOutputUnits(
-        unit_text,
+        text.units,
         &prom_flag_map,
         writer,
         b.allocator,

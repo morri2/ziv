@@ -20,13 +20,13 @@
           {
             "name": "tundra",
             "no_feature": true,
-            "need_freshwater": true
+            "required_attributes": [ "freshwater" ]
           }
         ],
         "features": [
           {
             "name": "hill",
-            "need_freshwater": true
+            "required_attributes": [ "freshwater" ]
           }
         ],
         "resources": [

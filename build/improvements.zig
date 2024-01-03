@@ -16,15 +16,15 @@ const Improvement = struct {
         bases: []struct {
             name: []const u8,
             no_feature: bool = false,
-            need_freshwater: bool = false,
+            required_attributes: []const []const u8 = &.{},
         } = &.{},
         features: []struct {
             name: []const u8,
-            need_freshwater: bool = false,
+            required_attributes: []const []const u8 = &.{},
         } = &.{},
         vegetation: []struct {
             name: []const u8,
-            need_freshwater: bool = false,
+            required_attributes: []const []const u8 = &.{},
         } = &.{},
     },
     yields: Yields = .{},
@@ -37,8 +37,7 @@ const Removal = struct {
 
 pub fn parseAndOutput(
     text: []const u8,
-    terrain: []const Terrain,
-    flag_index_map: *const FlagIndexMap,
+    terrain: *const Terrain,
     writer: anytype,
     allocator: std.mem.Allocator,
 ) !void {
@@ -92,7 +91,7 @@ pub fn parseAndOutput(
     // public check allow function
     try writer.print(
         \\
-        \\pub fn checkAllowedOn(self: @This(), tile: Tile, maybe_resource: ?Resource) ImprovementAllowed  {{
+        \\pub fn allowedOn(self: @This(), tile: Tile, maybe_resource: ?Resource) ImprovementAllowed  {{
         \\  return switch (self) {{
         \\
     , .{});
@@ -120,80 +119,77 @@ pub fn parseAndOutput(
         const veg_flags = blk: {
             var flags = Flags.initEmpty();
             for (imp.allow_on.vegetation) |vegetation| {
-                flags.set(flag_index_map.get(vegetation.name) orelse return error.UnknownVegetation);
+                flags.set(terrain.maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation);
             }
             break :blk flags;
         };
 
+        const Tag = enum {
+            allowed,
+            allowed_after_clear,
+            has_vegetation_resource,
+        };
+
         var found = std.ArrayList(struct {
             name: []const u8,
-            tag: enum {
-                allowed,
-                allowed_after_clear,
-                allowed_if_freshwater,
-                allowed_after_clear_if_freshwater,
-                has_vegetation_resource,
-            },
+            tag: Tag,
         }).init(allocator);
         defer found.deinit();
 
-        terrain_loop: for (terrain) |terr| {
+        terrain_loop: for (terrain.tiles) |tile| {
+            const tag: Tag = if (tile.vegetation) |veg| if (veg_flags.isSet(veg)) .allowed else .allowed_after_clear else .allowed;
+
             for (imp.allow_on.bases) |base| {
-                const base_flag = flag_index_map.get(base.name) orelse return error.UnknownBase;
-                if (!terr.flags.isSet(base_flag)) continue;
+                const base_index = terrain.maps.bases.get(base.name) orelse return error.UnknownBase;
+                if (tile.base != base_index) continue;
 
-                if (terr.has_feature and base.no_feature) continue;
+                if (base.no_feature and tile.feature != null) continue;
 
-                const has_allowed_vegegation = veg_flags.intersectWith(terr.flags).count() != 0;
-                if (terr.has_vegetation and !has_allowed_vegegation) {
-                    try found.append(.{
-                        .name = terr.name,
-                        .tag = if (base.need_freshwater) .allowed_after_clear_if_freshwater else .allowed_after_clear,
-                    });
-                } else {
-                    try found.append(.{
-                        .name = terr.name,
-                        .tag = if (base.need_freshwater) .allowed_if_freshwater else .allowed,
-                    });
-                }
-
-                continue :terrain_loop;
-            }
-
-            for (imp.allow_on.features) |feature| {
-                const feature_flag = flag_index_map.get(feature.name) orelse return error.UnknownFeature;
-                if (!terr.flags.isSet(feature_flag)) continue;
-
-                const has_allowed_vegegation = veg_flags.intersectWith(terr.flags).count() != 0;
-                if (terr.has_vegetation and !has_allowed_vegegation) {
-                    try found.append(.{
-                        .name = terr.name,
-                        .tag = if (feature.need_freshwater) .allowed_after_clear_if_freshwater else .allowed_after_clear,
-                    });
-                } else {
-                    try found.append(.{
-                        .name = terr.name,
-                        .tag = if (feature.need_freshwater) .allowed_if_freshwater else .allowed,
-                    });
-                }
-                continue :terrain_loop;
-            }
-
-            for (imp.allow_on.vegetation) |vegetation| {
-                const vegetation_flag = flag_index_map.get(vegetation.name) orelse return error.UnknownFeature;
-                if (!terr.flags.isSet(vegetation_flag)) continue;
+                const required_attributes = terrain.maps.attributes.flagsFromKeys(base.required_attributes);
+                if (!tile.attributes.intersectWith(required_attributes).eql(required_attributes)) continue;
 
                 try found.append(.{
-                    .name = terr.name,
-                    .tag = if (vegetation.need_freshwater) .allowed_if_freshwater else .allowed,
+                    .name = tile.name,
+                    .tag = tag,
                 });
 
                 continue :terrain_loop;
             }
 
-            if (terr.has_vegetation and imp.allow_on.resources.len != 0) {
+            for (imp.allow_on.features) |feature| {
+                const feature_index = terrain.maps.features.get(feature.name) orelse return error.UnknownFeature;
+                if (tile.feature == null) continue;
+                if (tile.feature != feature_index) continue;
+
+                const required_attributes = terrain.maps.attributes.flagsFromKeys(feature.required_attributes);
+                if (!tile.attributes.intersectWith(required_attributes).eql(required_attributes)) continue;
+
                 try found.append(.{
-                    .name = terr.name,
+                    .name = tile.name,
+                    .tag = tag,
+                });
+                continue :terrain_loop;
+            }
+
+            for (imp.allow_on.vegetation) |vegetation| {
+                const vegetation_index = terrain.maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation;
+                if (tile.vegetation == null) continue;
+                if (tile.vegetation != vegetation_index) continue;
+
+                const required_attributes = terrain.maps.attributes.flagsFromKeys(vegetation.required_attributes);
+
+                if (!tile.attributes.intersectWith(required_attributes).eql(required_attributes)) continue;
+                try found.append(.{
+                    .name = tile.name,
+                    .tag = .allowed,
+                });
+
+                continue :terrain_loop;
+            }
+
+            if (tile.vegetation != null and imp.allow_on.resources.len != 0) {
+                try found.append(.{
+                    .name = tile.name,
                     .tag = .has_vegetation_resource,
                 });
             }
@@ -202,8 +198,6 @@ pub fn parseAndOutput(
         inline for (&.{
             .allowed,
             .allowed_after_clear,
-            .allowed_if_freshwater,
-            .allowed_after_clear_if_freshwater,
             .has_vegetation_resource,
         }) |tag| {
             var count: usize = 0;
@@ -216,18 +210,8 @@ pub fn parseAndOutput(
             if (count != 0) {
                 try writer.print("=>", .{});
                 switch (tag) {
-                    .allowed_if_freshwater,
-                    .allowed_after_clear_if_freshwater,
-                    => try writer.print("if(tile.freshwater)", .{}),
-                    else => {},
-                }
-                switch (tag) {
-                    .allowed_if_freshwater,
-                    .allowed,
-                    => try writer.print(".allowed,", .{}),
-                    .allowed_after_clear_if_freshwater,
-                    .allowed_after_clear,
-                    => try writer.print(".allowed_after_clear,", .{}),
+                    .allowed => try writer.print(".allowed,", .{}),
+                    .allowed_after_clear => try writer.print(".allowed_after_clear,", .{}),
                     .has_vegetation_resource => {
                         try writer.print(
                             \\if(maybe_resource) |resource| switch(resource) {{
@@ -245,7 +229,7 @@ pub fn parseAndOutput(
                 }
             }
         }
-        if (found.items.len != terrain.len) {
+        if (found.items.len != terrain.tiles.len) {
             try writer.print("else =>", .{});
 
             if (imp.allow_on.resources.len != 0) {
@@ -256,7 +240,7 @@ pub fn parseAndOutput(
                     try writer.print(".{s},", .{resource});
                 }
                 try writer.print(
-                    \\=> .allowed_after_clear,
+                    \\=> .allowed,
                     \\else => .not_allowed,
                     \\}} else .not_allowed,
                 , .{});
@@ -271,25 +255,7 @@ pub fn parseAndOutput(
         , .{});
     }
 
-    try writer.print(
-        \\pub fn addYield(self: @This(), yield: *Yield) void {{
-        \\switch(self) {{
-    , .{});
-    for (improvements.improvements) |e| {
-        try writer.print(".{s} => {{", .{e.name});
-        if (e.yields.food != 0) try writer.print("yield.food += {};", .{e.yields.food});
-        if (e.yields.production != 0) try writer.print("yield.production += {};", .{e.yields.production});
-        if (e.yields.gold != 0) try writer.print("yield.gold += {};", .{e.yields.gold});
-        if (e.yields.culture != 0) try writer.print("yield.culture += {};", .{e.yields.culture});
-        if (e.yields.science != 0) try writer.print("yield.science += {};", .{e.yields.science});
-        if (e.yields.faith != 0) try writer.print("yield.faith += {};", .{e.yields.faith});
-        try writer.print("}},", .{});
-    }
-    try writer.print(
-        \\.none => {{}},
-        \\}}
-        \\}}
-    , .{});
+    try util.emitYieldsFunc(Improvement, improvements.improvements, allocator, writer, true);
 
     try util.endStructEnumUnion(writer);
 }

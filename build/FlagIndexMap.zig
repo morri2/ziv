@@ -2,7 +2,9 @@ const std = @import("std");
 
 const Self = @This();
 
-pub const Flags = std.StaticBitSet(256);
+const Integer = u64;
+
+pub const Flags = std.StaticBitSet(@bitSizeOf(Integer));
 
 indices: std.StringArrayHashMap(void),
 
@@ -23,6 +25,11 @@ pub fn add(self: *Self, key: []const u8) !usize {
     return gop.index;
 }
 
+pub fn addOrGet(self: *Self, key: []const u8) !usize {
+    const gop = try self.indices.getOrPut(key);
+    return gop.index;
+}
+
 pub fn get(self: Self, key: []const u8) ?usize {
     return self.indices.getIndex(key);
 }
@@ -36,4 +43,24 @@ pub fn flagsFromKeys(
         if (self.get(key)) |index| flags.set(index);
     }
     return flags;
+}
+
+pub fn addAndGetFlagsFromKeys(
+    self: *Self,
+    keys: []const []const u8,
+) !Flags {
+    var flags = Flags.initEmpty();
+    for (keys) |key| {
+        flags.set(try self.addOrGet(key));
+    }
+    return flags;
+}
+
+pub fn integerFromFlags(flags: Flags) Integer {
+    var mut_flags = flags;
+    var integer: Integer = 0;
+    while (mut_flags.toggleFirstSet()) |index| {
+        integer |= @as(Integer, 1) << @truncate(index);
+    }
+    return integer;
 }

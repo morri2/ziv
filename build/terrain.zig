@@ -9,44 +9,76 @@ const Flags = FlagIndexMap.Flags;
 const Base = struct {
     name: []const u8,
     yields: Yields = .{},
-    is_water: bool = false,
-    is_rough: bool = false,
-    is_impassable: bool = false,
+    happiness: u8 = 0,
+
+    attributes: []const []const u8 = &.{},
 };
 
 const Feature = struct {
     name: []const u8,
     yields: Yields = .{},
+
+    bases: []const []const u8,
+
+    attributes: []const []const u8 = &.{},
+};
+
+const Vegetation = struct {
+    name: []const u8,
+    yields: Yields = .{},
+
     bases: []const []const u8,
     features: []const []const u8 = &.{},
-    is_rough: bool = false,
-    is_impassable: bool = false,
+
+    attributes: []const []const u8 = &.{},
+};
+
+const ExtraAttribute = struct {
+    name: []const u8,
+    @"or": []const []const u8 = &.{},
+    @"and": []const []const u8 = &.{},
+};
+
+pub const Tile = struct {
+    name: []const u8,
+    yields: Yields,
+
+    base: usize,
+    feature: ?usize = null,
+    vegetation: ?usize = null,
+    attributes: Flags = Flags.initEmpty(),
 };
 
 pub const Terrain = struct {
-    name: []const u8,
-    yields: Yields,
-    flags: Flags,
-    has_feature: bool = false,
-    has_vegetation: bool = false,
-    is_water: bool,
-    is_rough: bool,
-    is_impassable: bool,
+    tiles: []const Tile,
+    maps: struct {
+        bases: FlagIndexMap,
+        features: FlagIndexMap,
+        vegetation: FlagIndexMap,
+        attributes: FlagIndexMap,
+    },
+    arena: std.heap.ArenaAllocator,
 };
 
 pub fn parseAndOutput(
     text: []const u8,
-    flag_index_map: *FlagIndexMap,
     writer: anytype,
     allocator: std.mem.Allocator,
-) ![]const Terrain {
+) !Terrain {
     var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
+    errdefer arena.deinit();
+
+    var maps = .{
+        .bases = try FlagIndexMap.init(allocator),
+        .features = try FlagIndexMap.init(allocator),
+        .vegetation = try FlagIndexMap.init(allocator),
+        .attributes = try FlagIndexMap.init(allocator),
+    };
 
     const parsed = try std.json.parseFromSlice(struct {
         bases: []const Base,
         features: []const Feature,
-        vegetation: []const Feature,
+        vegetation: []const Vegetation,
     }, allocator, text, .{});
     defer parsed.deinit();
 
@@ -58,158 +90,234 @@ pub fn parseAndOutput(
     }
     try util.endStructEnumUnion(writer);
 
-    try util.startEnum("Feature", terrain.features.len, writer);
+    try util.startEnum("Feature", terrain.features.len + 1, writer);
     try writer.print("none = 0,", .{});
     for (terrain.features, 1..) |feature, i| {
         try writer.print("{s} = {},", .{ feature.name, i });
     }
     try util.endStructEnumUnion(writer);
 
-    try util.startEnum("Vegetation", terrain.vegetation.len, writer);
+    try util.startEnum("Vegetation", terrain.vegetation.len + 1, writer);
     try writer.print("none = 0,", .{});
     for (terrain.vegetation, 1..) |vegetation, i| {
         try writer.print("{s} = {},", .{ vegetation.name, i });
     }
     try util.endStructEnumUnion(writer);
 
-    var terrain_tiles = std.ArrayList(Terrain).init(allocator);
-    defer terrain_tiles.deinit();
+    var tiles = std.ArrayList(Tile).init(allocator);
+    defer tiles.deinit();
 
     // Add all base tiles to terrain combinations
     for (terrain.bases) |base| {
-        const base_index = try flag_index_map.add(base.name);
+        const base_index = try maps.bases.add(base.name);
 
-        var flags = Flags.initEmpty();
-        flags.set(base_index);
-
-        try terrain_tiles.append(.{
+        try tiles.append(.{
             .name = base.name,
             .yields = base.yields,
-            .flags = flags,
-            .is_water = base.is_water,
-            .is_rough = base.is_rough,
-            .is_impassable = base.is_impassable,
+            .base = base_index,
+            .attributes = try maps.attributes.addAndGetFlagsFromKeys(base.attributes),
         });
     }
 
-    inline for ([_][]const u8{ "features", "vegetation" }, 0..) |field_name, i| {
-        for (@field(terrain, field_name)) |feature| {
-            const feature_index = try flag_index_map.add(feature.name);
+    {
+        const tiles_len = tiles.items.len;
+        for (terrain.features) |feature| {
+            const feature_index = try maps.features.add(feature.name);
 
-            const allowed_flags = flag_index_map.flagsFromKeys(feature.bases).unionWith(
-                flag_index_map.flagsFromKeys(feature.features),
-            );
+            const allowed_bases = maps.bases.flagsFromKeys(feature.bases);
+            for (0..tiles_len) |tile_index| {
+                const tile = tiles.items[tile_index];
+                if (!allowed_bases.isSet(tile.base)) continue;
 
-            for (0..terrain_tiles.items.len) |tile_index| {
-                const tile = terrain_tiles.items[tile_index];
-                if (!tile.flags.intersectWith(allowed_flags).eql(tile.flags)) continue;
-
-                var new_flags = tile.flags;
-                new_flags.set(feature_index);
-
-                try terrain_tiles.append(.{
-                    .name = try std.mem.concat(arena.allocator(), u8, &.{
-                        tile.name,
-                        "_",
-                        feature.name,
-                    }),
-                    .yields = feature.yields,
-                    .flags = new_flags,
-                    .has_feature = if (i == 0) true else tile.has_feature,
-                    .has_vegetation = if (i == 1) true else tile.has_vegetation,
-                    .is_water = tile.is_water,
-                    .is_rough = tile.is_rough or feature.is_rough,
-                    .is_impassable = tile.is_impassable or feature.is_impassable,
-                });
+                var new_tile = tile;
+                new_tile.name = try std.mem.concat(
+                    arena.allocator(),
+                    u8,
+                    &.{ tile.name, "_", feature.name },
+                );
+                new_tile.yields = feature.yields;
+                new_tile.feature = feature_index;
+                new_tile.attributes = new_tile.attributes.unionWith(
+                    try maps.attributes.addAndGetFlagsFromKeys(feature.attributes),
+                );
+                try tiles.append(new_tile);
             }
         }
     }
 
-    try util.startEnum("Terrain", terrain_tiles.items.len, writer);
-    for (terrain_tiles.items, 0..) |tile, i| {
+    {
+        const tiles_len = tiles.items.len;
+        for (terrain.vegetation) |vegetation| {
+            const vegetation_index = try maps.vegetation.add(vegetation.name);
+
+            const allowed_bases = maps.bases.flagsFromKeys(vegetation.bases);
+            const allowed_features = maps.features.flagsFromKeys(vegetation.features);
+
+            for (0..tiles_len) |tile_index| {
+                const tile = tiles.items[tile_index];
+                if (!allowed_bases.isSet(tile.base)) continue;
+                if (tile.feature != null and !allowed_features.isSet(tile.feature.?)) continue;
+
+                var new_tile = tile;
+                new_tile.name = try std.mem.concat(
+                    arena.allocator(),
+                    u8,
+                    &.{ tile.name, "_", vegetation.name },
+                );
+                new_tile.yields = vegetation.yields;
+                new_tile.vegetation = vegetation_index;
+                new_tile.attributes = new_tile.attributes.unionWith(
+                    try maps.attributes.addAndGetFlagsFromKeys(vegetation.attributes),
+                );
+                try tiles.append(new_tile);
+            }
+        }
+    }
+
+    // Add river and freshwater attribute tiles
+    {
+        const river_index = try maps.attributes.add("river");
+        const freshwater_index = try maps.attributes.add("freshwater");
+
+        const water_index = try maps.attributes.addOrGet("water");
+        for (0..tiles.items.len) |tile_index| {
+            const tile = tiles.items[tile_index];
+            if (tile.attributes.isSet(water_index)) continue;
+
+            var new_attributes = tile.attributes;
+            new_attributes.set(river_index);
+            new_attributes.set(freshwater_index);
+
+            var new_tile = tile;
+            new_tile.name = try std.mem.concat(
+                arena.allocator(),
+                u8,
+                &.{ tile.name, "_river" },
+            );
+            new_tile.attributes = new_attributes;
+            try tiles.append(new_tile);
+        }
+
+        for (0..tiles.items.len) |tile_index| {
+            const tile = tiles.items[tile_index];
+            if (tile.attributes.isSet(water_index)) continue;
+
+            if (tile.attributes.isSet(freshwater_index)) continue;
+
+            var new_attributes = tile.attributes;
+            new_attributes.set(freshwater_index);
+
+            var new_tile = tile;
+            new_tile.name = try std.mem.concat(
+                arena.allocator(),
+                u8,
+                &.{ tile.name, "_freshwater" },
+            );
+            new_tile.attributes = new_attributes;
+            try tiles.append(new_tile);
+        }
+    }
+
+    try writer.print("pub const Attributes = packed struct {{", .{});
+    for (maps.attributes.indices.keys()) |name| {
+        try writer.print("{s}: bool = false,", .{name});
+    }
+    try writer.print("}};", .{});
+
+    try util.startEnum("Terrain", tiles.items.len, writer);
+    for (tiles.items, 0..) |tile, i| {
         try writer.print("{s} = {},", .{ tile.name, i });
     }
 
     try writer.print("\n\n", .{});
-    try util.emitYieldsFunc(Terrain, terrain_tiles.items, writer);
+    try util.emitYieldsFunc(Tile, tiles.items, allocator, writer, false);
 
-    // Emit base()
+    // Emit base(), feature(), vegetation()
     {
-        try writer.print(
-            \\pub fn base(self: @This()) Base {{
-            \\return switch(self) {{
-        , .{});
-        for (terrain.bases) |base| {
-            for (terrain_tiles.items) |tile| {
-                if (tile.flags.isSet(flag_index_map.get(base.name).?)) {
+        inline for (
+            [_][]const u8{ "base", "feature", "vegetation" },
+            [_][]const u8{ "bases", "features", "vegetation" },
+            [_][]const u8{ "Base", "Feature", "Vegetation" },
+            0..,
+        ) |name, field_name, enum_name, i| {
+            try writer.print(
+                \\pub fn {s}(self: @This()) {s} {{
+                \\return switch(self) {{
+            , .{ name, enum_name });
+            for (@field(terrain, field_name)) |e| {
+                for (tiles.items) |tile| {
+                    if (@field(tile, name) != @field(maps, field_name).get(e.name).?) continue;
+
                     try writer.print(
                         \\.{s},
                     , .{tile.name});
                 }
+                try writer.print(
+                    \\=> .{s},
+                , .{e.name});
             }
+            if (i != 0) try writer.print("else => .none,", .{});
             try writer.print(
-                \\=> .{s},
-            , .{base.name});
+                \\}};
+                \\}}
+            , .{});
         }
-        try writer.print(
-            \\}};
-            \\}}
-        , .{});
     }
 
-    // Emit feature(), vegetation()
-    inline for (
-        [_][]const u8{ "features", "vegetation" },
-        [_][]const u8{ "feature", "vegetation" },
-        [_][]const u8{ "Feature", "Vegetation" },
-    ) |field_name, func_name, enum_name| {
+    // Emit attributes()
+    {
+        const indices = try allocator.alloc(u16, tiles.items.len);
+        defer allocator.free(indices);
+
+        for (0..indices.len) |i| {
+            indices[i] = @truncate(i);
+        }
+
+        std.sort.pdq(u16, indices, tiles.items, struct {
+            pub fn lessThan(context: []const Tile, a: u16, b: u16) bool {
+                const a_bits = FlagIndexMap.integerFromFlags(context[a].attributes);
+                const b_bits = FlagIndexMap.integerFromFlags(context[b].attributes);
+                return a_bits < b_bits;
+            }
+        }.lessThan);
+
         try writer.print(
-            \\pub fn {s}(self: @This()) {s} {{
+            \\pub fn attributes(self: @This()) Attributes {{
             \\return switch(self) {{
-        , .{ func_name, enum_name });
-        for (@field(terrain, field_name)) |feature| {
-            for (terrain_tiles.items) |tile| {
-                if (tile.flags.isSet(flag_index_map.get(feature.name).?)) {
+        , .{});
+        const attribute_names = maps.attributes.indices.keys();
+
+        var current_flags = tiles.items[indices[0]].attributes;
+        for (indices) |i| {
+            const tile = tiles.items[@intCast(i)];
+            const new_flags = tile.attributes;
+            if (!new_flags.eql(current_flags)) {
+                if (current_flags.count() != 0) {
                     try writer.print(
-                        \\.{s},
-                    , .{tile.name});
+                        \\=> .{{
+                    , .{});
+                    while (current_flags.toggleFirstSet()) |index| {
+                        try writer.print(".{s} = true,", .{attribute_names[index]});
+                    }
+                    try writer.print("}},", .{});
                 }
+                current_flags = new_flags;
             }
             try writer.print(
-                \\=> .{s},
-            , .{feature.name});
+                \\.{s},
+            , .{tile.name});
         }
+
         try writer.print(
-            \\else => .none,
-            \\}};
-            \\}}
+            \\=> .{{
         , .{});
-    }
+        while (current_flags.toggleFirstSet()) |index| {
+            try writer.print(".{s} = true,", .{attribute_names[index]});
+        }
+        try writer.print("}},", .{});
 
-    // Emit isSomething functions
-    inline for (
-        [_][]const u8{ "is_water", "is_impassable", "is_rough" },
-        [_][]const u8{ "isWater", "isImpassable", "isRough" },
-    ) |field_name, func_name| {
         try writer.print(
-            \\pub fn {s}(self: @This()) bool {{
-            \\return switch(self) {{
-        , .{func_name});
-
-        var count: usize = 0;
-        for (terrain_tiles.items) |tile| {
-            if (@field(tile, field_name)) {
-                try writer.print(".{s},", .{tile.name});
-                count += 1;
-            }
-        }
-        if (count != 0) {
-            try writer.print("=> true,", .{});
-        }
-        if (count != terrain_tiles.items.len) {
-            try writer.print("else => false,", .{});
-        }
-        try writer.print(
+            \\else => .{{}},
             \\}};
             \\}}
         , .{});
@@ -217,5 +325,14 @@ pub fn parseAndOutput(
 
     try util.endStructEnumUnion(writer);
 
-    return try terrain_tiles.toOwnedSlice();
+    return .{
+        .tiles = try tiles.toOwnedSlice(),
+        .maps = .{
+            .bases = maps.bases,
+            .features = maps.features,
+            .vegetation = maps.vegetation,
+            .attributes = maps.attributes,
+        },
+        .arena = arena,
+    };
 }

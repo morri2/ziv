@@ -49,7 +49,8 @@ pub fn main() !void {
         var texture_height: c_int = 0;
 
         inline for (enum_fields, 0..) |field, i| {
-            const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
+            const path = "textures/" ++ field.name ++ ".png";
+            const img = if (raylib.FileExists(path)) raylib.LoadImage(path) else raylib.LoadImage("textures/placeholder.png");
             defer raylib.UnloadImage(img);
 
             if (i == 0) texture_height = img.height else {
