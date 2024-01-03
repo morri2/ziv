@@ -78,11 +78,7 @@ pub fn HexGrid(comptime T: type) type {
             const hex_data = try allocator.alloc(T, width * height);
             errdefer allocator.free(hex_data);
 
-            // if (@typeInfo(T) == .Float or @typeInfo(T) == .Int) {
-            //     @memset(hex_data, 0);
-            // } else {
-            //     @memset(hex_data, .{});
-            // }
+            @memset(hex_data, std.mem.zeroes(T));
 
             return Self{
                 .width = width,
