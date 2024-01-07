@@ -11,7 +11,7 @@ const Resource = rules.Resource;
 const Edge = hex.Edge;
 const HexIdx = hex.HexIdx;
 const HexDir = hex.HexDir;
-const HexGrid = hex.HexGrid(Tile);
+const TileMap = hex.HexGrid(Tile);
 
 /// The lowest index is always in low :))
 pub const WorkInProgress = struct {
@@ -39,7 +39,7 @@ wrap_around: bool = false,
 allocator: std.mem.Allocator,
 
 // Per tile data
-tiles: HexGrid,
+tiles: TileMap,
 
 // Tile lookup data
 resources: std.AutoArrayHashMapUnmanaged(HexIdx, ResourceAndAmount),
@@ -56,7 +56,7 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_arou
 
         .allocator = allocator,
 
-        .tiles = try HexGrid.init(width, height, wrap_around, allocator),
+        .tiles = try TileMap.init(width, height, wrap_around, allocator),
 
         .resources = .{},
         .work_in_progress = .{},
