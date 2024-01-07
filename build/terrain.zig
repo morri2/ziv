@@ -319,7 +319,7 @@ pub fn parseAndOutput(
         try writer.print("}},", .{});
 
         try writer.print(
-            \\else => .{{}},
+        //\\else => .{{}}, // Yeet, because all cases handled :)
             \\}};
             \\}}
         , .{});
