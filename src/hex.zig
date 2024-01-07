@@ -35,6 +35,15 @@ pub const HexIdx = usize;
 pub const Edge = struct {
     low: HexIdx,
     high: HexIdx,
+
+    /// OBS! Does not garuantee the tiles are adjacent
+    fn between(a: HexIdx, b: HexIdx) ?Edge {
+        if (a == b) return null;
+        return Edge{
+            .low = @min(a, b),
+            .high = @max(a, b),
+        };
+    }
 };
 
 pub const HexDir = enum(u3) {
@@ -137,6 +146,15 @@ pub fn HexGrid(comptime T: type) type {
                 .low = @min(n, src),
                 .high = @max(n, src),
             };
+        }
+
+        /// Returns edge between a and b
+        pub fn getEdgeBetween(self: Self, a: HexIdx, b: HexIdx) ?Edge {
+            const src_neighbours = self.neighbours(a);
+            var are_neighbours = false;
+            for (0..6) |i| are_neighbours = are_neighbours or src_neighbours[i] == b;
+            if (!are_neighbours) return null;
+            return Edge.between(a, b);
         }
 
         /// Returns an array of HexIdx:s adjacent to the current tile, will be null if no tile exists in that direction.
