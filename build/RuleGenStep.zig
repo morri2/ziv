@@ -45,19 +45,10 @@ pub fn getSource(self: *Self) Build.FileSource {
     return .{ .generated = &self.generated_file };
 }
 
-/// Create a base-64 hash digest from a hasher, which we can use as file name.
-fn digest(hasher: anytype) [64]u8 {
-    var hash_digest: [48]u8 = undefined;
-    hasher.final(&hash_digest);
-    var hash: [64]u8 = undefined;
-    _ = std.fs.base64_encoder.encode(&hash, &hash_digest);
-    return hash;
-}
-
 fn readAndHash(
     dir: std.fs.Dir,
     sub_path: []const u8,
-    hasher: *std.crypto.hash.blake2.Blake2b384,
+    hash: *std.Build.Cache.HashHelper,
     allocator: std.mem.Allocator,
 ) ![]const u8 {
     const file = try dir.openFile(sub_path, .{});
@@ -65,7 +56,7 @@ fn readAndHash(
 
     const text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     errdefer allocator.free(text);
-    hasher.update(text);
+    hash.addBytes(text);
     return text;
 }
 
@@ -76,26 +67,27 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const self = @fieldParentPtr(Self, "step", step);
     const cwd = std.fs.cwd();
 
+    var man = b.cache.obtain();
+    defer man.deinit();
+
     // Read all JSON files
     const text = blk: {
         var rules_dir = try cwd.openDir(self.rules_path.getPath(b), .{});
         defer rules_dir.close();
 
-        var hasher = std.crypto.hash.blake2.Blake2b384.init(.{});
-
-        const terrain = try readAndHash(rules_dir, "terrain.json", &hasher, b.allocator);
+        const terrain = try readAndHash(rules_dir, "terrain.json", &man.hash, b.allocator);
         errdefer b.allocator.free(terrain);
 
-        const resources = try readAndHash(rules_dir, "resources.json", &hasher, b.allocator);
+        const resources = try readAndHash(rules_dir, "resources.json", &man.hash, b.allocator);
         errdefer b.allocator.free(resources);
 
-        const improvements = try readAndHash(rules_dir, "improvements.json", &hasher, b.allocator);
+        const improvements = try readAndHash(rules_dir, "improvements.json", &man.hash, b.allocator);
         errdefer b.allocator.free(improvements);
 
-        const promotions = try readAndHash(rules_dir, "promotions.json", &hasher, b.allocator);
+        const promotions = try readAndHash(rules_dir, "promotions.json", &man.hash, b.allocator);
         errdefer b.allocator.free(promotions);
 
-        const units = try readAndHash(rules_dir, "units.json", &hasher, b.allocator);
+        const units = try readAndHash(rules_dir, "units.json", &man.hash, b.allocator);
         errdefer b.allocator.free(units);
 
         break :blk .{
@@ -104,7 +96,6 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             .improvements = improvements,
             .promotions = promotions,
             .units = units,
-            .hash = digest(&hasher),
         };
     };
     defer b.allocator.free(text.resources);
@@ -113,24 +104,21 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     defer b.allocator.free(text.promotions);
     defer b.allocator.free(text.units);
 
+    const cache_hit = try man.hit();
+
+    const hash = man.final();
     const rules_zig_dir = try b.cache_root.join(
         b.allocator,
-        &.{ "rules", &text.hash },
+        &.{ "rules", &hash },
     );
     const rules_out_path = try std.fs.path.join(
         b.allocator,
         &.{ rules_zig_dir, "rules.zig" },
     );
 
-    // // uncomment when the gen code is done ish
-    // cache_check: {
-    //     std.fs.accessAbsolute(rules_out_path, .{}) catch |err| switch (err) {
-    //         error.FileNotFound => break :cache_check,
-    //         else => |e| return e,
-    //     };
-    //     self.generated_file.path = rules_out_path;
-    //     return;
-    // }
+    // uncomment when the gen code is done ish
+    self.generated_file.path = rules_out_path;
+    if (cache_hit) return;
 
     try cwd.makePath(rules_zig_dir);
 
@@ -231,5 +219,4 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     std.debug.print("{s}", .{formatted});
 
     try cwd.writeFile(rules_out_path, formatted);
-    self.generated_file.path = rules_out_path;
 }
