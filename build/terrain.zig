@@ -33,12 +33,6 @@ const Vegetation = struct {
     attributes: []const []const u8 = &.{},
 };
 
-const ExtraAttribute = struct {
-    name: []const u8,
-    @"or": []const []const u8 = &.{},
-    @"and": []const []const u8 = &.{},
-};
-
 pub const Tile = struct {
     name: []const u8,
     yields: Yields,
