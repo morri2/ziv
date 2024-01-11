@@ -15,15 +15,14 @@ pub const UnitEffect = enum {
     RoughTerrainBonusRange,
     OpenTerrainBonus, // +(value)%
     OpenTerrainBonusRange,
-    SettleCity, 
-    CanFortify, 
-    BuildRoads, 
-    BuildRail, 
+    SettleCity,
+    CanFortify,
+    BuildRoads,
+    BuildRail,
     BuildImprovement,
     ModifyAttackRange, // +(value)
     ModifyMovement, // +(value)
     ModifySightRange, // +(value)
-    IgnoreTerrainMove, 
+    IgnoreTerrainMove,
     CanEmbark,
-}
-
+};
