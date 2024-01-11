@@ -312,6 +312,42 @@ pub fn parseAndOutput(
 
     try util.endStructEnumUnion(writer);
 
+    {
+        try writer.print(
+            \\pub const TerrainUnpacked = struct {{
+            \\base: Base,
+            \\feature: ?Feature = null,
+            \\vegetation: ?Vegetation = null,
+            \\river: bool = false,
+            \\freshwater: bool = false,
+            \\
+            \\const map = foundation.comptime_hash_map.AutoComptimeHashMap(@This(), Terrain, .{{
+        , .{});
+
+        const river_attribute_index = maps.attributes.get("river").?;
+        const freshwater_attribute_index = maps.attributes.get("freshwater").?;
+
+        const base_names = maps.bases.indices.keys();
+        const feature_names = maps.features.indices.keys();
+        const vegetation_names = maps.vegetation.indices.keys();
+        for (tiles.items[0..32]) |tile| {
+            try writer.print(".{{.{{.base = .{s},", .{base_names[tile.base]});
+            if (tile.feature) |feature| try writer.print(".feature = .{s},", .{feature_names[feature]});
+            if (tile.vegetation) |vegetation| try writer.print(".vegetation = .{s},", .{vegetation_names[vegetation]});
+            try writer.print(".river = {},", .{tile.attributes.isSet(river_attribute_index)});
+            try writer.print(".freshwater = {},", .{tile.attributes.isSet(freshwater_attribute_index)});
+            try writer.print("}}, .{s}, }},", .{tile.name});
+        }
+
+        try writer.print(
+            \\}});
+            \\pub fn pack(self: @This()) ?Terrain {{
+            \\return map.get(self);
+            \\}}
+        , .{});
+        try util.endStructEnumUnion(writer);
+    }
+
     return .{
         .tiles = try tiles.toOwnedSlice(),
         .maps = .{
