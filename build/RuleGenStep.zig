@@ -1,5 +1,6 @@
 const std = @import("std");
 const Build = std.Build;
+const Module = Build.Module;
 const LazyPath = Build.LazyPath;
 
 const Self = @This();
@@ -14,12 +15,15 @@ rules_path: LazyPath,
 /// The main Zig file that contains for the rule types
 generated_file: Build.GeneratedFile,
 
+foundation: *Build.Module,
+
 print_rules: bool,
 
 pub fn create(
     builder: *Build,
     rules_path: LazyPath,
     print_rules: bool,
+    foundation: *Module,
 ) *Self {
     const self = builder.allocator.create(Self) catch unreachable;
     self.* = .{
@@ -30,6 +34,7 @@ pub fn create(
             .makeFn = make,
         }),
         .rules_path = rules_path,
+        .foundation = foundation,
         .print_rules = print_rules,
         .generated_file = undefined,
     };
@@ -41,6 +46,10 @@ pub fn create(
 pub fn getModule(self: *Self) *Build.Module {
     return self.step.owner.createModule(.{
         .source_file = self.getSource(),
+        .dependencies = &.{.{
+            .name = "foundation",
+            .module = self.foundation,
+        }},
     });
 }
 
@@ -135,15 +144,8 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     {
         try writer.print(
             \\const std = @import("std");
-            \\
-            \\pub const Yield = packed struct {{
-            \\    food: u5 = 0,
-            \\    production: u5 = 0,
-            \\    gold: u5 = 0,
-            \\    culture: u5 = 0,
-            \\    faith: u5 = 0,
-            \\    science: u5 = 0,
-            \\}};
+            \\const foundation = @import("foundation");
+            \\const Yield = foundation.Yield;
         , .{});
     }
 
