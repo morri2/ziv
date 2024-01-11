@@ -8,6 +8,11 @@ pub fn build(b: *std.Build) void {
     const rule_gen_step = RuleGenStep.create(
         b,
         .{ .cwd_relative = "base_rules" },
+        b.option(
+            bool,
+            "print_rules_zig",
+            "Print generated rules.zig",
+        ) orelse false,
     );
 
     const raylib_dep = b.dependency("raylib", .{});

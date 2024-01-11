@@ -14,9 +14,12 @@ rules_path: LazyPath,
 /// The main Zig file that contains for the rule types
 generated_file: Build.GeneratedFile,
 
+print_rules: bool,
+
 pub fn create(
     builder: *Build,
     rules_path: LazyPath,
+    print_rules: bool,
 ) *Self {
     const self = builder.allocator.create(Self) catch unreachable;
     self.* = .{
@@ -27,6 +30,7 @@ pub fn create(
             .makeFn = make,
         }),
         .rules_path = rules_path,
+        .print_rules = print_rules,
         .generated_file = undefined,
     };
     self.generated_file = .{ .step = &self.step };
@@ -216,7 +220,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     const formatted = try tree.render(b.allocator);
     defer b.allocator.free(formatted);
 
-    std.debug.print("{s}", .{formatted});
+    if (self.print_rules) std.debug.print("{s}", .{formatted});
 
     try cwd.writeFile(rules_out_path, formatted);
 }
