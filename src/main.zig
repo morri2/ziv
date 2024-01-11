@@ -154,7 +154,7 @@ pub fn main() !void {
             const real_y = hex.tilingY(y, hex_radius);
 
             for (min_x..max_x) |x| {
-                const index = world.grid.coordToIdx(x, y);
+                const index = world.grid.idxFromCoords(x, y);
                 const real_x = hex.tilingX(x, y, hex_radius);
 
                 const tile = world.tiles[index];

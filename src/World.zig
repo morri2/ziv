@@ -76,29 +76,3 @@ pub fn deinit(self: *Self) void {
     self.resources.deinit(self.allocator);
     self.allocator.free(self.tiles);
 }
-
-test "neighbour test" {
-    var world = try Self.init(std.testing.allocator, 128, 80, true);
-
-    defer world.deinit();
-    //try std.testing.expect(false);
-    try std.testing.expectEqual(
-        world.coordToIdx(1, 0),
-        world.neighbours(world.coordToIdx(0, 0))[HexDir.E.int()].?,
-    ); // EAST
-    try std.testing.expectEqual(
-        world.coordToIdx(127, 0),
-        world.neighbours(world.coordToIdx(0, 0))[HexDir.W.int()].?,
-    ); // WEST wrap
-    try std.testing.expect(
-        null == world.neighbours(world.coordToIdx(0, 0))[HexDir.NE.int()],
-    ); // NE (is null)
-    try std.testing.expectEqual(
-        world.coordToIdx(0, 1),
-        world.neighbours(world.coordToIdx(0, 0))[HexDir.SE.int()].?,
-    ); // SE
-    try std.testing.expectEqual(
-        world.coordToIdx(127, 1),
-        world.neighbours(world.coordToIdx(0, 0))[HexDir.SW.int()].?,
-    ); // SW wrap
-}

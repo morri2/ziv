@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const Self = @This();
 
 pub const Idx = usize;
@@ -55,35 +57,20 @@ pub fn init(
 //    / \ / \ / \ / \ / \ /
 //   |0,2|1,2|2,2|3,2|4,2|
 
-pub fn coordToIdx(self: Self, x: usize, y: usize) Idx {
+pub fn idxFromCoords(self: Self, x: usize, y: usize) Idx {
     return y * self.width + x;
 }
 
-pub fn idxToX(self: Self, idx: Idx) usize {
+pub fn xFromIdx(self: Self, idx: Idx) usize {
     return idx % self.width;
 }
 
-pub fn idxToY(self: Self, idx: Idx) usize {
+pub fn yFromIdx(self: Self, idx: Idx) usize {
     return idx / self.width;
 }
 
-/// like coordToIdx but takes signed shit and also allows wraparound
-pub fn xyToIdxSigned(self: Self, x: isize, y: isize) ?Idx {
-    const uy: usize = @intCast(@mod(y, @as(isize, @intCast(self.height))));
-    const ux: usize = @intCast(@mod(x, @as(isize, @intCast(self.width))));
-    // y-wrap around, idk if this is ever needed
-    if (y >= self.height or y < 0) return null;
-    // x-wrap around, we like doing this
-    if ((x >= self.height or x < 0) and !self.wrap_around) return null;
-    return uy * self.width + ux;
-}
-
-pub fn getNeighbour(self: Self, src: Idx, dir: Dir) ?Idx {
-    return self.neighbours(src)[dir.int()];
-}
-
 /// Returns edge "dir" of given hexs
-pub fn getDirEdge(self: Self, src: Idx, dir: Dir) ?Edge {
+pub fn dirEdge(self: Self, src: Idx, dir: Dir) ?Edge {
     const n: Idx = self.getNeighbour(src, dir) orelse return null;
     return Edge{
         .low = @min(n, src),
@@ -92,7 +79,7 @@ pub fn getDirEdge(self: Self, src: Idx, dir: Dir) ?Edge {
 }
 
 /// Returns edge between a and b
-pub fn getEdgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
+pub fn edgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
     const src_neighbours = self.neighbours(a);
     var are_neighbours = false;
     for (0..6) |i| are_neighbours = are_neighbours or src_neighbours[i] == b;
@@ -103,28 +90,58 @@ pub fn getEdgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
 /// Returns an array of Idx:s adjacent to the current tile, will be null if no tile exists in that direction.
 /// Index is the direction: 0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW
 pub fn neighbours(self: Self, src: Idx) [6]?Idx {
-    const x: isize = @intCast(self.idxToX(src));
-    const y: isize = @intCast(self.idxToY(src));
+    const x = self.xFromIdx(src);
+    const y = self.yFromIdx(src);
 
-    var ns: [6]?Idx = [_]?Idx{null} ** 6;
+    const west, const east = if (self.wrap_around) .{
+        if (x == 0) self.width - 1 else x - 1,
+        if (x == self.width - 1) 0 else x + 1,
+    } else .{
+        x -| 1,
+        x +| 1,
+    };
 
+    const north = y -| 1;
+    const south = y +| 1;
+
+    var ns: [6]Idx = undefined;
     // we assume wrap around, then yeet them if not
-    ns[Dir.E.int()] = self.xyToIdxSigned(x + 1, y);
-    ns[Dir.W.int()] = self.xyToIdxSigned(x - 1, y);
+    ns[Dir.E.int()] = self.idxFromCoords(east, y);
+    ns[Dir.W.int()] = self.idxFromCoords(west, y);
 
     if (@mod(y, 2) == 0) {
-        ns[Dir.NE.int()] = self.xyToIdxSigned(x, y - 1);
-        ns[Dir.SE.int()] = self.xyToIdxSigned(x, y + 1);
+        ns[Dir.NE.int()] = self.idxFromCoords(x, north);
+        ns[Dir.SE.int()] = self.idxFromCoords(x, south);
 
-        ns[Dir.NW.int()] = self.xyToIdxSigned(x - 1, y - 1);
-        ns[Dir.SW.int()] = self.xyToIdxSigned(x - 1, y + 1);
+        ns[Dir.NW.int()] = self.idxFromCoords(west, north);
+        ns[Dir.SW.int()] = self.idxFromCoords(west, south);
     } else {
-        ns[Dir.NW.int()] = self.xyToIdxSigned(x, y - 1);
-        ns[Dir.SW.int()] = self.xyToIdxSigned(x, y + 1);
+        ns[Dir.NW.int()] = self.idxFromCoords(x, north);
+        ns[Dir.SW.int()] = self.idxFromCoords(x, south);
 
-        ns[Dir.NE.int()] = self.xyToIdxSigned(x + 1, y - 1);
-        ns[Dir.SE.int()] = self.xyToIdxSigned(x + 1, y + 1);
+        ns[Dir.NE.int()] = self.idxFromCoords(east, north);
+        ns[Dir.SE.int()] = self.idxFromCoords(east, south);
     }
 
-    return ns;
+    var out_ns: [6]?Idx = undefined;
+    for (ns, 0..) |n, i| {
+        out_ns[i] = if (n == src) null else n;
+    }
+
+    return out_ns;
+}
+
+test "neighbours with wrap around" {
+    const grid = Self.init(100, 50, true);
+
+    const idx = grid.idxFromCoords(0, 4);
+
+    try std.testing.expectEqual([_]?Idx{
+        grid.idxFromCoords(0, 3), // NE
+        grid.idxFromCoords(1, 4), // E
+        grid.idxFromCoords(0, 5), // SE
+        grid.idxFromCoords(99, 5), // SW
+        grid.idxFromCoords(99, 4), // W
+        grid.idxFromCoords(99, 3), // NW
+    }, grid.neighbours(idx));
 }
