@@ -208,12 +208,15 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
     if (tree.errors.len != 0) {
         const stderr = std.io.getStdErr();
         const stderr_writer = stderr.writer();
+
+        try stderr_writer.writeAll(src);
+        try stderr_writer.writeByte('\n');
+
         for (tree.errors) |err| {
             const location = tree.tokenLocation(0, err.token);
             try stderr_writer.print("{}:{}: error: ", .{ location.line, location.column });
             try tree.renderError(err, stderr_writer);
             try stderr_writer.writeByte('\n');
-            std.debug.print("{s}", .{src});
         }
         return error.ZigSyntaxError;
     }
