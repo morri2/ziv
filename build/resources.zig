@@ -45,7 +45,8 @@ pub fn parseAndOutput(
         try writer.print("{s},", .{resource.name});
     }
 
-    try util.emitYieldsFunc(Resource, all_resources, allocator, writer, false);
+    // Yields
+    try util.emitYieldTable(Resource, all_resources, writer);
 
     try writer.print(
         \\pub const Kind = enum (u2) {{
@@ -55,20 +56,21 @@ pub fn parseAndOutput(
         \\}};
     , .{});
 
+    try writer.print("pub const kind_table = [_]Kind {{", .{});
+    for (0..resources.bonus.len) |_| {
+        try writer.print(".bonus,", .{});
+    }
+    for (0..resources.luxury.len) |_| {
+        try writer.print(".luxury,", .{});
+    }
+    for (0..resources.strategic.len) |_| {
+        try writer.print(".strategic,", .{});
+    }
+    try writer.print("}};", .{});
+
     try writer.print(
         \\pub fn kind(self: @This()) Kind {{
-        \\return switch(self) {{
-    , .{});
-    inline for ([_][]const u8{ "bonus", "strategic", "luxury" }) |field_name| {
-        for (@field(resources, field_name)) |resource| {
-            try writer.print(".{s},", .{resource.name});
-        }
-        try writer.print(
-            \\=> .{s},
-        , .{field_name});
-    }
-    try writer.print(
-        \\}};
+        \\return kind_table[@intFromEnum(self)];
         \\}}
     , .{});
 

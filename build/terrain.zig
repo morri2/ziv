@@ -226,113 +226,86 @@ pub fn parseAndOutput(
     }
 
     try writer.print("\n\n", .{});
-    try util.emitYieldsFunc(Tile, tiles.items, allocator, writer, false);
 
-    // Emit base(), feature(), vegetation()
+    // yield()
+    try util.emitYieldTable(Tile, tiles.items, writer);
+
+    // base(), feature(), vegetation()
     {
-        inline for (
-            [_][]const u8{ "base", "feature", "vegetation" },
-            [_][]const u8{ "bases", "features", "vegetation" },
-            [_][]const u8{ "Base", "Feature", "Vegetation" },
-            0..,
-        ) |name, field_name, enum_name, i| {
-            try writer.print(
-                \\pub fn {s}(self: @This()) {s} {{
-                \\return switch(self) {{
-            , .{ name, enum_name });
-            for (@field(terrain, field_name)) |e| {
-                for (tiles.items) |tile| {
-                    if (@field(tile, name) != @field(maps, field_name).get(e.name).?) continue;
-
-                    try writer.print(
-                        \\.{s},
-                    , .{tile.name});
-                }
-                try writer.print(
-                    \\=> .{s},
-                , .{e.name});
-            }
-            if (i != 0) try writer.print("else => .none,", .{});
-            try writer.print(
-                \\}};
-                \\}}
-            , .{});
+        const base_names = maps.bases.indices.keys();
+        try writer.print("pub const base_table = [_]Base{{", .{});
+        for (tiles.items) |tile| {
+            try writer.print(".{s},", .{base_names[tile.base]});
         }
+        try writer.print("}};", .{});
+
+        const feature_names = maps.features.indices.keys();
+        try writer.print("pub const feature_table = [_]Feature{{", .{});
+        for (tiles.items) |tile| {
+            if (tile.feature) |feature| {
+                try writer.print(".{s},", .{feature_names[feature]});
+            } else {
+                try writer.print(".none,", .{});
+            }
+        }
+        try writer.print("}};", .{});
+
+        const vegetation_names = maps.vegetation.indices.keys();
+        try writer.print("pub const vegetation_table = [_]Vegetation{{", .{});
+        for (tiles.items) |tile| {
+            if (tile.vegetation) |vegetation| {
+                try writer.print(".{s},", .{vegetation_names[vegetation]});
+            } else {
+                try writer.print(".none,", .{});
+            }
+        }
+        try writer.print("}};", .{});
+
+        try writer.print(
+            \\pub inline fn base(self: @This()) Base {{
+            \\return base_table[@intFromEnum(self)];
+            \\}}
+            \\pub inline fn feature(self: @This()) Feature {{
+            \\return feature_table[@intFromEnum(self)];
+            \\}}
+            \\pub inline fn vegetation(self: @This()) Vegetation {{
+            \\return vegetation_table[@intFromEnum(self)];
+            \\}}
+        , .{});
     }
 
-    // Emit attributes()
+    // attributes()
     {
-        const indices = try allocator.alloc(u16, tiles.items.len);
-        defer allocator.free(indices);
-
-        for (0..indices.len) |i| {
-            indices[i] = @truncate(i);
-        }
-
-        std.sort.pdq(u16, indices, tiles.items, struct {
-            pub fn lessThan(context: []const Tile, a: u16, b: u16) bool {
-                const a_bits = FlagIndexMap.integerFromFlags(context[a].attributes);
-                const b_bits = FlagIndexMap.integerFromFlags(context[b].attributes);
-                return a_bits < b_bits;
+        const attribute_names = maps.attributes.indices.keys();
+        try writer.print("pub const attribute_table = [_]Attributes {{", .{});
+        for (tiles.items) |tile| {
+            var flags = tile.attributes;
+            try writer.print(".{{", .{});
+            while (flags.toggleFirstSet()) |index| {
+                try writer.print(".{s} = true,", .{attribute_names[index]});
             }
-        }.lessThan);
+            try writer.print("}},", .{});
+        }
+        try writer.print("}};", .{});
 
         try writer.print(
             \\pub fn attributes(self: @This()) Attributes {{
-            \\return switch(self) {{
-        , .{});
-        const attribute_names = maps.attributes.indices.keys();
-
-        var current_flags = tiles.items[indices[0]].attributes;
-        for (indices) |i| {
-            const tile = tiles.items[@intCast(i)];
-            const new_flags = tile.attributes;
-            if (!new_flags.eql(current_flags)) {
-                if (current_flags.count() != 0) {
-                    try writer.print(
-                        \\=> .{{
-                    , .{});
-                    while (current_flags.toggleFirstSet()) |index| {
-                        try writer.print(".{s} = true,", .{attribute_names[index]});
-                    }
-                    try writer.print("}},", .{});
-                }
-                current_flags = new_flags;
-            }
-            try writer.print(
-                \\.{s},
-            , .{tile.name});
-        }
-
-        try writer.print(
-            \\=> .{{
-        , .{});
-        while (current_flags.toggleFirstSet()) |index| {
-            try writer.print(".{s} = true,", .{attribute_names[index]});
-        }
-        try writer.print("}},", .{});
-
-        try writer.print(
-            \\else => .{{}},
-            \\}};
+            \\return attribute_table[@intFromEnum(self)];
             \\}}
         , .{});
     }
 
     // happiness()
     {
+        try writer.print("pub const happiness_table = [_]u8 {{", .{});
+        for (tiles.items) |tile| {
+            try writer.print("{},", .{tile.happiness});
+        }
+        try writer.print("}};", .{});
+
         try writer.print(
             \\pub fn happiness(self: @This()) u8 {{
-            \\return switch(self) {{
-        , .{});
-        for (tiles.items) |tile| {
-            if (tile.happiness == 0) continue;
-
-            try writer.print(".{s} => {},", .{ tile.name, tile.happiness });
-        }
-        try writer.print(
-            \\else => 0,
-            \\}};
+            \\return happiness_table[@intFromEnum(self)];
             \\}}
         , .{});
     }

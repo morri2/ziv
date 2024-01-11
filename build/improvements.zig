@@ -264,7 +264,8 @@ pub fn parseAndOutput(
         , .{});
     }
 
-    try util.emitYieldsFunc(Building, improvements.buildings, allocator, writer, true);
+    // yield()
+    try util.emitYieldTable(Building, improvements.buildings, writer);
 
     try util.endStructEnumUnion(writer);
     try writer.print(
