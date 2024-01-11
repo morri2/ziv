@@ -144,24 +144,6 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
             \\    faith: u5 = 0,
             \\    science: u5 = 0,
             \\}};
-            \\
-            \\pub const Transport = enum(u2) {{
-            \\    none,
-            \\    road,
-            \\    rail,
-            \\}};
-            \\
-            \\pub const Tile = packed struct {{
-            \\    terrain: Terrain = @enumFromInt(0),
-            \\    improvement: Improvement = .none,
-            \\    transport: Transport = .none,
-            \\    pillaged_improvements: bool = false,
-            \\    pillaged_transport: bool = false,
-            \\
-            \\    comptime {{
-            \\        std.debug.assert(@sizeOf(@This()) == 2);
-            \\    }}
-            \\}};
         , .{});
     }
 

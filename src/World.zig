@@ -2,8 +2,9 @@ const Self = @This();
 const std = @import("std");
 
 const rules = @import("rules");
-const Tile = rules.Tile;
-const Improvement = rules.Improvement;
+const Terrain = rules.Terrain;
+const Improvements = rules.Improvements;
+
 const Transport = rules.Transport;
 const Resource = rules.Resource;
 
@@ -15,9 +16,9 @@ const HexDir = Grid.Dir;
 /// The lowest index is always in low :))
 pub const WorkInProgress = struct {
     work_type: union(enum) {
-        build_improvement: Improvement,
-        remove_vegetation_build_improvement: Improvement,
-        build_transport: Transport,
+        building: Improvements.Building,
+        remove_vegetation_building: Improvements.Building,
+        transport: Improvements.Transport,
         remove_fallout,
         repair,
         remove_vegetation,
@@ -36,7 +37,8 @@ allocator: std.mem.Allocator,
 grid: Grid,
 
 // Per tile data
-tiles: []Tile,
+terrain: []Terrain,
+improvements: []Improvements,
 
 // Tile lookup data
 resources: std.AutoArrayHashMapUnmanaged(HexIdx, ResourceAndAmount),
@@ -53,16 +55,21 @@ pub fn init(
 ) !Self {
     const grid = Grid.init(width, height, wrap_around);
 
-    const tiles = try allocator.alloc(Tile, grid.len);
-    errdefer allocator.free(tiles);
-    @memset(tiles, std.mem.zeroes(Tile));
+    const terrain = try allocator.alloc(Terrain, grid.len);
+    errdefer allocator.free(terrain);
+    @memset(terrain, std.mem.zeroes(Terrain));
+
+    const improvements = try allocator.alloc(Improvements, grid.len);
+    errdefer allocator.free(terrain);
+    @memset(improvements, std.mem.zeroes(Improvements));
 
     return Self{
         .allocator = allocator,
 
         .grid = grid,
 
-        .tiles = tiles,
+        .terrain = terrain,
+        .improvements = improvements,
 
         .resources = .{},
         .work_in_progress = .{},
@@ -74,5 +81,6 @@ pub fn deinit(self: *Self) void {
     self.rivers.deinit(self.allocator);
     self.work_in_progress.deinit(self.allocator);
     self.resources.deinit(self.allocator);
-    self.allocator.free(self.tiles);
+    self.allocator.free(self.improvements);
+    self.allocator.free(self.terrain);
 }

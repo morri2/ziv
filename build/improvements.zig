@@ -8,7 +8,7 @@ const Yields = util.Yields;
 const FlagIndexMap = @import("FlagIndexMap.zig");
 const Flags = FlagIndexMap.Flags;
 
-const Improvement = struct {
+const Building = struct {
     name: []const u8,
     build_turns: u8,
     allow_on: struct {
@@ -42,25 +42,34 @@ pub fn parseAndOutput(
     allocator: std.mem.Allocator,
 ) !void {
     const parsed = try std.json.parseFromSlice(struct {
-        improvements: []Improvement,
+        buildings: []Building,
     }, allocator, text, .{});
     defer parsed.deinit();
 
     const improvements = parsed.value;
 
-    try writer.print("\npub const ImprovementAllowed = enum {{ not_allowed, allowed, allowed_after_clear }};\n", .{});
+    try writer.print(
+        \\pub const Improvements = packed struct {{
+        \\    building: Building = .none,
+        \\    transport: Transport = .none,
+        \\    pillaged_improvements: bool = false,
+        \\    pillaged_transport: bool = false,
+        \\
+    , .{});
 
     try util.startEnum(
-        "Improvement",
-        improvements.improvements.len,
+        "Building",
+        improvements.buildings.len,
         writer,
     );
 
     try writer.print("none,\n", .{});
 
-    for (improvements.improvements) |improvement| {
-        try writer.print("{s},\n", .{improvement.name});
+    for (improvements.buildings) |building| {
+        try writer.print("{s},\n", .{building.name});
     }
+
+    try writer.print("\npub const Allowed = enum {{ not_allowed, allowed, allowed_after_clear }};\n", .{});
 
     // connects resource function
     try writer.print(
@@ -70,12 +79,12 @@ pub fn parseAndOutput(
         \\
     , .{});
 
-    for (improvements.improvements) |imp| {
-        try writer.print(".{s} => switch (resource) {{", .{imp.name});
-        for (imp.allow_on.resources) |res| {
+    for (improvements.buildings) |building| {
+        try writer.print(".{s} => switch (resource) {{", .{building.name});
+        for (building.allow_on.resources) |res| {
             try writer.print(".{s}, ", .{res});
         }
-        if (imp.allow_on.resources.len > 0) {
+        if (building.allow_on.resources.len > 0) {
             try writer.print("=> true,", .{});
         }
         try writer.print("else => false, }},\n     ", .{});
@@ -91,13 +100,13 @@ pub fn parseAndOutput(
     // public check allow function
     try writer.print(
         \\
-        \\pub fn allowedOn(self: @This(), tile: Tile, maybe_resource: ?Resource) ImprovementAllowed  {{
+        \\pub fn allowedOn(self: @This(), terrain: Terrain, maybe_resource: ?Resource) Allowed  {{
         \\  return switch (self) {{
         \\
     , .{});
 
-    for (improvements.improvements) |imp| {
-        try writer.print(".{s} => {s}AllowedOn(tile, maybe_resource), \n", .{ imp.name, imp.name });
+    for (improvements.buildings) |building| {
+        try writer.print(".{s} => {s}AllowedOn(terrain, maybe_resource), \n", .{ building.name, building.name });
     }
 
     try writer.print(
@@ -108,17 +117,17 @@ pub fn parseAndOutput(
     , .{});
 
     // check allow for specific improvement :))
-    for (improvements.improvements) |imp| {
+    for (improvements.buildings) |building| {
         try writer.print(
             \\
-            \\fn {s}AllowedOn(tile: Tile, maybe_resource: ?Resource) ImprovementAllowed  {{
+            \\fn {s}AllowedOn(terrain: Terrain, maybe_resource: ?Resource) Allowed  {{
             \\if(maybe_resource) |_| {{}}
-            \\return switch(tile.terrain) {{ 
-        , .{imp.name});
+            \\return switch(terrain) {{ 
+        , .{building.name});
 
         const veg_flags = blk: {
             var flags = Flags.initEmpty();
-            for (imp.allow_on.vegetation) |vegetation| {
+            for (building.allow_on.vegetation) |vegetation| {
                 flags.set(terrain.maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation);
             }
             break :blk flags;
@@ -139,7 +148,7 @@ pub fn parseAndOutput(
         terrain_loop: for (terrain.tiles) |tile| {
             const tag: Tag = if (tile.vegetation) |veg| if (veg_flags.isSet(veg)) .allowed else .allowed_after_clear else .allowed;
 
-            for (imp.allow_on.bases) |base| {
+            for (building.allow_on.bases) |base| {
                 const base_index = terrain.maps.bases.get(base.name) orelse return error.UnknownBase;
                 if (tile.base != base_index) continue;
 
@@ -156,7 +165,7 @@ pub fn parseAndOutput(
                 continue :terrain_loop;
             }
 
-            for (imp.allow_on.features) |feature| {
+            for (building.allow_on.features) |feature| {
                 const feature_index = terrain.maps.features.get(feature.name) orelse return error.UnknownFeature;
                 if (tile.feature == null) continue;
                 if (tile.feature != feature_index) continue;
@@ -171,7 +180,7 @@ pub fn parseAndOutput(
                 continue :terrain_loop;
             }
 
-            for (imp.allow_on.vegetation) |vegetation| {
+            for (building.allow_on.vegetation) |vegetation| {
                 const vegetation_index = terrain.maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation;
                 if (tile.vegetation == null) continue;
                 if (tile.vegetation != vegetation_index) continue;
@@ -187,7 +196,7 @@ pub fn parseAndOutput(
                 continue :terrain_loop;
             }
 
-            if (tile.vegetation != null and imp.allow_on.resources.len != 0) {
+            if (tile.vegetation != null and building.allow_on.resources.len != 0) {
                 try found.append(.{
                     .name = tile.name,
                     .tag = .has_vegetation_resource,
@@ -216,7 +225,7 @@ pub fn parseAndOutput(
                         try writer.print(
                             \\if(maybe_resource) |resource| switch(resource) {{
                         , .{});
-                        for (imp.allow_on.resources) |resource| {
+                        for (building.allow_on.resources) |resource| {
                             try writer.print(".{s},", .{resource});
                         }
                         try writer.print(
@@ -232,11 +241,11 @@ pub fn parseAndOutput(
         if (found.items.len != terrain.tiles.len) {
             try writer.print("else =>", .{});
 
-            if (imp.allow_on.resources.len != 0) {
+            if (building.allow_on.resources.len != 0) {
                 try writer.print(
                     \\if(maybe_resource) |resource| switch(resource) {{
                 , .{});
-                for (imp.allow_on.resources) |resource| {
+                for (building.allow_on.resources) |resource| {
                     try writer.print(".{s},", .{resource});
                 }
                 try writer.print(
@@ -255,7 +264,19 @@ pub fn parseAndOutput(
         , .{});
     }
 
-    try util.emitYieldsFunc(Improvement, improvements.improvements, allocator, writer, true);
+    try util.emitYieldsFunc(Building, improvements.buildings, allocator, writer, true);
 
     try util.endStructEnumUnion(writer);
+    try writer.print(
+        \\    pub const Transport = enum(u2) {{
+        \\        none,
+        \\        road,
+        \\        rail,
+        \\    }};
+        \\
+        \\    comptime {{
+        \\        std.debug.assert(@sizeOf(@This()) == 1);
+        \\    }}
+        \\}};
+    , .{});
 }

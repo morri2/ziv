@@ -1,5 +1,5 @@
 {
-  "improvements": [
+  "buildings": [
     {
       "name": "farm",
       "build_turns": 3,

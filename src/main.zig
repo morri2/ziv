@@ -157,8 +157,7 @@ pub fn main() !void {
                 const index = world.grid.idxFromCoords(x, y);
                 const real_x = hex.tilingX(x, y, hex_radius);
 
-                const tile = world.tiles[index];
-                const terrain = tile.terrain;
+                const terrain = world.terrain[index];
 
                 raylib.DrawTextureEx(
                     base_textures[@intFromEnum(terrain.base())],
