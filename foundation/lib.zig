@@ -1,3 +1,7 @@
+const std = @import("std");
+
+pub const comptime_hash_map = @import("comptime_hash_map");
+
 pub const Yield = packed struct {
     food: u5 = 0,
     production: u5 = 0,
