@@ -1,17 +1,16 @@
 const Self = @This();
 const std = @import("std");
-const hex = @import("hex.zig");
-const rules = @import("rules");
 
+const rules = @import("rules");
 const Tile = rules.Tile;
 const Improvement = rules.Improvement;
 const Transport = rules.Transport;
 const Resource = rules.Resource;
 
-const Edge = hex.Edge;
-const HexIdx = hex.HexIdx;
-const HexDir = hex.HexDir;
-const TileMap = hex.HexGrid(Tile);
+const Grid = @import("Grid.zig");
+const Edge = Grid.Edge;
+const HexIdx = Grid.Idx;
+const HexDir = Grid.Dir;
 
 /// The lowest index is always in low :))
 pub const WorkInProgress = struct {
@@ -32,14 +31,12 @@ pub const ResourceAndAmount = struct {
     amount: u8,
 };
 
-width: usize, // <= 128
-height: usize, // <= 80
-wrap_around: bool = false,
-
 allocator: std.mem.Allocator,
 
+grid: Grid,
+
 // Per tile data
-tiles: TileMap,
+tiles: []Tile,
 
 // Tile lookup data
 resources: std.AutoArrayHashMapUnmanaged(HexIdx, ResourceAndAmount),
@@ -48,15 +45,24 @@ work_in_progress: std.AutoArrayHashMapUnmanaged(HexIdx, WorkInProgress),
 // Tile edge data
 rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
 
-pub fn init(allocator: std.mem.Allocator, width: usize, height: usize, wrap_around: bool) !Self {
-    return Self{
-        .width = width,
-        .height = height,
-        .wrap_around = wrap_around,
+pub fn init(
+    allocator: std.mem.Allocator,
+    width: usize,
+    height: usize,
+    wrap_around: bool,
+) !Self {
+    const grid = Grid.init(width, height, wrap_around);
 
+    const tiles = try allocator.alloc(Tile, grid.len);
+    errdefer allocator.free(tiles);
+    @memset(tiles, std.mem.zeroes(Tile));
+
+    return Self{
         .allocator = allocator,
 
-        .tiles = try TileMap.init(width, height, wrap_around, allocator),
+        .grid = grid,
+
+        .tiles = tiles,
 
         .resources = .{},
         .work_in_progress = .{},
@@ -68,8 +74,9 @@ pub fn deinit(self: *Self) void {
     self.rivers.deinit(self.allocator);
     self.work_in_progress.deinit(self.allocator);
     self.resources.deinit(self.allocator);
-    self.tiles.deinit();
+    self.allocator.free(self.tiles);
 }
+
 test "neighbour test" {
     var world = try Self.init(std.testing.allocator, 128, 80, true);
 

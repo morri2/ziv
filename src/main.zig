@@ -122,16 +122,16 @@ pub fn main() !void {
                 .y = @as(f32, @floatFromInt(screen_height)),
             }, camera);
 
-            const fwidth: f32 = @floatFromInt(world.width);
-            const fheight: f32 = @floatFromInt(world.height);
+            const fwidth: f32 = @floatFromInt(world.grid.width);
+            const fheight: f32 = @floatFromInt(world.grid.height);
 
             const min_x: usize = @intFromFloat(std.math.clamp(
-                @round(top_left.x / hex.hexWidth(hex_radius)) - 2.0,
+                @round(top_left.x / hex.widthFromRadius(hex_radius)) - 2.0,
                 0.0,
                 fwidth,
             ));
             const max_x: usize = @intFromFloat(std.math.clamp(
-                @round(bottom_right.x / hex.hexWidth(hex_radius)) + 2.0,
+                @round(bottom_right.x / hex.widthFromRadius(hex_radius)) + 2.0,
                 0.0,
                 fwidth,
             ));
@@ -151,13 +151,13 @@ pub fn main() !void {
         };
 
         for (min_y..max_y) |y| {
-            const real_y = hex.tilingPosY(y, hex_radius);
+            const real_y = hex.tilingY(y, hex_radius);
 
             for (min_x..max_x) |x| {
-                const index = world.tiles.coordToIdx(x, y);
-                const real_x = hex.tilingPosX(x, y, hex_radius);
+                const index = world.grid.coordToIdx(x, y);
+                const real_x = hex.tilingX(x, y, hex_radius);
 
-                const tile = world.tiles.get(index);
+                const tile = world.tiles[index];
                 const terrain = tile.terrain;
 
                 raylib.DrawTextureEx(
