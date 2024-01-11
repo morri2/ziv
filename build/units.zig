@@ -21,7 +21,7 @@ const UnitType = struct {
 const Promotion = struct {
     name: []const u8,
     requires: []const []const u8 = &.{}, // Seem to only be either of the listed, never 2 different
-    replaces: ?[]const u8 = null,
+
 };
 
 pub fn parseAndOutputPromotions(
@@ -40,30 +40,17 @@ pub fn parseAndOutputPromotions(
 
     const promotions = parsed.value.promotions;
 
+    try writer.print("\npub const PromotionBitSet: type = std.bit_set.IntegerBitSet({});\n", .{promotions.len});
+
     try util.startEnum("Promotion", promotions.len, writer);
     for (promotions) |promotion| {
         try writer.print("\n {s},", .{promotion.name});
         _ = try flag_index_map.add(promotion.name);
     }
 
-    // Add prereq. function
-    try writer.print(
-        \\ 
-        \\ pub fn bitflags(promotions: []const Promotion) u{} {{
-        \\     var flags = 0;
-        \\     for (promotions) |promotion|{{
-        \\         flags &= (1 << @intFromEnum(promotion));
-        \\     }}
-        \\     return flags;
-        \\}}
-        \\
-    , .{promotions.len});
+    // Build prereq table :))
 
-    // Add prereq. function
-    try writer.print(
-        \\ pub fn hasRequired(new_promotion: Promotion,
-        \\ promotion_flags: u{}) bool {{ return switch (new_promotion) {{
-    , .{promotions.len});
+    try writer.print("\npub const promotion_prereqs = [{}]?PromotionBitSet {{\n", .{promotions.len});
 
     for (promotions) |promotion| {
         var bit_flags: Flags = flag_index_map.flagsFromKeys(promotion.requires);
@@ -72,29 +59,14 @@ pub fn parseAndOutputPromotions(
             bits |= (@as(u256, 1) << @intCast(bit_pos));
         }
         if (bits == 0) {
-            try writer.print("\n .{s} => true,", .{promotion.name});
+            try writer.print("\n null,", .{});
         } else {
-            try writer.print("\n .{s} => ((0b{b} & promotion_flags) != 0),", .{ promotion.name, bits });
+            try writer.print("\n .{{ .mask =  0b{b} }},", .{bits});
         }
     }
 
-    try writer.print("\n }}; }}", .{});
+    try writer.print("}};\n", .{});
 
-    // Add upgrade function, Does not handle availability check, see above
-    try writer.print(
-        \\ pub fn addPromotion(new_promotion: Promotion,
-        \\ promotion_flags: u{}) u{} {{ const promotions = switch (new_promotion) {{
-    , .{ promotions.len, promotions.len });
-
-    for (promotions) |promotion| {
-        if (promotion.replaces) |replaced| {
-            try writer.print("\n .{s} => (.bitflags(.{s}) ^ promotion_flags),", .{
-                promotion.name,
-                replaced,
-            });
-        }
-    }
-    try writer.print("\n else => promotion_flags,}}; \n return .bitflag(new_promotion) & promotions; }}", .{});
     try util.endStructEnumUnion(writer);
 }
 
@@ -116,8 +88,6 @@ pub fn parseAndOutputUnits(
     );
     defer parsed.deinit();
 
-    const promotion_bits = promotion_flag_map.indices.count();
-
     const units = parsed.value;
 
     try writer.print(
@@ -129,9 +99,9 @@ pub fn parseAndOutputUnits(
         \\    range: u8, // Max range, Nuclear Missile 12
         \\    sight: u8, // Max 10 = 2 + 4 promotions + 1 scout + 1 nation + 1 Exploration + 1 Great Lighthouse
         \\    domain: Unit.Domain,
-        \\    promotions: u{},
+        \\    promotions: PromotionBitSet,
         \\
-        \\    pub fn init(production: u16, moves: u8, melee:u8, ranged:u8,range: u8,sight:u8,domain: Unit.Domain, promotions: u{}) UnitStats {{
+        \\    pub fn init(production: u16, moves: u8, melee:u8, ranged:u8,range: u8,sight:u8,domain: Unit.Domain, promotions: PromotionBitSet) UnitStats {{
         \\      return UnitStats {{
         \\          .production = production,
         \\          .moves = moves,
@@ -144,7 +114,7 @@ pub fn parseAndOutputUnits(
         \\      }};
         \\    }}
         \\}};
-    , .{ promotion_bits, promotion_bits });
+    , .{});
 
     var domains = std.StringArrayHashMap(void).init(allocator);
     defer domains.deinit();

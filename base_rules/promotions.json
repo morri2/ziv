@@ -20,13 +20,16 @@
 		},
 		{
 			"name": "IgnoreTerrain",
-			"requires": ["IgnoreTerrain"]
+			"requires": [
+				"IgnoreTerrain"
+			]
 		},
 		{
 			"name": "BuildImprovements",
-			"requires": ["BuildImprovements"]
+			"requires": [
+				"BuildImprovements"
+			]
 		},
-
 		{
 			"name": "ShockI"
 		},
@@ -34,32 +37,25 @@
 			"name": "ShockII",
 			"requires": [
 				"ShockI"
-			],
-			"replaces": "ShockI"
+			]
 		},
 		{
 			"name": "ShockIII",
 			"requires": [
 				"ShockII"
-			],
-			"replaces": "ShockII"
-		},
-		{
-			"name": "DrillI"
+			]
 		},
 		{
 			"name": "DrillII",
 			"requires": [
 				"DrillI"
-			],
-			"replaces": "DrillI"
+			]
 		},
 		{
 			"name": "DrillIII",
 			"requires": [
 				"DrillII"
-			],
-			"replaces": "DrillII"
+			]
 		}
 	]
 }
