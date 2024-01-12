@@ -12,6 +12,7 @@ const Base = struct {
     happiness: u8 = 0,
 
     attributes: []const []const u8 = &.{},
+    combat_bonus: i8 = 0,
 };
 
 const Feature = struct {
@@ -21,6 +22,7 @@ const Feature = struct {
     bases: []const []const u8,
 
     attributes: []const []const u8 = &.{},
+    combat_bonus: i8 = 0,
 };
 
 const Vegetation = struct {
@@ -31,6 +33,7 @@ const Vegetation = struct {
     features: []const []const u8 = &.{},
 
     attributes: []const []const u8 = &.{},
+    combat_bonus: i8 = 0,
 };
 
 pub const Tile = struct {
