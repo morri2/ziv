@@ -7,6 +7,10 @@
             .url = "https://github.com/raysan5/raylib/archive/99f22a47ff09ae3bef4ee16c1910953efc46832b.tar.gz",
             .hash = "12204d2d1fcbffddc37745a471e8e2bc06946cd39b9fb9fb06ca87b5bafdb2240856",
         },
+        .comptime_hash_map = .{
+            .url = "https://github.com/antlilja/comptime_hash_map/archive/c011eb9154e9aae633c75e5a81754ddc29803031.tar.gz",
+            .hash = "1220c6e8ca2525a1563fedb8085ff52ba70a6dce5b999c0207dbf730743d62af79ab",
+        },
     },
 
     .paths = .{

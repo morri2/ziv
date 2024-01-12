@@ -5,21 +5,28 @@
       "yields": {
         "food": 1
       },
-      "attributes": [ "water" ]
-    }, 
+      "attributes": [
+        "water"
+      ]
+    },
     {
       "name": "coast",
       "yields": {
         "food": 1
       },
-      "attributes": [ "water" ]
+      "attributes": [
+        "water"
+      ]
     },
     {
       "name": "lake",
       "yields": {
         "food": 2
       },
-      "attributes": [ "water", "isfreshwater" ]
+      "attributes": [
+        "water",
+        "isfreshwater"
+      ]
     },
     {
       "name": "grassland",
@@ -48,47 +55,67 @@
     },
     {
       "name": "mountain",
-      "attributes": [ "impassable" ]
+      "attributes": [
+        "impassable"
+      ]
     },
     {
       "name": "cerro_de_potosi",
       "yields": {
         "gold": 10
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "el_dorado",
       "yields": {
         "culture": 5
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "fountain_of_youth",
       "happiness": 10,
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "king_solomons_mines",
       "yields": {
         "production": 6
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "krakatoa",
       "yields": {
         "science": 5
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "lake_victoria",
       "yields": {
         "food": 6
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "mt_fuji",
@@ -97,7 +124,10 @@
         "culture": 3,
         "faith": 3
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "mt_kailash",
@@ -105,7 +135,10 @@
         "faith": 6
       },
       "happiness": 2,
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "mt_kilimanjaro",
@@ -113,14 +146,20 @@
         "food": 3,
         "culture": 2
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "mt_sinai",
       "yields": {
         "faith": 8
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "old_faithful",
@@ -128,7 +167,10 @@
         "science": 2
       },
       "happiness": 3,
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "rock_of_gibraltar",
@@ -136,7 +178,10 @@
         "food": 2,
         "gold": 5
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "sri_pada",
@@ -145,7 +190,10 @@
         "faith": 4
       },
       "happiness": 2,
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "the_barringer_crater",
@@ -153,7 +201,10 @@
         "gold": 2,
         "science": 3
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "the_grand_mesa",
@@ -161,7 +212,10 @@
         "production": 2,
         "gold": 3
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "the_barrier_reef",
@@ -171,7 +225,10 @@
         "gold": 1,
         "science": 2
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     },
     {
       "name": "uluru",
@@ -179,7 +236,10 @@
         "food": 2,
         "faith": 6
       },
-      "attributes": [ "impassable", "wonder" ]
+      "attributes": [
+        "impassable",
+        "wonder"
+      ]
     }
   ],
   "features": [
@@ -195,29 +255,40 @@
       "yields": {
         "production": 2
       },
-      "attributes": [ "rough" ]
+      "attributes": [
+        "rough"
+      ],
+      "combat_bonus": 25
     },
     {
       "name": "oasis",
-      "bases": [ "desert" ],
+      "bases": [
+        "desert"
+      ],
       "yields": {
         "food": 3,
         "gold": 1
       },
-      "attributes": [ "isfreshwater" ]
+      "attributes": [
+        "isfreshwater"
+      ]
     },
     {
       "name": "ice",
-      "bases": [ 
-        "ocean", 
-        "coast", 
-        "lake" 
+      "bases": [
+        "ocean",
+        "coast",
+        "lake"
       ],
-      "attributes": [ "impassable" ]
+      "attributes": [
+        "impassable"
+      ]
     },
     {
       "name": "atoll",
-      "bases": [ "ocean" ]
+      "bases": [
+        "ocean"
+      ]
     }
   ],
   "vegetation": [
@@ -228,23 +299,33 @@
         "plains",
         "tundra"
       ],
-      "features": [ "hill" ],
+      "features": [
+        "hill"
+      ],
       "yields": {
         "food": 1,
         "production": 1
       },
-      "attributes": [ "rough" ]
+      "attributes": [
+        "rough"
+      ],
+      "combat_bonus": 25
     },
     {
       "name": "jungle",
       "bases": [
         "plains"
       ],
-      "features": [ "hill" ],
+      "features": [
+        "hill"
+      ],
       "yields": {
         "food": 2
       },
-      "attributes": [ "rough" ]
+      "attributes": [
+        "rough"
+      ],
+      "combat_bonus": 25
     },
     {
       "name": "marsh",
@@ -254,7 +335,10 @@
       "yields": {
         "food": 2
       },
-      "attributes": [ "rough" ]
+      "attributes": [
+        "rough"
+      ],
+      "combat_bonus": -15
     }
   ]
 }
