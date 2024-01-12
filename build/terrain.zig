@@ -360,6 +360,21 @@ pub fn parseAndOutput(
         , .{});
     }
 
+    // combatBonus()
+    {
+        try writer.print("pub const combat_bonus_table = [_]i8 {{", .{});
+        for (tiles.items) |tile| {
+            try writer.print("{},", .{tile.combat_bonus});
+        }
+        try writer.print("}};", .{});
+
+        try writer.print(
+            \\pub fn combatBonus(self: @This()) i8 {{
+            \\return combat_bonus_table[@intFromEnum(self)];
+            \\}}
+        , .{});
+    }
+
     try util.endStructEnumUnion(writer);
 
     {
