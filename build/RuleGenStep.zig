@@ -154,6 +154,7 @@ fn make(step: *Build.Step, progress: *std.Progress.Node) !void {
         writer,
         b.allocator,
     );
+    defer terrain.arena.deinit();
 
     try @import("resources.zig").parseAndOutput(
         text.resources,
