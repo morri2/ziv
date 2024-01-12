@@ -271,7 +271,8 @@
       },
       "attributes": [
         "isfreshwater"
-      ]
+      ],
+      "combat_bonus": -10
     },
     {
       "name": "ice",
