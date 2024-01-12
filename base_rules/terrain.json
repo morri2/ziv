@@ -271,7 +271,8 @@
       },
       "attributes": [
         "isfreshwater"
-      ]
+      ],
+      "combat_bonus": -10
     },
     {
       "name": "ice",
@@ -339,6 +340,17 @@
         "rough"
       ],
       "combat_bonus": -15
+    }
+  ],
+  "overrides": [
+    {
+      "name": "floodplain",
+      "base": "desert",
+      "attributes": [ "river" ],
+      "yields": {
+        "food": 2
+      },
+      "combat_bonus": -10
     }
   ]
 }
