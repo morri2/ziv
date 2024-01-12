@@ -25,4 +25,5 @@ pub const UnitEffect = enum {
     ModifySightRange, // +(value)
     IgnoreTerrainMove,
     CanEmbark,
+    CannotMelee,
 };

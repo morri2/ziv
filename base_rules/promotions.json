@@ -4,57 +4,99 @@
 			"name": "CannotMelee",
 			"requires": [
 				"CannotMelee"
+			],
+			"effects": [
+				{"effect":"CannotMelee"}
 			]
 		},
 		{
 			"name": "SettleCity",
 			"requires": [
 				"SettleCity"
+			],
+			"effects":[
+				{"effect":"SettleCity"}
 			]
 		},
 		{
 			"name": "Fortify",
 			"requires": [
 				"Fortify"
+			],
+			"effects":[
+				{"effect":"CanFortify"}
 			]
 		},
 		{
 			"name": "IgnoreTerrain",
 			"requires": [
 				"IgnoreTerrain"
+			],
+			"effects":[
+				{"effect":"IgnoreTerrainMove"}
 			]
 		},
 		{
 			"name": "BuildImprovements",
 			"requires": [
 				"BuildImprovements"
+			],
+			"effects":[
+				{"effect":"BuildImprovement"}
 			]
 		},
 		{
-			"name": "ShockI"
+			"name": "ShockI",
+			"effects":[
+				{"effect":"OpenTerrainBonus",
+				"value":15}
+			]
 		},
 		{
 			"name": "ShockII",
 			"requires": [
 				"ShockI"
+			],
+			"effects":[
+				{"effect":"OpenTerrainBonus",
+				"value":15}
 			]
 		},
 		{
 			"name": "ShockIII",
 			"requires": [
 				"ShockII"
+			],
+			"effects":[
+				{"effect":"OpenTerrainBonus",
+				"value":15}
+			]
+		},		
+		{
+			"name": "DrillI",
+			"effects":[
+				{"effect":"RoughTerrainBonus",
+				"value":10}
 			]
 		},
 		{
 			"name": "DrillII",
 			"requires": [
 				"DrillI"
+			],
+			"effects":[
+				{"effect":"RoughTerrainBonus",
+				"value":15}
 			]
 		},
 		{
 			"name": "DrillIII",
 			"requires": [
 				"DrillII"
+			],
+			"effects":[
+				{"effect":"RoughTerrainBonus",
+				"value":15}
 			]
 		}
 	]

@@ -2,9 +2,9 @@ const std = @import("std");
 
 const Self = @This();
 
-const Integer = u64;
+const Integer = u256;
 
-pub const Flags = std.StaticBitSet(@bitSizeOf(Integer));
+pub const Flags = std.bit_set.IntegerBitSet(@bitSizeOf(Integer));
 
 indices: std.StringArrayHashMap(void),
 
