@@ -92,15 +92,15 @@ pub fn parseAndOutputPromotions(
 
     try writer.print(
         \\ 
-        \\ pub fn effect_promotions(effect: foundation.Effect) []struct {{promotions: PromotionBitSet,value: ?u32}} {{
+        \\ pub fn effect_promotions(effect: foundation.UnitEffect) []const struct {{promotions: PromotionBitSet,value: ?u32}} {{
         \\ return switch (effect) {{
     , .{});
 
     inline for (@typeInfo(Effect).Enum.fields) |effect| {
-        try writer.print(".{s} => .{{ \n", .{effect.name});
+        try writer.print(".{s} => &.{{ \n", .{effect.name});
         for (effect_hash.keys(), effect_hash.values()) |effect_val, bits| {
             if (@intFromEnum(effect_val.effect) == effect.value) {
-                try writer.print(".{{.promotions = 0b{b}, .value = {?} }},", .{ bits, effect_val.value });
+                try writer.print(".{{.promotions = .{{ .mask = 0b{b} }}, .value = {?} }},", .{ bits, effect_val.value });
             }
         }
 
@@ -200,7 +200,7 @@ pub fn parseAndOutputUnits(
         while (bit_flags.toggleFirstSet()) |bit_pos| {
             bits |= (@as(u256, 1) << @intCast(bit_pos));
         }
-        try writer.print(".{s} => UnitStats.init({d},{d},{d},{d},{d},{d},.Domain.{s},0b{b}),", .{
+        try writer.print(".{s} => UnitStats.init({d},{d},{d},{d},{d},{d},.{s},.{{.mask = 0b{b} }}),", .{
             unit.name,
             unit.production_cost,
             unit.moves,
