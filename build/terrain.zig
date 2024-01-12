@@ -36,10 +36,24 @@ const Vegetation = struct {
     combat_bonus: i8 = 0,
 };
 
+const Override = struct {
+    name: ?[]const u8 = null,
+    yields: ?Yields = null,
+    happiness: u8 = 0,
+
+    base: []const u8,
+    feature: ?[]const u8 = null,
+    vegetation: ?[]const u8 = null,
+
+    attributes: []const []const u8 = &.{},
+    combat_bonus: ?i8 = null,
+};
+
 pub const Tile = struct {
     name: []const u8,
     yields: Yields,
     happiness: u8,
+    combat_bonus: i8,
 
     base: usize,
     feature: ?usize = null,
@@ -77,6 +91,7 @@ pub fn parseAndOutput(
         bases: []const Base,
         features: []const Feature,
         vegetation: []const Vegetation,
+        overrides: []const Override,
     }, allocator, text, .{});
     defer parsed.deinit();
 
@@ -110,11 +125,12 @@ pub fn parseAndOutput(
         const base_index = try maps.bases.add(base.name);
 
         try tiles.append(.{
-            .name = base.name,
+            .name = try arena.allocator().dupe(u8, base.name),
             .yields = base.yields,
             .happiness = base.happiness,
             .base = base_index,
             .attributes = try maps.attributes.addAndGetFlagsFromKeys(base.attributes),
+            .combat_bonus = base.combat_bonus,
         });
     }
 
@@ -139,6 +155,7 @@ pub fn parseAndOutput(
                 new_tile.attributes = new_tile.attributes.unionWith(
                     try maps.attributes.addAndGetFlagsFromKeys(feature.attributes),
                 );
+                new_tile.combat_bonus = feature.combat_bonus;
                 try tiles.append(new_tile);
             }
         }
@@ -168,6 +185,7 @@ pub fn parseAndOutput(
                 new_tile.attributes = new_tile.attributes.unionWith(
                     try maps.attributes.addAndGetFlagsFromKeys(vegetation.attributes),
                 );
+                new_tile.combat_bonus = vegetation.combat_bonus;
                 try tiles.append(new_tile);
             }
         }
@@ -214,6 +232,35 @@ pub fn parseAndOutput(
             );
             new_tile.attributes = new_attributes;
             try tiles.append(new_tile);
+        }
+    }
+
+    // Add overrides
+    {
+        for (terrain.overrides) |override| {
+            const base_index = maps.bases.get(override.base) orelse return error.UnknownBase;
+            const feature_index = if (override.feature) |feature| maps.features.get(feature) orelse return error.UnknownFeature else null;
+            const vegetation_index = if (override.vegetation) |vegetation| maps.vegetation.get(vegetation) orelse return error.UnknownVegetation else null;
+            const attributes = blk: {
+                var attributes = maps.attributes.flagsFromKeys(override.attributes);
+                const river_index = maps.attributes.get("river").?;
+                const freshwater_index = maps.attributes.get("freshwater").?;
+                if (attributes.isSet(river_index)) attributes.set(freshwater_index);
+
+                break :blk attributes;
+            };
+            for (tiles.items) |*tile| {
+                if (tile.base != base_index) continue;
+                if (tile.feature != feature_index) continue;
+                if (tile.vegetation != vegetation_index) continue;
+
+                if (!attributes.intersectWith(tile.attributes).eql(attributes)) continue;
+
+                if (override.name) |name| tile.name = try arena.allocator().dupe(u8, name);
+
+                if (override.yields) |yields| tile.yields = yields;
+                if (override.combat_bonus) |combat_bonus| tile.combat_bonus = combat_bonus;
+            }
         }
     }
 
