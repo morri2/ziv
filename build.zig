@@ -5,8 +5,17 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const comptime_hash_map_dep = b.dependency("comptime_hash_map", .{});
+    const comptime_hash_map_mod = b.createModule(.{
+        .source_file = comptime_hash_map_dep.path("comptime_hash_map.zig"),
+    });
+
     const foundation = b.addModule("foundation", .{
         .source_file = .{ .path = "foundation/lib.zig" },
+        .dependencies = &.{.{
+            .name = "comptime_hash_map",
+            .module = comptime_hash_map_mod,
+        }},
     });
 
     const rule_gen_step = RuleGenStep.create(
