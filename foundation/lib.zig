@@ -16,9 +16,9 @@ pub const UnitEffect = enum {
     CombatBonusAttacking, // +(value)%
     CombatBonus, // +(value)%
     RoughTerrainBonus, // +(value)%
-    RoughTerrainBonusRange,
+    RoughTerrainBonusRange, // +(value)%
     OpenTerrainBonus, // +(value)%
-    OpenTerrainBonusRange,
+    OpenTerrainBonusRange, // +(value)%
     SettleCity,
     CanFortify,
     BuildRoads,
