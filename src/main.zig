@@ -1,8 +1,9 @@
 const std = @import("std");
 const rules = @import("rules");
 const hex = @import("hex.zig");
-
+const render = @import("render.zig");
 const World = @import("World.zig");
+const Grid = @import("Grid.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -23,6 +24,8 @@ pub fn main() !void {
     );
     defer world.deinit();
 
+    try world.loadFromFile("maps/island_map.map");
+
     const screen_width = 1920;
     const screen_height = 1080;
 
@@ -42,74 +45,28 @@ pub fn main() !void {
         .zoom = 0.5,
     };
 
-    // Load resources
-    const base_textures, const texture_height = blk: {
-        const enum_fields = @typeInfo(rules.Base).Enum.fields;
-        var textures = [_]raylib.Texture2D{undefined} ** enum_fields.len;
-        var texture_height: c_int = 0;
+    var texture_set = try render.TextureSet.init();
+    defer texture_set.deinit();
 
-        inline for (enum_fields, 0..) |field, i| {
-            const path = "textures/" ++ field.name ++ ".png";
-            const img = if (raylib.FileExists(path)) raylib.LoadImage(path) else raylib.LoadImage("textures/placeholder.png");
-            defer raylib.UnloadImage(img);
-
-            if (i == 0) texture_height = img.height else {
-                if (img.height != texture_height) return error.InvalidResources;
-            }
-
-            textures[i] = raylib.LoadTextureFromImage(img);
-        }
-        break :blk .{ textures, texture_height };
-    };
-    defer {
-        for (base_textures) |texture| {
-            raylib.UnloadTexture(texture);
-        }
-    }
-
-    const feature_textures = blk: {
-        const enum_fields = @typeInfo(rules.Feature).Enum.fields;
-        var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
-
-        inline for (enum_fields[1..], 0..) |field, i| {
-            const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
-            defer raylib.UnloadImage(img);
-
-            if (img.height != texture_height) return error.InvalidResources;
-
-            textures[i] = raylib.LoadTextureFromImage(img);
-        }
-        break :blk textures;
-    };
-    defer {
-        for (feature_textures) |texture| {
-            raylib.UnloadTexture(texture);
-        }
-    }
-
-    const vegetation_textures = blk: {
-        const enum_fields = @typeInfo(rules.Vegetation).Enum.fields;
-        var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
-
-        inline for (enum_fields[1..], 0..) |field, i| {
-            const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
-            defer raylib.UnloadImage(img);
-
-            if (img.height != texture_height) return error.InvalidResources;
-
-            textures[i] = raylib.LoadTextureFromImage(img);
-        }
-        break :blk textures;
-    };
-    defer {
-        for (vegetation_textures) |texture| {
-            raylib.UnloadTexture(texture);
-        }
-    }
-
-    const hex_radius = @as(f32, @floatFromInt(texture_height)) * 0.5;
+    // MAP DRAW MODE
+    var draw_terrain: rules.Terrain = .desert;
+    draw_terrain = draw_terrain; // autofix
+    var edit_mode: bool = false;
+    edit_mode = edit_mode;
 
     while (!raylib.WindowShouldClose()) {
+        if (raylib.IsKeyPressed(raylib.KEY_E)) edit_mode = !edit_mode;
+        if (raylib.IsKeyPressed(raylib.KEY_C)) {
+            try world.saveToFile("maps/last_saved.map");
+            std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
+        }
+        if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
+            if (edit_mode) {
+                draw_terrain = @enumFromInt(getMouseTile(&camera, world.grid, texture_set) % @typeInfo(rules.Terrain).Enum.fields.len);
+            } else {
+                world.terrain[getMouseTile(&camera, world.grid, texture_set)] = draw_terrain;
+            }
+        }
         updateCamera(&camera, 16.0);
         raylib.BeginDrawing();
         raylib.ClearBackground(raylib.BLACK);
@@ -126,23 +83,23 @@ pub fn main() !void {
             const fheight: f32 = @floatFromInt(world.grid.height);
 
             const min_x: usize = @intFromFloat(std.math.clamp(
-                @round(top_left.x / hex.widthFromRadius(hex_radius)) - 2.0,
+                @round(top_left.x / hex.widthFromRadius(texture_set.hex_radius)) - 2.0,
                 0.0,
                 fwidth,
             ));
             const max_x: usize = @intFromFloat(std.math.clamp(
-                @round(bottom_right.x / hex.widthFromRadius(hex_radius)) + 2.0,
+                @round(bottom_right.x / hex.widthFromRadius(texture_set.hex_radius)) + 2.0,
                 0.0,
                 fwidth,
             ));
 
             const min_y: usize = @intFromFloat(std.math.clamp(
-                @round(top_left.y / (hex_radius * 1.5)) - 2.0,
+                @round(top_left.y / (texture_set.hex_radius * 1.5)) - 2.0,
                 0.0,
                 fheight,
             ));
             const max_y: usize = @intFromFloat(std.math.clamp(
-                @round(bottom_right.y / (hex_radius * 1.5)) + 2.0,
+                @round(bottom_right.y / (texture_set.hex_radius * 1.5)) + 2.0,
                 0.0,
                 fheight,
             ));
@@ -151,49 +108,15 @@ pub fn main() !void {
         };
 
         for (min_y..max_y) |y| {
-            const real_y = hex.tilingY(y, hex_radius);
-
             for (min_x..max_x) |x| {
                 const index = world.grid.idxFromCoords(x, y);
-                const real_x = hex.tilingX(x, y, hex_radius);
-
                 const terrain = world.terrain[index];
 
-                raylib.DrawTextureEx(
-                    base_textures[@intFromEnum(terrain.base())],
-                    raylib.Vector2{
-                        .x = real_x,
-                        .y = real_y,
-                    },
-                    0.0,
-                    1.0,
-                    raylib.WHITE,
-                );
-
-                if (terrain.feature() != .none) {
-                    raylib.DrawTextureEx(
-                        feature_textures[@intFromEnum(terrain.feature()) - 1],
-                        raylib.Vector2{
-                            .x = real_x,
-                            .y = real_y,
-                        },
-                        0.0,
-                        1.0,
-                        raylib.WHITE,
-                    );
-                }
-
-                if (terrain.vegetation() != .none) {
-                    raylib.DrawTextureEx(
-                        vegetation_textures[@intFromEnum(terrain.vegetation()) - 1],
-                        raylib.Vector2{
-                            .x = real_x,
-                            .y = real_y,
-                        },
-                        0.0,
-                        1.0,
-                        raylib.WHITE,
-                    );
+                if (edit_mode) {
+                    const select_terrain: rules.Terrain = @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
+                    render.renderTile(select_terrain, index, world.grid, texture_set);
+                } else {
+                    render.renderTile(terrain, index, world.grid, texture_set);
                 }
             }
         }
@@ -201,6 +124,32 @@ pub fn main() !void {
 
         raylib.EndDrawing();
     }
+}
+
+/// VERY PLACEHOLDER AND SHIT
+fn getMouseTile(
+    camera: *raylib.Camera2D,
+    grid: Grid,
+    ts: render.TextureSet,
+) usize {
+    const click_point = raylib.GetScreenToWorld2D(raylib.GetMousePosition(), camera.*);
+    const click_x: f32 = click_point.x;
+    const click_y: f32 = click_point.y;
+    var click_idx: Grid.Idx = 0; // = world.tiles.coordToIdx(click_x, click_y);
+
+    var min_dist: f32 = std.math.floatMax(f32);
+    for (0..grid.width) |x| {
+        for (0..grid.height) |y| {
+            const real_x = hex.tilingX(x, y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) * 0.5;
+            const real_y = hex.tilingY(y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) * 0.5;
+            const dist = std.math.pow(f32, real_x - click_x, 2) + std.math.pow(f32, real_y - click_y, 2);
+            if (dist < min_dist) {
+                click_idx = grid.idxFromCoords(x, y);
+                min_dist = dist;
+            }
+        }
+    }
+    return click_idx;
 }
 
 fn updateCamera(camera: *raylib.Camera2D, speed: f32) void {
@@ -226,8 +175,8 @@ fn updateCamera(camera: *raylib.Camera2D, speed: f32) void {
     }
 
     // Arrow key controls
-    if (raylib.IsKeyDown(raylib.KEY_RIGHT)) camera.target.x += speed / camera.zoom;
-    if (raylib.IsKeyDown(raylib.KEY_LEFT)) camera.target.x -= speed / camera.zoom;
-    if (raylib.IsKeyDown(raylib.KEY_UP)) camera.target.y -= speed / camera.zoom;
-    if (raylib.IsKeyDown(raylib.KEY_DOWN)) camera.target.y += speed / camera.zoom;
+    if (raylib.IsKeyDown(raylib.KEY_RIGHT) or raylib.IsKeyDown(raylib.KEY_D)) camera.target.x += speed / camera.zoom;
+    if (raylib.IsKeyDown(raylib.KEY_LEFT) or raylib.IsKeyDown(raylib.KEY_A)) camera.target.x -= speed / camera.zoom;
+    if (raylib.IsKeyDown(raylib.KEY_UP) or raylib.IsKeyDown(raylib.KEY_W)) camera.target.y -= speed / camera.zoom;
+    if (raylib.IsKeyDown(raylib.KEY_DOWN) or raylib.IsKeyDown(raylib.KEY_S)) camera.target.y += speed / camera.zoom;
 }

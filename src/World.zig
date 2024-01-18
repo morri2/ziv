@@ -84,3 +84,27 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.improvements);
     self.allocator.free(self.terrain);
 }
+
+pub fn saveToFile(self: *Self, path: []const u8) !void {
+    var file = try std.fs.cwd().createFile(path, .{});
+
+    for (0..self.grid.len) |i| {
+        const terrain_bytes: [@sizeOf(Terrain)]u8 = std.mem.asBytes(&self.terrain[i]).*;
+        _ = try file.write(&terrain_bytes);
+    }
+
+    file.close();
+}
+
+pub fn loadFromFile(self: *Self, path: []const u8) !void {
+    var file = try std.fs.cwd().openFile(path, .{});
+    var reader = file.reader();
+    for (0..self.grid.len) |i| {
+        const terrain_bytes = try reader.readBytesNoEof(@sizeOf(Terrain));
+
+        const terrain: *const Terrain = @ptrCast(&terrain_bytes);
+        self.terrain[i] = terrain.*;
+    }
+
+    file.close();
+}
