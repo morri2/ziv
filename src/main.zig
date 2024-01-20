@@ -3,7 +3,10 @@ const rules = @import("rules");
 const hex = @import("hex.zig");
 const render = @import("render.zig");
 const World = @import("World.zig");
+const Unit = @import("Unit.zig");
 const Grid = @import("Grid.zig");
+const Idx = Grid.Idx;
+const move = @import("move.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -24,7 +27,13 @@ pub fn main() !void {
     );
     defer world.deinit();
 
-    try world.loadFromFile("maps/island_map.map");
+    try world.loadFromFile("maps/last_saved.map");
+
+    //world.pushUnit(1200, .{ .type = .Archer });
+    world.pushUnit(1200, Unit.new(.Warrior));
+
+    std.debug.print("unita {} \n", .{world.topUnitContainerPtr(1200).?.unit.type});
+    //std.debug.print("unitb {} \n", .{world.nextUnitContainerPtr(world.topUnitContainerPtr(1200).?).?.unit.type});
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -49,24 +58,74 @@ pub fn main() !void {
     defer texture_set.deinit();
 
     // MAP DRAW MODE
-    var draw_terrain: rules.Terrain = .desert;
+    var draw_terrain: ?rules.Terrain = null;
     draw_terrain = draw_terrain; // autofix
     var edit_mode: bool = false;
     edit_mode = edit_mode;
 
+    var selected_tile: ?Idx = null;
+    selected_tile = selected_tile; // autofix
+
     while (!raylib.WindowShouldClose()) {
+        if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.refreshUnits();
         if (raylib.IsKeyPressed(raylib.KEY_E)) edit_mode = !edit_mode;
+
+        if (raylib.IsKeyPressed(raylib.KEY_R)) {
+            const mouse_tile = getMouseTile(&camera, world.grid, texture_set);
+            const res = try world.resources.getOrPut(world.allocator, mouse_tile);
+
+            if (res.found_existing) {
+                const next_enum_int: u8 = @intFromEnum(res.value_ptr.type) + 1;
+                if (next_enum_int >= @typeInfo(rules.Resource).Enum.fields.len) {
+                    _ = world.resources.swapRemove(mouse_tile);
+                } else {
+                    res.value_ptr.type = @enumFromInt(next_enum_int);
+                }
+            } else {
+                try world.resources.put(world.allocator, mouse_tile, .{ .type = @enumFromInt(0), .amount = 1 });
+            }
+        }
+        if (raylib.IsKeyPressed(raylib.KEY_T)) {
+            const mouse_tile = getMouseTile(&camera, world.grid, texture_set);
+            const res = try world.resources.getOrPut(world.allocator, mouse_tile);
+
+            if (res.found_existing) {
+                {
+                    res.value_ptr.amount = res.value_ptr.amount + 1;
+                    if (res.value_ptr.amount > 12) {
+                        res.value_ptr.amount = 1;
+                    }
+                }
+            }
+        }
         if (raylib.IsKeyPressed(raylib.KEY_C)) {
             try world.saveToFile("maps/last_saved.map");
             std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
         }
         if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
+            const clicked_tile = getMouseTile(&camera, world.grid, texture_set);
+            // EDIT MAP
             if (edit_mode) {
-                draw_terrain = @enumFromInt(getMouseTile(&camera, world.grid, texture_set) % @typeInfo(rules.Terrain).Enum.fields.len);
-            } else {
-                world.terrain[getMouseTile(&camera, world.grid, texture_set)] = draw_terrain;
+                draw_terrain = @enumFromInt(clicked_tile % @typeInfo(rules.Terrain).Enum.fields.len);
+            }
+            // UNIT MOVEMENT
+            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and !edit_mode and (draw_terrain == null)) {
+                if (draw_terrain != null) {
+                    world.terrain[clicked_tile] = draw_terrain.?;
+                } else {
+                    if (selected_tile == null) {
+                        selected_tile = clicked_tile;
+                    } else {
+                        _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
+                        if (selected_tile == clicked_tile) {
+                            selected_tile = null;
+                        }
+                        selected_tile = null;
+                    }
+                }
             }
         }
+
         updateCamera(&camera, 16.0);
         raylib.BeginDrawing();
         raylib.ClearBackground(raylib.BLACK);
@@ -116,7 +175,29 @@ pub fn main() !void {
                     const select_terrain: rules.Terrain = @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
                     render.renderTile(select_terrain, index, world.grid, texture_set);
                 } else {
+                    // Normal mode render
                     render.renderTile(terrain, index, world.grid, texture_set);
+                    render.renderResource(&world, index, texture_set);
+                    render.renderUnits(&world, index, texture_set);
+
+                    // Selection menu render :)
+                    if (selected_tile != null) {
+                        if (selected_tile == index) {
+                            const real_x = hex.tilingX(x, y, texture_set.hex_radius);
+                            const real_y = hex.tilingY(y, texture_set.hex_radius);
+
+                            raylib.DrawTextureEx(
+                                texture_set.base_textures[@intFromEnum(rules.Base.snow)],
+                                raylib.Vector2{
+                                    .x = real_x,
+                                    .y = real_y,
+                                },
+                                0.0,
+                                1.0,
+                                .{ .r = 100, .g = 100, .b = 100, .a = 100 },
+                            );
+                        }
+                    }
                 }
             }
         }

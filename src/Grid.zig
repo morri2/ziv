@@ -78,6 +78,10 @@ pub fn dirEdge(self: Self, src: Idx, dir: Dir) ?Edge {
     };
 }
 
+pub fn adjacentTo(self: Self, src: Idx, dest: Idx) bool {
+    return self.edgeBetween(src, dest) != null;
+}
+
 /// Returns edge between a and b
 pub fn edgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
     const src_neighbours = self.neighbours(a);

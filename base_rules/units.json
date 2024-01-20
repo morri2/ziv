@@ -67,7 +67,7 @@
 		}
 	],
 	"naval": [
-			{
+		{
 			"name": "Trireme",
 			"production_cost": 45,
 			"moves": 4,

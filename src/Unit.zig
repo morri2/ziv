@@ -9,6 +9,23 @@ prepared: bool = false,
 embarked: bool = false,
 fortified: bool = false,
 promotions: rules.PromotionBitSet = rules.PromotionBitSet.initEmpty(),
+movement: f32 = 0,
+
+pub fn new(unit_type: rules.UnitType) Self {
+    var unit = Self{ .type = unit_type };
+    unit.promotions = unit_type.baseStats().promotions;
+    unit.movement = @as(f32, @floatFromInt(unit_type.baseStats().moves));
+    return unit;
+}
+
+pub fn maxMovement(self: Self) f32 {
+    const move_mod = cumPromotionValues(self.promotions, .ModifyMovement);
+    return @as(f32, @floatFromInt(move_mod)) + @as(f32, @floatFromInt(self.type.baseStats().moves));
+}
+// restore movement
+pub fn refresh(self: *Self) void {
+    self.movement = self.maxMovement();
+}
 
 /// returns a bitset for the promotions that grant the effect :)
 pub fn effectPromotions(effect: foundation.UnitEffect) rules.PromotionBitSet {
