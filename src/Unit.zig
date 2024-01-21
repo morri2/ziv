@@ -1,17 +1,22 @@
 const Self = @This();
 const std = @import("std");
-const rules = @import("rules");
-const foundation = @import("foundation");
+const Rules = @import("Rules.zig");
 
-type: rules.UnitType,
+const Terrain = Rules.Terrain;
+const Improvements = Rules.Improvements;
+const PromotionBitSet = Rules.PromotionBitSet;
+const UnitType = Rules.UnitType;
+const UnitEffect = Rules.UnitEffect;
+
+type: UnitType,
 hit_points: u8 = 100, // All units have 100 HP
 prepared: bool = false,
 embarked: bool = false,
 fortified: bool = false,
-promotions: rules.PromotionBitSet = rules.PromotionBitSet.initEmpty(),
+promotions: PromotionBitSet = PromotionBitSet.initEmpty(),
 movement: f32 = 0,
 
-pub fn new(unit_type: rules.UnitType) Self {
+pub fn new(unit_type: UnitType) Self {
     var unit = Self{ .type = unit_type };
     unit.promotions = unit_type.baseStats().promotions;
     unit.movement = unit.maxMovement();
@@ -28,18 +33,18 @@ pub fn refresh(self: *Self) void {
 }
 
 /// returns a bitset for the promotions that grant the effect :)
-pub fn effectPromotions(effect: foundation.UnitEffect) rules.PromotionBitSet {
-    var bitset = rules.PromotionBitSet.initEmpty();
-    for (rules.effect_promotions(effect)) |variant| {
+pub fn effectPromotions(effect: UnitEffect) PromotionBitSet {
+    var bitset = PromotionBitSet.initEmpty();
+    for (Rules.effect_promotions(effect)) |variant| {
         bitset = bitset.unionWith(variant.promotions);
     }
     return bitset;
 }
 
 /// returns the sum of the values of all the promotions.
-pub fn cumPromotionValues(promotions: rules.PromotionBitSet, effect: foundation.UnitEffect) i32 {
+pub fn cumPromotionValues(promotions: PromotionBitSet, effect: UnitEffect) i32 {
     var cum: i32 = 0;
-    for (rules.effect_promotions(effect)) |variant| {
+    for (Rules.effect_promotions(effect)) |variant| {
         const u = variant.promotions.intersectWith(promotions);
         cum += @as(i32, @intCast(u.count())) * @as(i32, @intCast(variant.value.?));
     }
@@ -47,8 +52,8 @@ pub fn cumPromotionValues(promotions: rules.PromotionBitSet, effect: foundation.
 }
 
 const CombatContext = struct {
-    target_terrain: rules.Terrain = .plains,
-    target_improvement: rules.Improvements = .{ .building = .none },
+    target_terrain: Terrain = .plains,
+    target_improvement: Improvements = .{ .building = .none },
     river_crossing: bool = false,
 };
 

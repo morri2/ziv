@@ -1,5 +1,5 @@
 const std = @import("std");
-const rules = @import("rules");
+const Rules = @import("Rules.zig");
 const hex = @import("hex.zig");
 const render = @import("render.zig");
 const World = @import("World.zig");
@@ -17,6 +17,13 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
+    var rules = blk: {
+        var rules_dir = try std.fs.cwd().openDir("base_rules", .{});
+        defer rules_dir.close();
+        break :blk try Rules.parse(rules_dir, gpa.allocator());
+    };
+    defer rules.deinit();
+
     const WIDTH = 56;
     const HEIGHT = 36;
     var world = try World.init(
@@ -24,18 +31,19 @@ pub fn main() !void {
         WIDTH,
         HEIGHT,
         false,
+        &rules,
     );
     defer world.deinit();
 
     try world.loadFromFile("maps/last_saved.map");
 
     var w1 = Unit.new(.warrior);
-    w1.promotions.set(@intFromEnum(rules.Promotion.Mobility));
+    w1.promotions.set(@intFromEnum(Rules.Promotion.Mobility));
     //world.pushUnit(1200, .{ .type = .Archer });
     world.pushUnit(1200, w1);
 
     var w2 = Unit.new(.archer);
-    w2.promotions.set(@intFromEnum(rules.Promotion.Mobility));
+    w2.promotions.set(@intFromEnum(Rules.Promotion.Mobility));
     //world.pushUnit(1200, .{ .type = .Archer });
     world.pushUnit(1201, w2);
 
@@ -61,11 +69,11 @@ pub fn main() !void {
         .zoom = 0.5,
     };
 
-    var texture_set = try render.TextureSet.init();
+    var texture_set = try render.TextureSet.init(&rules, gpa.allocator());
     defer texture_set.deinit();
 
     // MAP DRAW MODE
-    var draw_terrain: ?rules.Terrain = null;
+    var draw_terrain: ?Rules.Terrain = null;
     draw_terrain = draw_terrain; // autofix
     var edit_mode: bool = false;
     edit_mode = edit_mode;
@@ -116,7 +124,7 @@ pub fn main() !void {
                 const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
                 // EDIT MAP
                 if (edit_mode) {
-                    draw_terrain = @enumFromInt(clicked_tile % @typeInfo(rules.Terrain).Enum.fields.len);
+                    // draw_terrain = @enumFromInt(clicked_tile % @typeInfo(rules.Terrain).Enum.fields.len);
                 }
                 // UNIT MOVEMENT
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and !edit_mode and (draw_terrain == null)) {
@@ -157,8 +165,8 @@ pub fn main() !void {
 
         while (camera_bound_box.iterNext()) |index| {
             if (edit_mode) {
-                const select_terrain: rules.Terrain = @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
-                render.renderTerrain(select_terrain, index, world.grid, texture_set);
+                //const select_terrain: rules.Terrain = @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
+                //render.renderTerrain(select_terrain, index, world.grid, texture_set);
             } else {
                 // Normal mode render
                 render.renderTile(world, index, world.grid, texture_set);
