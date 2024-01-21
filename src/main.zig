@@ -83,63 +83,75 @@ pub fn main() !void {
 
     var camera_bound_box = render.cameraRenderBoundBox(camera, &world.grid, screen_width, screen_height, texture_set);
 
+    // MAP EDIT MODE
+    var in_edit_mode = true;
+    var in_pallet = false;
+    var terrain_brush: ?Rules.Terrain = null;
+    terrain_brush = terrain_brush; // autofix
+
+    //
+
     while (!raylib.WindowShouldClose()) {
         {
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.refreshUnits();
-            if (raylib.IsKeyPressed(raylib.KEY_E)) edit_mode = !edit_mode;
+            if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) in_edit_mode = true;
 
-            if (raylib.IsKeyPressed(raylib.KEY_R)) {
+            // EDIT MODE CONTROLLS
+            if (in_edit_mode) {
+                if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) in_edit_mode = false;
+                if (raylib.IsKeyPressed(raylib.KEY_E)) in_pallet = !in_pallet;
                 const mouse_tile = render.getMouseTile(&camera, world.grid, texture_set);
-                const res = try world.resources.getOrPut(world.allocator, mouse_tile);
+                if (raylib.IsKeyPressed(raylib.KEY_R)) {
+                    const res = world.resources.getPtr(mouse_tile);
 
-                if (res.found_existing) {
-                    //const next_enum_int: u8 = @intFromEnum(res.value_ptr.type) + 1;
-                    //if (next_enum_int >= @typeInfo(rules.Resource).Enum.fields.len) {
-                    //    _ = world.resources.swapRemove(mouse_tile);
-                    //} else {
-                    //    res.value_ptr.type = @enumFromInt(next_enum_int);
-                    //}
-                } else {
-                    //try world.resources.put(world.allocator, mouse_tile, .{ .type = @enumFromInt(0), .amount = 1 });
+                    if (res != null) {
+                        res.?.type = @enumFromInt((@intFromEnum(res.?.type) + 1) % rules.resource_count);
+                    } else {
+                        try world.resources.put(world.allocator, mouse_tile, .{ .type = @enumFromInt(0), .amount = 1 });
+                    }
                 }
-            }
-            if (raylib.IsKeyPressed(raylib.KEY_T)) {
-                const mouse_tile = render.getMouseTile(&camera, world.grid, texture_set);
-                const res = try world.resources.getOrPut(world.allocator, mouse_tile);
-
-                if (res.found_existing) {
-                    {
-                        res.value_ptr.amount = res.value_ptr.amount + 1;
-                        if (res.value_ptr.amount > 12) {
-                            res.value_ptr.amount = 1;
+                if (raylib.IsKeyPressed(raylib.KEY_F)) {
+                    const res = world.resources.getPtr(mouse_tile);
+                    if (res != null) {
+                        if (@intFromEnum(res.?.type) == 0) {
+                            _ = world.resources.swapRemove(mouse_tile);
+                        } else {
+                            res.?.type = @enumFromInt(@as(u8, (@intFromEnum(res.?.type)) -| 1));
                         }
                     }
                 }
+                if (raylib.IsKeyPressed(raylib.KEY_T)) {
+                    const res = try world.resources.getOrPut(world.allocator, mouse_tile);
+                    if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
+                }
+
+                if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and in_edit_mode) { // DRAW / Pallet
+                    if (!in_pallet and terrain_brush != null) world.terrain[mouse_tile] = terrain_brush.?;
+                    if (in_pallet) terrain_brush = @enumFromInt(mouse_tile % rules.terrain_count);
+                }
             }
+            // SAVE MAP
             if (raylib.IsKeyPressed(raylib.KEY_C)) {
                 try world.saveToFile("maps/last_saved.map");
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
-            if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
-                const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
-                // EDIT MAP
-                if (edit_mode) {
-                    // draw_terrain = @enumFromInt(clicked_tile % @typeInfo(rules.Terrain).Enum.fields.len);
-                }
-                // UNIT MOVEMENT
-                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and !edit_mode and (draw_terrain == null)) {
-                    if (draw_terrain != null) {
-                        world.terrain[clicked_tile] = draw_terrain.?;
+
+            const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
+
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.refreshUnits();
+
+            // UNIT MOVEMENT
+            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and !edit_mode and (draw_terrain == null)) {
+                if (draw_terrain != null) {
+                    world.terrain[clicked_tile] = draw_terrain.?;
+                } else {
+                    if (selected_tile == null) {
+                        selected_tile = clicked_tile;
                     } else {
-                        if (selected_tile == null) {
-                            selected_tile = clicked_tile;
-                        } else {
-                            _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
-                            if (selected_tile == clicked_tile) {
-                                selected_tile = null;
-                            }
+                        _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
+                        if (selected_tile == clicked_tile) {
                             selected_tile = null;
                         }
+                        selected_tile = null;
                     }
                 }
             }
@@ -164,9 +176,14 @@ pub fn main() !void {
         raylib.BeginMode2D(camera);
 
         while (camera_bound_box.iterNext()) |index| {
-            if (edit_mode) {
-                //const select_terrain: rules.Terrain = @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
-                //render.renderTerrain(select_terrain, index, world.grid, texture_set);
+            if (in_pallet) {
+                render.renderTerrain(
+                    @enumFromInt(index % rules.terrain_count),
+                    index,
+                    world.grid,
+                    texture_set,
+                    &rules,
+                );
             } else {
                 // Normal mode render
                 render.renderTile(world, index, world.grid, texture_set, &rules);
