@@ -104,7 +104,12 @@ pub fn removeNthStackedUnit(self: *Self, idx: Idx, n: usize) ?Unit {
     var last_uc = topUnitContainerPtr(self, idx) orelse return null;
     if (n == 0) {
         const uc = last_uc.*;
-        self.unit_map[idx] = null;
+        if (uc.stacked_key != null) {
+            self.unit_map[idx] = self.unit_stack.get(uc.stacked_key.?);
+            _ = self.unit_stack.swapRemove(uc.stacked_key.?);
+        } else {
+            self.unit_map[idx] = null;
+        }
         return uc.unit;
     }
     for (0..(n - 1)) |_| {

@@ -171,7 +171,7 @@ pub fn renderUnit(unit: Unit, stack_pos: usize, tile_idx: Idx, grid: Grid, ts: T
     }
     {
         var buf: [8:0]u8 = [_:0]u8{0} ** 8;
-        const hp_str = std.fmt.bufPrint(&buf, "{d:.1}/{}", .{ unit.movement, unit.type.baseStats().moves }) catch unreachable;
+        const hp_str = std.fmt.bufPrint(&buf, "{d:.1}/{d:.0}", .{ unit.movement, unit.maxMovement() }) catch unreachable;
 
         raylib.DrawTextEx(ts.font, hp_str.ptr, raylib.Vector2{
             .x = base_x,

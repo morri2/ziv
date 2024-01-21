@@ -29,8 +29,15 @@ pub fn main() !void {
 
     try world.loadFromFile("maps/last_saved.map");
 
+    var w1 = Unit.new(.Warrior);
+    w1.promotions.set(@intFromEnum(rules.Promotion.Mobility));
     //world.pushUnit(1200, .{ .type = .Archer });
-    world.pushUnit(1200, Unit.new(.Warrior));
+    world.pushUnit(1200, w1);
+
+    var w2 = Unit.new(.Archer);
+    w2.promotions.set(@intFromEnum(rules.Promotion.Mobility));
+    //world.pushUnit(1200, .{ .type = .Archer });
+    world.pushUnit(1201, w2);
 
     std.debug.print("unita {} \n", .{world.topUnitContainerPtr(1200).?.unit.type});
     //std.debug.print("unitb {} \n", .{world.nextUnitContainerPtr(world.topUnitContainerPtr(1200).?).?.unit.type});

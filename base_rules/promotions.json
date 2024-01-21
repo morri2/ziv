@@ -120,6 +120,27 @@
 					"value": 15
 				}
 			]
+		},
+		{
+			"name": "Mobility",
+			"effects": [
+				{
+					"effect": "ModifyMovement",
+					"value": 1
+				}
+			]
+		},
+		{
+			"name": "MobilityII",
+			"requires": [
+				"Mobility"
+			],
+			"effects": [
+				{
+					"effect": "ModifyMovement",
+					"value": 1
+				}
+			]
 		}
 	]
 }

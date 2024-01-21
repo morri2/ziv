@@ -14,7 +14,7 @@ movement: f32 = 0,
 pub fn new(unit_type: rules.UnitType) Self {
     var unit = Self{ .type = unit_type };
     unit.promotions = unit_type.baseStats().promotions;
-    unit.movement = @as(f32, @floatFromInt(unit_type.baseStats().moves));
+    unit.movement = unit.maxMovement();
     return unit;
 }
 
