@@ -15,133 +15,59 @@ const raylib = @cImport({
 
 pub const TextureSet = struct {
     font: raylib.Font,
-    vegetation_textures: [@typeInfo(rules.Vegetation).Enum.fields.len - 1]raylib.Texture2D,
+    vegetation_textures: [@typeInfo(rules.Vegetation).Enum.fields.len]raylib.Texture2D,
     base_textures: [@typeInfo(rules.Base).Enum.fields.len]raylib.Texture2D,
-    feature_textures: [@typeInfo(rules.Feature).Enum.fields.len - 1]raylib.Texture2D,
+    feature_textures: [@typeInfo(rules.Feature).Enum.fields.len]raylib.Texture2D,
     unit_icons: [@typeInfo(rules.UnitType).Enum.fields.len]raylib.Texture2D,
     resource_icons: [@typeInfo(rules.Resource).Enum.fields.len]raylib.Texture2D,
-    improvement_textures: [@typeInfo(rules.Improvements.Building).Enum.fields.len - 1]raylib.Texture2D,
+    transport_textures: [@typeInfo(rules.Improvements.Transport).Enum.fields.len]raylib.Texture2D,
+    improvement_textures: [@typeInfo(rules.Improvements.Building).Enum.fields.len]raylib.Texture2D,
     hex_radius: f32,
 
     pub fn init() !TextureSet {
         const font = raylib.LoadFont("textures/custom_alagard.png");
-        // Load resources
-        const base_textures, const texture_height = blk: {
-            const enum_fields = @typeInfo(rules.Base).Enum.fields;
-            var textures = [_]raylib.Texture2D{undefined} ** enum_fields.len;
-            var texture_height: c_int = 0;
+        const universal_fallback = loadTexture("textures/placeholder.png", null);
 
-            inline for (enum_fields, 0..) |field, i| {
-                const path = "textures/" ++ field.name ++ ".png";
-                const img = if (raylib.FileExists(path)) raylib.LoadImage(path) else raylib.LoadImage("textures/placeholder.png");
-                defer raylib.UnloadImage(img);
-
-                if (i == 0) texture_height = img.height else {
-                    if (img.height != texture_height) return error.InvalidResources;
-                }
-
-                textures[i] = raylib.LoadTextureFromImage(img);
-            }
-            break :blk .{ textures, texture_height };
-        };
-
-        const feature_textures = blk: {
-            const enum_fields = @typeInfo(rules.Feature).Enum.fields;
-            var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
-
-            inline for (enum_fields[1..], 0..) |field, i| {
-                const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
-                defer raylib.UnloadImage(img);
-
-                if (img.height != texture_height) return error.InvalidResources;
-
-                textures[i] = raylib.LoadTextureFromImage(img);
-            }
-            break :blk textures;
-        };
-
-        const vegetation_textures = blk: {
-            const enum_fields = @typeInfo(rules.Vegetation).Enum.fields;
-            var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
-
-            inline for (enum_fields[1..], 0..) |field, i| {
-                const img = raylib.LoadImage("textures/" ++ field.name ++ ".png");
-                defer raylib.UnloadImage(img);
-
-                if (img.height != texture_height) return error.InvalidResources;
-
-                textures[i] = raylib.LoadTextureFromImage(img);
-            }
-            break :blk textures;
-        };
-
-        const improvement_textures = blk: {
-            const enum_fields = @typeInfo(rules.Improvements.Building).Enum.fields;
-            var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
-
-            inline for (enum_fields[1..], 0..) |field, i| {
-                const img = img: {
-                    std.fs.Dir.access(std.fs.cwd(), "textures/impr_" ++ field.name ++ ".png", .{}) catch {
-                        break :img raylib.LoadImage("textures/impr_placeholder.png");
-                    };
-                    break :img raylib.LoadImage("textures/impr_" ++ field.name ++ ".png");
-                };
-
-                defer raylib.UnloadImage(img);
-                textures[i] = raylib.LoadTextureFromImage(img);
-            }
-            break :blk textures;
-        };
-
-        const hex_radius = @as(f32, @floatFromInt(texture_height)) * 0.5;
-
-        const units_icons = blk: {
-            const enum_fields = @typeInfo(rules.UnitType).Enum.fields;
-            var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len);
-            //var buf: [255]u8 = undefined;
-            inline for (enum_fields[0..], 0..) |field, i| {
-                //const field_name = std.ascii.lowerString(&buf, field.name);
-                const img = img: {
-                    std.fs.Dir.access(std.fs.cwd(), "textures/unit_" ++ field.name ++ ".png", .{}) catch {
-                        break :img raylib.LoadImage("textures/unit_placeholder.png");
-                    };
-                    break :img raylib.LoadImage("textures/unit_" ++ field.name ++ ".png");
-                };
-
-                defer raylib.UnloadImage(img);
-                textures[i] = raylib.LoadTextureFromImage(img);
-            }
-            break :blk textures;
-        };
-
-        const resource_icons = blk: {
-            const enum_fields = @typeInfo(rules.Resource).Enum.fields;
-            var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len);
-            //var buf: [255]u8 = undefined;
-            inline for (enum_fields[0..], 0..) |field, i| {
-                //const field_name = std.ascii.lowerString(&buf, field.name);
-                const img = img: {
-                    std.fs.Dir.access(std.fs.cwd(), "textures/res_" ++ field.name ++ ".png", .{}) catch {
-                        break :img raylib.LoadImage("textures/res_placeholder.png");
-                    };
-                    break :img raylib.LoadImage("textures/res_" ++ field.name ++ ".png");
-                };
-
-                defer raylib.UnloadImage(img);
-                textures[i] = raylib.LoadTextureFromImage(img);
-            }
-            break :blk textures;
-        };
-
+        const hex_radius = @as(f32, @floatFromInt(universal_fallback.height)) * 0.5;
         return .{
-            .improvement_textures = improvement_textures,
-            .resource_icons = resource_icons,
             .font = font,
-            .base_textures = base_textures,
-            .vegetation_textures = vegetation_textures,
-            .feature_textures = feature_textures,
             .hex_radius = hex_radius,
-            .unit_icons = units_icons,
+
+            .base_textures = loadEnumTextures(
+                "textures/{s}.png",
+                universal_fallback,
+                rules.Base,
+            ),
+            .vegetation_textures = loadEnumTextures(
+                "textures/{s}.png",
+                universal_fallback,
+                rules.Vegetation,
+            ),
+            .feature_textures = loadEnumTextures(
+                "textures/{s}.png",
+                universal_fallback,
+                rules.Feature,
+            ),
+            .improvement_textures = loadEnumTextures(
+                "textures/impr_{s}.png",
+                universal_fallback,
+                rules.Improvements.Building,
+            ),
+            .transport_textures = loadEnumTextures(
+                "textures/transp_{s}.png",
+                universal_fallback,
+                rules.Improvements.Transport,
+            ),
+            .resource_icons = loadEnumTextures(
+                "textures/res_{s}.png",
+                universal_fallback,
+                rules.Resource,
+            ),
+            .unit_icons = loadEnumTextures(
+                "textures/unit_{s}.png",
+                universal_fallback,
+                rules.UnitType,
+            ),
         };
     }
 
@@ -152,159 +78,261 @@ pub const TextureSet = struct {
     }
 };
 
+pub fn loadEnumTextures(
+    comptime path_fmt: []const u8,
+    universal_fallback: ?raylib.Texture2D,
+    comptime E: type,
+) [@typeInfo(E).Enum.fields.len]raylib.Texture2D {
+    const enum_fields = @typeInfo(E).Enum.fields;
+    var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len);
+
+    var fallback_path_buf: [256]u8 = undefined;
+    const fallback_path = std.fmt.bufPrintZ(&fallback_path_buf, path_fmt, .{"placeholder"}) catch unreachable;
+
+    const fallback_texture = loadTexture(fallback_path, universal_fallback);
+
+    inline for (@typeInfo(E).Enum.fields, 0..) |field, i| {
+        var enum_name_buf: [256]u8 = undefined;
+        const enum_name = std.ascii.lowerString(&enum_name_buf, field.name);
+
+        var path_buf: [256]u8 = undefined;
+        const path = std.fmt.bufPrintZ(&path_buf, path_fmt, .{enum_name}) catch unreachable;
+        textures[i] = loadTexture(path, fallback_texture);
+    }
+    return textures;
+}
+
+pub fn loadTexture(path: []const u8, fallback: ?raylib.Texture2D) raylib.Texture2D {
+    std.fs.Dir.access(std.fs.cwd(), path, .{}) catch {
+        if (!std.mem.containsAtLeast(u8, path, 1, "none")) {
+            std.debug.print("No texture '{s}', resorting to placeholder.\n", .{path});
+        }
+        return fallback orelse unreachable;
+    };
+    const img = raylib.LoadImage(path.ptr);
+    defer raylib.UnloadImage(img);
+    return raylib.LoadTextureFromImage(img);
+}
+
 pub fn renderYields(world: *World, tile_idx: Idx, ts: TextureSet) void {
     const yields = world.tileYield(tile_idx);
-    const x = world.grid.xFromIdx(tile_idx);
-    const y = world.grid.yFromIdx(tile_idx);
-    const base_x = hex.tilingX(x, y, ts.hex_radius) + 0.2 * ts.hex_radius;
-    const base_y = hex.tilingY(y, ts.hex_radius) + 0.2 * ts.hex_radius;
-
-    var buf: [16:0]u8 = [_:0]u8{0} ** 16;
-    const yields_str = std.fmt.bufPrint(&buf, "{}P  {}F  {}G", .{ yields.production, yields.food, yields.gold }) catch unreachable;
-
-    raylib.DrawTextEx(ts.font, yields_str.ptr, raylib.Vector2{
-        .x = base_x + 0.04 * ts.hex_radius,
-        .y = base_y + 1.1 * ts.hex_radius,
-    }, 12, 0.0, raylib.WHITE);
+    renderInHexTextFormat(
+        tile_idx,
+        world.grid,
+        "{}P  {}F  {}G",
+        .{ yields.production, yields.food, yields.gold },
+        0.0,
+        0.5,
+        .{},
+        ts,
+    );
 }
 
 pub fn renderUnits(world: *World, tile_idx: Idx, ts: TextureSet) void {
     var unit_container = world.topUnitContainerPtr(tile_idx);
     for (0..32) |i| {
+        _ = i; // autofix
+
         const unit = (unit_container orelse break).unit;
-        renderUnit(unit, i, tile_idx, world.grid, ts);
+        renderUnit(unit, tile_idx, world.grid, ts);
         unit_container = world.nextUnitContainerPtr(unit_container.?);
     }
 }
 
-pub fn renderUnit(unit: Unit, stack_pos: usize, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
-    const x = grid.xFromIdx(tile_idx);
-    const y = grid.yFromIdx(tile_idx);
-    const real_x = hex.tilingX(x, y, ts.hex_radius);
-    const real_y = hex.tilingY(y, ts.hex_radius);
-
-    raylib.DrawTextureEx(
+pub fn renderUnit(unit: Unit, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
+    renderInHexTexture(
+        tile_idx,
+        grid,
         ts.unit_icons[@intFromEnum(unit.type)],
-        raylib.Vector2{
-            .x = real_x + ts.hex_radius / 2.0 - ts.hex_radius * 0.1 * @as(f32, @floatFromInt(stack_pos)),
-            .y = real_y + ts.hex_radius / 2.0 - ts.hex_radius * 0.2 * @as(f32, @floatFromInt(stack_pos)),
-        },
         0.0,
-        0.5,
-        raylib.WHITE,
+        0.0,
+        .{ .scale = 0.4 },
+        ts,
     );
-    const base_x = real_x + ts.hex_radius / 2.0 + ts.hex_radius * 0.1 * @as(f32, @floatFromInt(stack_pos));
-    const base_y = real_y + ts.hex_radius / 2.0 + ts.hex_radius * 0.2 * @as(f32, @floatFromInt(stack_pos));
 
-    {
-        var buf: [8:0]u8 = [_:0]u8{0} ** 8;
-        const hp_str = std.fmt.bufPrint(&buf, "{} HP", .{unit.hit_points}) catch unreachable;
+    renderInHexTextFormat(
+        tile_idx,
+        grid,
+        "{}hp",
+        .{unit.hit_points},
+        0.0,
+        -0.3,
+        .{},
+        ts,
+    );
 
-        raylib.DrawTextEx(ts.font, hp_str.ptr, raylib.Vector2{
-            .x = base_x,
-            .y = base_y,
-        }, 10, 0.0, raylib.GREEN);
-    }
-    {
-        var buf: [8:0]u8 = [_:0]u8{0} ** 8;
-        const hp_str = std.fmt.bufPrint(&buf, "{d:.1}/{d:.0}", .{ unit.movement, unit.maxMovement() }) catch unreachable;
-
-        raylib.DrawTextEx(ts.font, hp_str.ptr, raylib.Vector2{
-            .x = base_x,
-            .y = base_y + 0.5 * ts.hex_radius,
-        }, 10, 0.0, raylib.YELLOW);
-    }
+    renderInHexTextFormat(
+        tile_idx,
+        grid,
+        "{d:.0}/{d:.0}",
+        .{ unit.movement, unit.maxMovement() },
+        0.0,
+        0.3,
+        .{},
+        ts,
+    );
 }
 
-pub fn renderTile(terrain: Terrain, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
-    const x = grid.xFromIdx(tile_idx);
-    const y = grid.yFromIdx(tile_idx);
-    const real_x = hex.tilingX(x, y, ts.hex_radius);
-    const real_y = hex.tilingY(y, ts.hex_radius);
+/// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
+pub fn renderTile(world: World, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
+    renderTerrain(world.terrain[tile_idx], tile_idx, grid, ts);
+    renderImprovement(world.improvements[tile_idx], tile_idx, grid, ts);
+}
 
-    raylib.DrawTextureEx(
+pub fn renderTerrain(terrain: Terrain, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
+    renderHexTexture(
+        tile_idx,
+        grid,
         ts.base_textures[@intFromEnum(terrain.base())],
-        raylib.Vector2{
-            .x = real_x,
-            .y = real_y,
-        },
-        0.0,
-        1.0,
-        raylib.WHITE,
+        ts,
     );
 
     if (terrain.feature() != .none) {
-        raylib.DrawTextureEx(
-            ts.feature_textures[@intFromEnum(terrain.feature()) - 1],
-            raylib.Vector2{
-                .x = real_x,
-                .y = real_y,
-            },
-            0.0,
-            1.0,
-            raylib.WHITE,
+        renderHexTexture(
+            tile_idx,
+            grid,
+            ts.feature_textures[@intFromEnum(terrain.feature())],
+            ts,
         );
     }
 
     if (terrain.vegetation() != .none) {
-        raylib.DrawTextureEx(
-            ts.vegetation_textures[@intFromEnum(terrain.vegetation()) - 1],
-            raylib.Vector2{
-                .x = real_x,
-                .y = real_y,
-            },
-            0.0,
-            1.0,
-            raylib.WHITE,
+        renderHexTexture(
+            tile_idx,
+            grid,
+            ts.vegetation_textures[@intFromEnum(terrain.vegetation())],
+            ts,
         );
     }
 }
 
 pub fn renderImprovement(improvement: rules.Improvements, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
-    const x = grid.xFromIdx(tile_idx);
-    const y = grid.yFromIdx(tile_idx);
-    const real_x = hex.tilingX(x, y, ts.hex_radius);
-    const real_y = hex.tilingY(y, ts.hex_radius);
-
     if (improvement.building != .none) {
-        raylib.DrawTextureEx(
-            ts.improvement_textures[@intFromEnum(improvement.building) - 1],
-            raylib.Vector2{
-                .x = real_x,
-                .y = real_y,
-            },
-            0.0,
-            1.0,
-            raylib.WHITE,
+        renderHexTexture(
+            tile_idx,
+            grid,
+            ts.improvement_textures[@intFromEnum(improvement.building)],
+            ts,
+        );
+    }
+
+    if (improvement.transport != .none) {
+        // PLACEHOLDER!
+        renderHexTexture(
+            tile_idx,
+            grid,
+            ts.feature_textures[3],
+            ts,
         );
     }
 }
 
 pub fn renderResource(world: *World, tile_idx: Idx, ts: TextureSet) void {
     const res_amt = world.resources.get(tile_idx) orelse return;
-    const x = world.grid.xFromIdx(tile_idx);
-    const y = world.grid.yFromIdx(tile_idx);
-    const base_x = hex.tilingX(x, y, ts.hex_radius) + 0.2 * ts.hex_radius;
-    const base_y = hex.tilingY(y, ts.hex_radius) + 0.2 * ts.hex_radius;
 
-    raylib.DrawTextureEx(
+    renderInHexTexture(
+        tile_idx,
+        world.grid,
         ts.resource_icons[@intFromEnum(res_amt.type)],
-        raylib.Vector2{
-            .x = base_x,
-            .y = base_y,
-        },
-        0.0,
-        0.4,
-        raylib.WHITE,
+        -0.4,
+        -0.4,
+        .{ .scale = 0.4 },
+        ts,
     );
 
     if (res_amt.amount > 1) {
-        var buf: [8:0]u8 = [_:0]u8{0} ** 8;
-        const amt_str = std.fmt.bufPrint(&buf, "x{}", .{res_amt.amount}) catch unreachable;
+        var buf: [8]u8 = [_]u8{0} ** 8;
+        const amt_str = std.fmt.bufPrintZ(&buf, "x{}", .{res_amt.amount}) catch unreachable;
 
-        raylib.DrawTextEx(ts.font, amt_str.ptr, raylib.Vector2{
-            .x = base_x + 0.3 * ts.hex_radius,
-            .y = base_y + 0.3 * ts.hex_radius,
-        }, 12, 0.0, raylib.WHITE);
+        renderInHexText(tile_idx, world.grid, amt_str, -0.2, -0.25, .{ .font_size = 14 }, ts);
     }
+}
+
+/// For rendering a texture with the dimensions of a Hex tile covering a full hex tile
+pub fn renderHexTexture(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, ts: TextureSet) void {
+    const x = grid.xFromIdx(tile_idx);
+    const y = grid.yFromIdx(tile_idx);
+    const hex_x = hex.tilingX(x, y, ts.hex_radius);
+    const hex_y = hex.tilingY(y, ts.hex_radius);
+
+    raylib.DrawTextureEx(texture, raylib.Vector2{
+        .x = hex_x,
+        .y = hex_y,
+    }, 0.0, 1.0, raylib.WHITE);
+}
+
+pub const RenderTextArgs = struct {
+    font: ?raylib.Font = null, // null -> ts default font
+    font_size: f32 = 10,
+    spaceing: f32 = 0.0,
+    rotation: f32 = 0.0, // unstable? might fuck up with anything other than left anchor
+    tint: raylib.Color = raylib.WHITE,
+    anchor: enum { center, right, left } = .center,
+};
+
+/// Format print can do UP TO 31 characters
+pub fn renderInHexTextFormat(tile_idx: Idx, grid: Grid, comptime fmt: []const u8, fmt_args: anytype, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
+    var buf: [32]u8 = undefined;
+    const text = std.fmt.bufPrintZ(&buf, fmt, fmt_args) catch unreachable;
+    renderInHexText(tile_idx, grid, text, off_x, off_y, args, ts);
+}
+
+/// Format print can do UP TO 255 characters
+pub fn renderInHexTextFormatLong(tile_idx: Idx, grid: Grid, comptime fmt: []const u8, fmt_args: anytype, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
+    var buf: [256]u8 = undefined;
+    const text = std.fmt.bufPrintZ(&buf, fmt, fmt_args) catch unreachable;
+    renderInHexText(tile_idx, grid, text, off_x, off_y, args, ts);
+}
+
+/// Render text in hex. Render text with a relative position form tile center (offset messured in hex radius)
+pub fn renderInHexText(tile_idx: Idx, grid: Grid, text: []const u8, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
+    const x = grid.xFromIdx(tile_idx);
+    const y = grid.yFromIdx(tile_idx);
+    const center_x = hex.tilingX(x, y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) / 2.0;
+    const center_y = hex.tilingY(y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) / 2.0;
+
+    const text_messurements = raylib.MeasureTextEx(ts.font, text.ptr, args.font_size, args.spaceing);
+
+    const pos = switch (args.anchor) {
+        .center => raylib.Vector2{
+            .x = center_x + off_x * ts.hex_radius - text_messurements.x / 2,
+            .y = center_y + off_y * ts.hex_radius - text_messurements.y / 2,
+        },
+        .left => raylib.Vector2{ .x = center_x + off_x * ts.hex_radius, .y = center_y + off_y * ts.hex_radius },
+        .right => raylib.Vector2{
+            .x = center_x + off_x * ts.hex_radius - text_messurements.x,
+            .y = center_y + off_y * ts.hex_radius - text_messurements.y,
+        },
+    };
+
+    raylib.DrawTextEx(args.font orelse ts.font, text.ptr, pos, args.font_size, args.spaceing, args.tint);
+}
+
+pub const RenderTextureArgs = struct {
+    scale: f32 = 1.0,
+    rotation: f32 = 0.0, // unstable? might fuck up with anything other than top_left
+    tint: raylib.Color = raylib.WHITE,
+    anchor: enum { center, bot_right, top_left } = .center,
+};
+
+/// Render texture in hex . Render text with a relative position form tile center (offset messured in hex radius)
+pub fn renderInHexTexture(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, off_x: f32, off_y: f32, args: RenderTextureArgs, ts: TextureSet) void {
+    const x = grid.xFromIdx(tile_idx);
+    const y = grid.yFromIdx(tile_idx);
+    const center_x = hex.tilingX(x, y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) / 2.0;
+    const center_y = hex.tilingY(y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) / 2.0;
+
+    const pos = switch (args.anchor) {
+        .center => raylib.Vector2{
+            .x = center_x + off_x * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.width)) / 2,
+            .y = center_y + off_y * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.height)) / 2,
+        },
+        .top_left => raylib.Vector2{ .x = center_x + off_x * ts.hex_radius, .y = center_y + off_y * ts.hex_radius },
+        .bot_right => raylib.Vector2{
+            .x = center_x + off_x * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.width)),
+            .y = center_y + off_y * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.height)),
+        },
+    };
+
+    raylib.DrawTextureEx(texture, pos, args.rotation, args.scale, raylib.WHITE);
 }

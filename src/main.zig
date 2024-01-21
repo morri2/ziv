@@ -176,14 +176,13 @@ pub fn main() !void {
         for (min_y..max_y) |y| {
             for (min_x..max_x) |x| {
                 const index = world.grid.idxFromCoords(x, y);
-                const terrain = world.terrain[index];
 
                 if (edit_mode) {
                     const select_terrain: rules.Terrain = @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
-                    render.renderTile(select_terrain, index, world.grid, texture_set);
+                    render.renderTerrain(select_terrain, index, world.grid, texture_set);
                 } else {
                     // Normal mode render
-                    render.renderTile(terrain, index, world.grid, texture_set);
+                    render.renderTile(world, index, world.grid, texture_set);
                     render.renderResource(&world, index, texture_set);
                     render.renderUnits(&world, index, texture_set);
 
@@ -211,6 +210,7 @@ pub fn main() !void {
                 }
             }
         }
+
         raylib.EndMode2D();
 
         raylib.EndDrawing();
