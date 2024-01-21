@@ -2,48 +2,48 @@
   "bases": [
     {
       "name": "ocean",
-      "yields": {
+      "yield": {
         "food": 1
       },
-      "attributes": [
-        "water"
-      ]
+      "attributes": {
+        "is_water": true
+      }
     },
     {
       "name": "coast",
-      "yields": {
+      "yield": {
         "food": 1
       },
-      "attributes": [
-        "water"
-      ]
+      "attributes": {
+        "is_water": true
+      }
     },
     {
       "name": "lake",
-      "yields": {
+      "yield": {
         "food": 2
       },
-      "attributes": [
-        "water",
-        "isfreshwater"
-      ]
+      "attributes": {
+        "is_water": true,
+        "is_freshwater": true
+      }
     },
     {
       "name": "grassland",
-      "yields": {
+      "yield": {
         "food": 2
       }
     },
     {
       "name": "plains",
-      "yields": {
+      "yield": {
         "food": 1,
         "production": 1
       }
     },
     {
       "name": "tundra",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
@@ -55,191 +55,191 @@
     },
     {
       "name": "mountain",
-      "attributes": [
-        "impassable"
-      ]
+      "attributes": {
+        "is_impassable": true
+      }
     },
     {
       "name": "cerro_de_potosi",
-      "yields": {
+      "yield": {
         "gold": 10
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "el_dorado",
-      "yields": {
+      "yield": {
         "culture": 5
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "fountain_of_youth",
       "happiness": 10,
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "king_solomons_mines",
-      "yields": {
+      "yield": {
         "production": 6
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "krakatoa",
-      "yields": {
+      "yield": {
         "science": 5
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "lake_victoria",
-      "yields": {
+      "yield": {
         "food": 6
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "mt_fuji",
-      "yields": {
+      "yield": {
         "gold": 2,
         "culture": 3,
         "faith": 3
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "mt_kailash",
-      "yields": {
+      "yield": {
         "faith": 6
       },
       "happiness": 2,
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "mt_kilimanjaro",
-      "yields": {
+      "yield": {
         "food": 3,
         "culture": 2
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "mt_sinai",
-      "yields": {
+      "yield": {
         "faith": 8
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "old_faithful",
-      "yields": {
+      "yield": {
         "science": 2
       },
       "happiness": 3,
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "rock_of_gibraltar",
-      "yields": {
+      "yield": {
         "food": 2,
         "gold": 5
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "sri_pada",
-      "yields": {
+      "yield": {
         "food": 2,
         "faith": 4
       },
       "happiness": 2,
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "the_barringer_crater",
-      "yields": {
+      "yield": {
         "gold": 2,
         "science": 3
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "the_grand_mesa",
-      "yields": {
+      "yield": {
         "production": 2,
         "gold": 3
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "the_barrier_reef",
-      "yields": {
+      "yield": {
         "food": 2,
         "production": 1,
         "gold": 1,
         "science": 2
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     },
     {
       "name": "uluru",
-      "yields": {
+      "yield": {
         "food": 2,
         "faith": 6
       },
-      "attributes": [
-        "impassable",
-        "wonder"
-      ]
+      "attributes": {
+        "is_impassable": true,
+        "is_wonder": true
+      }
     }
   ],
   "features": [
@@ -252,12 +252,12 @@
         "snow",
         "desert"
       ],
-      "yields": {
+      "yield": {
         "production": 2
       },
-      "attributes": [
-        "rough"
-      ],
+      "attributes": {
+        "is_rough": true
+      },
       "combat_bonus": 25
     },
     {
@@ -265,13 +265,13 @@
       "bases": [
         "desert"
       ],
-      "yields": {
+      "yield": {
         "food": 3,
         "gold": 1
       },
-      "attributes": [
-        "isfreshwater"
-      ],
+      "attributes": {
+        "is_freshwater": true
+      },
       "combat_bonus": -10
     },
     {
@@ -281,16 +281,16 @@
         "coast",
         "lake"
       ],
-      "attributes": [
-        "impassable"
-      ]
+      "attributes": {
+        "is_impassable": true
+      }
     },
     {
       "name": "atoll",
       "bases": [
         "coast"
       ],
-      "yields": {
+      "yield": {
         "food": 2,
         "production": 1
       }
@@ -307,13 +307,13 @@
       "features": [
         "hill"
       ],
-      "yields": {
+      "yield": {
         "food": 1,
         "production": 1
       },
-      "attributes": [
-        "rough"
-      ],
+      "attributes": {
+        "is_rough": true
+      },
       "combat_bonus": 25
     },
     {
@@ -324,12 +324,12 @@
       "features": [
         "hill"
       ],
-      "yields": {
+      "yield": {
         "food": 2
       },
-      "attributes": [
-        "rough"
-      ],
+      "attributes": {
+        "is_rough": true
+      },
       "combat_bonus": 25
     },
     {
@@ -337,12 +337,12 @@
       "bases": [
         "grassland"
       ],
-      "yields": {
+      "yield": {
         "food": 1
       },
-      "attributes": [
-        "rough"
-      ],
+      "attributes": {
+        "is_rough": true
+      },
       "combat_bonus": -15
     }
   ],
@@ -350,10 +350,10 @@
     {
       "name": "floodplain",
       "base": "desert",
-      "attributes": [
-        "river"
-      ],
-      "yields": {
+      "attributes": {
+        "has_river": true
+      },
+      "yield": {
         "food": 2
       },
       "combat_bonus": -10

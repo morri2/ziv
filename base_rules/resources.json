@@ -2,49 +2,49 @@
   "bonus": [
     {
       "name": "bananas",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
     {
       "name": "wheat",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
     {
       "name": "cattle",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
     {
       "name": "sheep",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
     {
       "name": "bison",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
     {
       "name": "deer",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
     {
       "name": "fish",
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
     {
       "name": "stone",
-      "yields": {
+      "yield": {
         "food": 1
       }
     }
@@ -52,37 +52,37 @@
   "strategic": [
     {
       "name": "horses",
-      "yields": {
+      "yield": {
         "production": 1
       }
     },
     {
       "name": "iron",
-      "yields": {
+      "yield": {
         "production": 1
       }
     },
     {
       "name": "coal",
-      "yields": {
+      "yield": {
         "production": 1
       }
     },
     {
       "name": "oil",
-      "yields": {
+      "yield": {
         "production": 1
       }
     },
     {
       "name": "aluminum",
-      "yields": {
+      "yield": {
         "production": 1
       }
     },
     {
       "name": "uranium",
-      "yields": {
+      "yield": {
         "production": 1
       }
     }
@@ -90,156 +90,156 @@
   "luxury": [
     {
       "name": "cotton",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "spices",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "sugar",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "furs",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "ivory",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "silk",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "dyes",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "incense",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "wine",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "copper",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "gold",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "silver",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "marble",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "pearls",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "truffles",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "jewelry",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "porcelain",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "nutmeg",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "cloves",
-      "yields": {
+      "yield": {
         "gold": 2
       }
     },
     {
       "name": "crab",
-      "yields": {
+      "yield": {
         "gold": 1,
         "food": 1
       }
     },
     {
       "name": "salt",
-      "yields": {
+      "yield": {
         "gold": 1,
         "food": 1
       }
     },
     {
       "name": "whales",
-      "yields": {
+      "yield": {
         "gold": 1,
         "food": 1
       }
     },
     {
       "name": "citrus",
-      "yields": {
+      "yield": {
         "gold": 1,
         "food": 1
       }
     },
     {
       "name": "cocoa",
-      "yields": {
+      "yield": {
         "gold": 1,
         "food": 1
       }
     },
     {
       "name": "gems",
-      "yields": {
+      "yield": {
         "gold": 3
       }
     }

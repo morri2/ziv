@@ -1,5 +1,5 @@
 const std = @import("std");
-const rules = @import("rules");
+const Rules = @import("Rules.zig");
 const hex = @import("hex.zig");
 const render = @import("render.zig");
 const World = @import("World.zig");
@@ -17,6 +17,13 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
+    var rules = blk: {
+        var rules_dir = try std.fs.cwd().openDir("base_rules", .{});
+        defer rules_dir.close();
+        break :blk try Rules.parse(rules_dir, gpa.allocator());
+    };
+    defer rules.deinit();
+
     const WIDTH = 56;
     const HEIGHT = 36;
     var world = try World.init(
@@ -24,18 +31,19 @@ pub fn main() !void {
         WIDTH,
         HEIGHT,
         false,
+        &rules,
     );
     defer world.deinit();
 
     try world.loadFromFile("maps/last_saved.map");
 
     var w1 = Unit.new(.warrior);
-    w1.promotions.set(@intFromEnum(rules.Promotion.Mobility));
+    w1.promotions.set(@intFromEnum(Rules.Promotion.Mobility));
     //world.pushUnit(1200, .{ .type = .Archer });
     world.pushUnit(1200, w1);
 
     var w2 = Unit.new(.archer);
-    w2.promotions.set(@intFromEnum(rules.Promotion.Mobility));
+    w2.promotions.set(@intFromEnum(Rules.Promotion.Mobility));
     //world.pushUnit(1200, .{ .type = .Archer });
     world.pushUnit(1201, w2);
 
@@ -61,11 +69,11 @@ pub fn main() !void {
         .zoom = 0.5,
     };
 
-    var texture_set = try render.TextureSet.init();
+    var texture_set = try render.TextureSet.init(&rules, gpa.allocator());
     defer texture_set.deinit();
 
     // MAP DRAW MODE
-    var draw_terrain: ?rules.Terrain = null;
+    var draw_terrain: ?Rules.Terrain = null;
     draw_terrain = draw_terrain; // autofix
     var edit_mode: bool = false;
     edit_mode = edit_mode;
@@ -83,7 +91,7 @@ pub fn main() !void {
 
             if (res.found_existing) {
                 const next_enum_int: u8 = @intFromEnum(res.value_ptr.type) + 1;
-                if (next_enum_int >= @typeInfo(rules.Resource).Enum.fields.len) {
+                if (next_enum_int >= @typeInfo(Rules.Resource).Enum.fields.len) {
                     _ = world.resources.swapRemove(mouse_tile);
                 } else {
                     res.value_ptr.type = @enumFromInt(next_enum_int);
@@ -113,7 +121,7 @@ pub fn main() !void {
             const clicked_tile = getMouseTile(&camera, world.grid, texture_set);
             // EDIT MAP
             if (edit_mode) {
-                draw_terrain = @enumFromInt(clicked_tile % @typeInfo(rules.Terrain).Enum.fields.len);
+                // draw_terrain = @enumFromInt(clicked_tile % @typeInfo(Rules.Terrain).Enum.fields.len);
             }
             // UNIT MOVEMENT
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and !edit_mode and (draw_terrain == null)) {
@@ -178,11 +186,11 @@ pub fn main() !void {
                 const index = world.grid.idxFromCoords(x, y);
 
                 if (edit_mode) {
-                    const select_terrain: rules.Terrain = @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
-                    render.renderTerrain(select_terrain, index, world.grid, texture_set);
+                    const select_terrain: Rules.Terrain = @enumFromInt(0); // @enumFromInt(index % @typeInfo(rules.Terrain).Enum.fields.len);
+                    render.renderTerrain(select_terrain, index, world.grid, texture_set, &rules);
                 } else {
                     // Normal mode render
-                    render.renderTile(world, index, world.grid, texture_set);
+                    render.renderTile(world, index, world.grid, texture_set, &rules);
                     render.renderResource(&world, index, texture_set);
                     render.renderUnits(&world, index, texture_set);
 
@@ -192,19 +200,19 @@ pub fn main() !void {
                     // Selection menu render :)
                     if (selected_tile != null) {
                         if (selected_tile == index) {
-                            const real_x = hex.tilingX(x, y, texture_set.hex_radius);
-                            const real_y = hex.tilingY(y, texture_set.hex_radius);
+                            // const real_x = hex.tilingX(x, y, texture_set.hex_radius);
+                            // const real_y = hex.tilingY(y, texture_set.hex_radius);
 
-                            raylib.DrawTextureEx(
-                                texture_set.base_textures[@intFromEnum(rules.Base.snow)],
-                                raylib.Vector2{
-                                    .x = real_x,
-                                    .y = real_y,
-                                },
-                                0.0,
-                                1.0,
-                                .{ .r = 100, .g = 100, .b = 100, .a = 100 },
-                            );
+                            // raylib.DrawTextureEx(
+                            //     texture_set.base_textures[@intFromEnum(rules.Base.snow)],
+                            //     raylib.Vector2{
+                            //         .x = real_x,
+                            //         .y = real_y,
+                            //     },
+                            //     0.0,
+                            //     1.0,
+                            //     .{ .r = 100, .g = 100, .b = 100, .a = 100 },
+                            // );
                         }
                     }
                 }

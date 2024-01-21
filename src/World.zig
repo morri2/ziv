@@ -1,13 +1,13 @@
 const Self = @This();
 const std = @import("std");
-const foundation = @import("foundation");
 
-const rules = @import("rules");
-const Terrain = rules.Terrain;
-const Improvements = rules.Improvements;
-
-const Transport = rules.Transport;
-const Resource = rules.Resource;
+const Rules = @import("Rules.zig");
+const Yield = Rules.Yield;
+const Terrain = Rules.Terrain;
+const Resource = Rules.Resource;
+const Building = Rules.Building;
+const Transport = Rules.Transport;
+const Improvements = Rules.Improvements;
 
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
@@ -19,9 +19,9 @@ const Unit = @import("Unit.zig");
 /// The lowest index is always in low :))
 pub const WorkInProgress = struct {
     work_type: union(enum) {
-        building: Improvements.Building,
-        remove_vegetation_building: Improvements.Building,
-        transport: Improvements.Transport,
+        building: Building,
+        remove_vegetation_building: Building,
+        transport: Transport,
         remove_fallout,
         repair,
         remove_vegetation,
@@ -36,6 +36,8 @@ pub const ResourceAndAmount = packed struct {
 };
 
 allocator: std.mem.Allocator,
+
+rules: *const Rules,
 
 grid: Grid,
 
@@ -153,14 +155,14 @@ pub fn refreshUnits(self: *Self) void {
     }
 }
 
-pub fn tileYield(self: *Self, idx: Idx) foundation.Yield {
+pub fn tileYield(self: *Self, idx: Idx) Yield {
     const terrain = self.terrain[idx];
     const resource = self.resources.get(idx);
 
-    var y = terrain.yield();
+    var y = terrain.yield(self.rules);
 
     if (resource != null) {
-        y = y.add(resource.?.type.yield());
+        y = y.add(resource.?.type.yield(self.rules));
     }
     return y;
 }
@@ -170,6 +172,7 @@ pub fn init(
     width: usize,
     height: usize,
     wrap_around: bool,
+    rules: *const Rules,
 ) !Self {
     const grid = Grid.init(width, height, wrap_around);
 
@@ -195,6 +198,7 @@ pub fn init(
         .rivers = .{},
         .unit_map = unit_map,
         .unit_stack = .{},
+        .rules = rules,
     };
 }
 

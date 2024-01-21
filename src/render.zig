@@ -1,5 +1,5 @@
-const rules = @import("rules");
-const Terrain = rules.Terrain;
+const Rules = @import("Rules.zig");
+const Terrain = Rules.Terrain;
 const Grid = @import("Grid.zig");
 const hex = @import("hex.zig");
 const Idx = @import("Grid.zig").Idx;
@@ -14,59 +14,78 @@ const raylib = @cImport({
 });
 
 pub const TextureSet = struct {
+    allocator: std.mem.Allocator,
     font: raylib.Font,
-    vegetation_textures: [@typeInfo(rules.Vegetation).Enum.fields.len]raylib.Texture2D,
-    base_textures: [@typeInfo(rules.Base).Enum.fields.len]raylib.Texture2D,
-    feature_textures: [@typeInfo(rules.Feature).Enum.fields.len]raylib.Texture2D,
-    unit_icons: [@typeInfo(rules.UnitType).Enum.fields.len]raylib.Texture2D,
-    resource_icons: [@typeInfo(rules.Resource).Enum.fields.len]raylib.Texture2D,
-    transport_textures: [@typeInfo(rules.Improvements.Transport).Enum.fields.len]raylib.Texture2D,
-    improvement_textures: [@typeInfo(rules.Improvements.Building).Enum.fields.len]raylib.Texture2D,
+    vegetation_textures: []const raylib.Texture2D,
+    base_textures: []const raylib.Texture2D,
+    feature_textures: []const raylib.Texture2D,
+    unit_icons: []const raylib.Texture2D,
+    resource_icons: []const raylib.Texture2D,
+    transport_textures: []const raylib.Texture2D,
+    improvement_textures: []const raylib.Texture2D,
     hex_radius: f32,
 
-    pub fn init() !TextureSet {
+    pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !TextureSet {
         const font = raylib.LoadFont("textures/custom_alagard.png");
         const universal_fallback = loadTexture("textures/placeholder.png", null);
 
         const hex_radius = @as(f32, @floatFromInt(universal_fallback.height)) * 0.5;
         return .{
+            .allocator = allocator,
             .font = font,
             .hex_radius = hex_radius,
 
-            .base_textures = loadEnumTextures(
+            .base_textures = try loadTextures(
                 "textures/{s}.png",
                 universal_fallback,
-                rules.Base,
+                Rules.Terrain.Base,
+                rules,
+                rules.base_count,
+                allocator,
             ),
-            .vegetation_textures = loadEnumTextures(
+            .feature_textures = try loadTextures(
                 "textures/{s}.png",
                 universal_fallback,
-                rules.Vegetation,
+                Rules.Terrain.Feature,
+                rules,
+                rules.feature_count,
+                allocator,
             ),
-            .feature_textures = loadEnumTextures(
+            .vegetation_textures = try loadTextures(
                 "textures/{s}.png",
                 universal_fallback,
-                rules.Feature,
+                Rules.Terrain.Vegetation,
+                rules,
+                rules.vegetation_count,
+                allocator,
             ),
-            .improvement_textures = loadEnumTextures(
-                "textures/impr_{s}.png",
-                universal_fallback,
-                rules.Improvements.Building,
-            ),
-            .transport_textures = loadEnumTextures(
-                "textures/transp_{s}.png",
-                universal_fallback,
-                rules.Improvements.Transport,
-            ),
-            .resource_icons = loadEnumTextures(
+            .resource_icons = try loadTextures(
                 "textures/res_{s}.png",
                 universal_fallback,
-                rules.Resource,
+                Rules.Resource,
+                rules,
+                rules.resource_count,
+                allocator,
             ),
-            .unit_icons = loadEnumTextures(
+            .improvement_textures = try loadTextures(
+                "textures/impr_{s}.png",
+                universal_fallback,
+                Rules.Building,
+                rules,
+                rules.building_count,
+                allocator,
+            ),
+            .transport_textures = try loadEnumTextures(
+                "textures/transp_{s}.png",
+                universal_fallback,
+                Rules.Transport,
+                allocator,
+            ),
+            .unit_icons = try loadEnumTextures(
                 "textures/unit_{s}.png",
                 universal_fallback,
-                rules.UnitType,
+                Rules.UnitType,
+                allocator,
             ),
         };
     }
@@ -75,16 +94,52 @@ pub const TextureSet = struct {
         for (self.vegetation_textures) |texture| raylib.UnloadTexture(texture);
         for (self.feature_textures) |texture| raylib.UnloadTexture(texture);
         for (self.base_textures) |texture| raylib.UnloadTexture(texture);
+
+        self.allocator.free(self.unit_icons);
+        self.allocator.free(self.transport_textures);
+        self.allocator.free(self.improvement_textures);
+        self.allocator.free(self.resource_icons);
+        self.allocator.free(self.vegetation_textures);
+        self.allocator.free(self.feature_textures);
+        self.allocator.free(self.base_textures);
     }
 };
+
+pub fn loadTextures(
+    comptime path_fmt: []const u8,
+    universal_fallback: ?raylib.Texture2D,
+    comptime Enum: type,
+    rules: *const Rules,
+    len: usize,
+    allocator: std.mem.Allocator,
+) ![]const raylib.Texture2D {
+    const textures = try allocator.alloc(raylib.Texture2D, len);
+    errdefer allocator.free(textures);
+
+    var fallback_path_buf: [256]u8 = undefined;
+    const fallback_path = std.fmt.bufPrintZ(&fallback_path_buf, path_fmt, .{"placeholder"}) catch unreachable;
+
+    const fallback_texture = loadTexture(fallback_path, universal_fallback);
+
+    for (0..len) |i| {
+        const e: Enum = @enumFromInt(i);
+        const name = e.name(rules);
+        var path_buf: [256]u8 = undefined;
+        const path = std.fmt.bufPrintZ(&path_buf, path_fmt, .{name}) catch unreachable;
+        textures[i] = loadTexture(path, fallback_texture);
+    }
+    return textures;
+}
 
 pub fn loadEnumTextures(
     comptime path_fmt: []const u8,
     universal_fallback: ?raylib.Texture2D,
     comptime E: type,
-) [@typeInfo(E).Enum.fields.len]raylib.Texture2D {
+    allocator: std.mem.Allocator,
+) ![]const raylib.Texture2D {
     const enum_fields = @typeInfo(E).Enum.fields;
-    var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len);
+    const textures = try allocator.alloc(raylib.Texture2D, enum_fields.len);
+    errdefer allocator.free(textures);
 
     var fallback_path_buf: [256]u8 = undefined;
     const fallback_path = std.fmt.bufPrintZ(&fallback_path_buf, path_fmt, .{"placeholder"}) catch unreachable;
@@ -174,39 +229,42 @@ pub fn renderUnit(unit: Unit, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
 }
 
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
-pub fn renderTile(world: World, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
-    renderTerrain(world.terrain[tile_idx], tile_idx, grid, ts);
+pub fn renderTile(world: World, tile_idx: Idx, grid: Grid, ts: TextureSet, rules: *const Rules) void {
+    renderTerrain(world.terrain[tile_idx], tile_idx, grid, ts, rules);
     renderImprovement(world.improvements[tile_idx], tile_idx, grid, ts);
 }
 
-pub fn renderTerrain(terrain: Terrain, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
+pub fn renderTerrain(terrain: Terrain, tile_idx: Idx, grid: Grid, ts: TextureSet, rules: *const Rules) void {
+    const base = terrain.base(rules);
     renderHexTexture(
         tile_idx,
         grid,
-        ts.base_textures[@intFromEnum(terrain.base())],
+        ts.base_textures[@intFromEnum(base)],
         ts,
     );
 
-    if (terrain.feature() != .none) {
+    const feature = terrain.feature(rules);
+    if (feature != .none) {
         renderHexTexture(
             tile_idx,
             grid,
-            ts.feature_textures[@intFromEnum(terrain.feature())],
+            ts.feature_textures[@intFromEnum(feature)],
             ts,
         );
     }
 
-    if (terrain.vegetation() != .none) {
+    const vegetation = terrain.vegetation(rules);
+    if (vegetation != .none) {
         renderHexTexture(
             tile_idx,
             grid,
-            ts.vegetation_textures[@intFromEnum(terrain.vegetation())],
+            ts.vegetation_textures[@intFromEnum(vegetation)],
             ts,
         );
     }
 }
 
-pub fn renderImprovement(improvement: rules.Improvements, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
+pub fn renderImprovement(improvement: Rules.Improvements, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
     if (improvement.building != .none) {
         renderHexTexture(
             tile_idx,

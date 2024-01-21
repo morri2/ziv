@@ -33,7 +33,7 @@
           "wheat"
         ]
       },
-      "yields": {
+      "yield": {
         "food": 1
       }
     },
@@ -58,7 +58,7 @@
           "gems"
         ]
       },
-      "yields": {
+      "yield": {
         "production": 1
       }
     },
@@ -72,7 +72,7 @@
           }
         ]
       },
-      "yields": {
+      "yield": {
         "production": 1
       }
     },
@@ -129,7 +129,7 @@
           }
         ]
       },
-      "yields": {
+      "yield": {
         "gold": 1
       }
     }

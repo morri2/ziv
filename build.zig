@@ -1,33 +1,8 @@
 const std = @import("std");
-const RuleGenStep = @import("build/RuleGenStep.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-
-    const comptime_hash_map_dep = b.dependency("comptime_hash_map", .{});
-    const comptime_hash_map_mod = b.createModule(.{
-        .source_file = comptime_hash_map_dep.path("comptime_hash_map.zig"),
-    });
-
-    const foundation = b.addModule("foundation", .{
-        .source_file = .{ .path = "foundation/lib.zig" },
-        .dependencies = &.{.{
-            .name = "comptime_hash_map",
-            .module = comptime_hash_map_mod,
-        }},
-    });
-
-    const rule_gen_step = RuleGenStep.create(
-        b,
-        .{ .path = "base_rules" },
-        b.option(
-            bool,
-            "print_rules_zig",
-            "Print generated rules.zig",
-        ) orelse false,
-        foundation,
-    );
 
     const raylib_dep = b.dependency("raylib", .{});
     const raylib_lib = raylib_dep.artifact("raylib");
@@ -39,11 +14,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     b.installArtifact(exe);
-    exe.addModule("rules", rule_gen_step.getModule());
-    exe.addModule("foundation", foundation);
     exe.linkLibrary(raylib_lib);
     exe.addIncludePath(raylib_dep.path("src"));
-    exe.step.dependOn(&rule_gen_step.step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -59,9 +31,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    exe.addModule("foundation", foundation);
-    exe_unit_tests.addModule("rules", rule_gen_step.getModule());
-    exe_unit_tests.step.dependOn(&rule_gen_step.step);
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 

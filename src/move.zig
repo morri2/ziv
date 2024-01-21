@@ -46,9 +46,7 @@ pub fn moveCost(dest: Idx, src: Idx, unit: Unit, world: *World) MoveCostRes {
     const improvements = world.improvements[dest];
     const edge = world.grid.edgeBetween(src, dest) orelse return .disallowed;
     const is_river = world.rivers.contains(edge);
-    const is_mountain = terrain.base() == .mountain;
-    const is_rough = terrain.attributes().rough;
-    const is_water = terrain.attributes().water;
+    const attributes = terrain.attributes(world.rules);
     const has_road = improvements.transport == .road and !improvements.pillaged_transport;
     const has_rail = improvements.transport == .rail and !improvements.pillaged_transport;
 
@@ -56,11 +54,10 @@ pub fn moveCost(dest: Idx, src: Idx, unit: Unit, world: *World) MoveCostRes {
 
     var cost: f32 = 1;
     if (is_river) return .allowed_final;
-    cost += if (is_rough) 1 else 0;
+    cost += if (attributes.is_rough) 1 else 0;
 
     //if (is_water) return .embarkation;
-    if (is_water) return .disallowed;
-    if (is_mountain) return .disallowed;
+    if (attributes.is_impassable) return .disallowed;
 
     if (has_road or has_rail) cost = 0.5; // changed with machinery to 1/3.
     if (has_rail) cost = @min(cost, unit.maxMovement() / 10.0); // risk of float_rounding error :/
