@@ -1,7 +1,7 @@
 {
 	"civilian": [
 		{
-			"name": "Worker",
+			"name": "worker",
 			"production_cost": 70,
 			"moves": 2,
 			"domain": "LAND",
@@ -11,7 +11,7 @@
 			]
 		},
 		{
-			"name": "Settler",
+			"name": "settler",
 			"production_cost": 106,
 			"moves": 2,
 			"domain": "LAND",
@@ -21,7 +21,7 @@
 			]
 		},
 		{
-			"name": "WorkBoat",
+			"name": "work_boat",
 			"production_cost": 30,
 			"moves": 4,
 			"domain": "SEA",
@@ -33,7 +33,7 @@
 	],
 	"land": [
 		{
-			"name": "Warrior",
+			"name": "warrior",
 			"production_cost": 40,
 			"moves": 2,
 			"combat_strength": 8,
@@ -43,7 +43,7 @@
 			]
 		},
 		{
-			"name": "Archer",
+			"name": "archer",
 			"production_cost": 40,
 			"moves": 2,
 			"combat_strength": 5,
@@ -55,7 +55,7 @@
 			]
 		},
 		{
-			"name": "Scout",
+			"name": "scout",
 			"production_cost": 25,
 			"moves": 2,
 			"combat_strength": 5,
@@ -68,7 +68,7 @@
 	],
 	"naval": [
 		{
-			"name": "Trireme",
+			"name": "trireme",
 			"production_cost": 45,
 			"moves": 4,
 			"combat_strength": 10,

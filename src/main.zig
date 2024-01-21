@@ -29,12 +29,12 @@ pub fn main() !void {
 
     try world.loadFromFile("maps/last_saved.map");
 
-    var w1 = Unit.new(.Warrior);
+    var w1 = Unit.new(.warrior);
     w1.promotions.set(@intFromEnum(rules.Promotion.Mobility));
     //world.pushUnit(1200, .{ .type = .Archer });
     world.pushUnit(1200, w1);
 
-    var w2 = Unit.new(.Archer);
+    var w2 = Unit.new(.archer);
     w2.promotions.set(@intFromEnum(rules.Promotion.Mobility));
     //world.pushUnit(1200, .{ .type = .Archer });
     world.pushUnit(1201, w2);

@@ -20,6 +20,7 @@ pub const TextureSet = struct {
     feature_textures: [@typeInfo(rules.Feature).Enum.fields.len - 1]raylib.Texture2D,
     unit_icons: [@typeInfo(rules.UnitType).Enum.fields.len]raylib.Texture2D,
     resource_icons: [@typeInfo(rules.Resource).Enum.fields.len]raylib.Texture2D,
+    improvement_textures: [@typeInfo(rules.Improvements.Building).Enum.fields.len - 1]raylib.Texture2D,
     hex_radius: f32,
 
     pub fn init() !TextureSet {
@@ -74,6 +75,24 @@ pub const TextureSet = struct {
             break :blk textures;
         };
 
+        const improvement_textures = blk: {
+            const enum_fields = @typeInfo(rules.Improvements.Building).Enum.fields;
+            var textures = [_]raylib.Texture2D{undefined} ** (enum_fields.len - 1);
+
+            inline for (enum_fields[1..], 0..) |field, i| {
+                const img = img: {
+                    std.fs.Dir.access(std.fs.cwd(), "textures/impr_" ++ field.name ++ ".png", .{}) catch {
+                        break :img raylib.LoadImage("textures/impr_placeholder.png");
+                    };
+                    break :img raylib.LoadImage("textures/impr_" ++ field.name ++ ".png");
+                };
+
+                defer raylib.UnloadImage(img);
+                textures[i] = raylib.LoadTextureFromImage(img);
+            }
+            break :blk textures;
+        };
+
         const hex_radius = @as(f32, @floatFromInt(texture_height)) * 0.5;
 
         const units_icons = blk: {
@@ -115,6 +134,7 @@ pub const TextureSet = struct {
         };
 
         return .{
+            .improvement_textures = improvement_textures,
             .resource_icons = resource_icons,
             .font = font,
             .base_textures = base_textures,
@@ -131,6 +151,22 @@ pub const TextureSet = struct {
         for (self.base_textures) |texture| raylib.UnloadTexture(texture);
     }
 };
+
+pub fn renderYields(world: *World, tile_idx: Idx, ts: TextureSet) void {
+    const yields = world.tileYield(tile_idx);
+    const x = world.grid.xFromIdx(tile_idx);
+    const y = world.grid.yFromIdx(tile_idx);
+    const base_x = hex.tilingX(x, y, ts.hex_radius) + 0.2 * ts.hex_radius;
+    const base_y = hex.tilingY(y, ts.hex_radius) + 0.2 * ts.hex_radius;
+
+    var buf: [16:0]u8 = [_:0]u8{0} ** 16;
+    const yields_str = std.fmt.bufPrint(&buf, "{}P  {}F  {}G", .{ yields.production, yields.food, yields.gold }) catch unreachable;
+
+    raylib.DrawTextEx(ts.font, yields_str.ptr, raylib.Vector2{
+        .x = base_x + 0.04 * ts.hex_radius,
+        .y = base_y + 1.1 * ts.hex_radius,
+    }, 12, 0.0, raylib.WHITE);
+}
 
 pub fn renderUnits(world: *World, tile_idx: Idx, ts: TextureSet) void {
     var unit_container = world.topUnitContainerPtr(tile_idx);
@@ -224,6 +260,26 @@ pub fn renderTile(terrain: Terrain, tile_idx: Idx, grid: Grid, ts: TextureSet) v
     }
 }
 
+pub fn renderImprovement(improvement: rules.Improvements, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
+    const x = grid.xFromIdx(tile_idx);
+    const y = grid.yFromIdx(tile_idx);
+    const real_x = hex.tilingX(x, y, ts.hex_radius);
+    const real_y = hex.tilingY(y, ts.hex_radius);
+
+    if (improvement.building != .none) {
+        raylib.DrawTextureEx(
+            ts.improvement_textures[@intFromEnum(improvement.building) - 1],
+            raylib.Vector2{
+                .x = real_x,
+                .y = real_y,
+            },
+            0.0,
+            1.0,
+            raylib.WHITE,
+        );
+    }
+}
+
 pub fn renderResource(world: *World, tile_idx: Idx, ts: TextureSet) void {
     const res_amt = world.resources.get(tile_idx) orelse return;
     const x = world.grid.xFromIdx(tile_idx);
@@ -251,20 +307,4 @@ pub fn renderResource(world: *World, tile_idx: Idx, ts: TextureSet) void {
             .y = base_y + 0.3 * ts.hex_radius,
         }, 12, 0.0, raylib.WHITE);
     }
-}
-
-pub fn renderYields(world: *World, tile_idx: Idx, ts: TextureSet) void {
-    const yields = world.tileYield(tile_idx);
-    const x = world.grid.xFromIdx(tile_idx);
-    const y = world.grid.yFromIdx(tile_idx);
-    const base_x = hex.tilingX(x, y, ts.hex_radius) + 0.2 * ts.hex_radius;
-    const base_y = hex.tilingY(y, ts.hex_radius) + 0.2 * ts.hex_radius;
-
-    var buf: [16:0]u8 = [_:0]u8{0} ** 16;
-    const yields_str = std.fmt.bufPrint(&buf, "{}P  {}F  {}G", .{ yields.production, yields.food, yields.gold }) catch unreachable;
-
-    raylib.DrawTextEx(ts.font, yields_str.ptr, raylib.Vector2{
-        .x = base_x + 0.04 * ts.hex_radius,
-        .y = base_y + 1.1 * ts.hex_radius,
-    }, 12, 0.0, raylib.WHITE);
 }
