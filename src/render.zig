@@ -1,8 +1,8 @@
 const rules = @import("rules");
 const Terrain = rules.Terrain;
 const Grid = @import("Grid.zig");
-const hex = @import("HEX.zig");
-const Idx = @import("grid.zig").Idx;
+const hex = @import("hex.zig");
+const Idx = @import("Grid.zig").Idx;
 const World = @import("World.zig");
 const Unit = @import("Unit.zig");
 
