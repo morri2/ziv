@@ -22,6 +22,7 @@ pub const TextureSet = struct {
     resource_icons: [@typeInfo(rules.Resource).Enum.fields.len]raylib.Texture2D,
     transport_textures: [@typeInfo(rules.Improvements.Transport).Enum.fields.len]raylib.Texture2D,
     improvement_textures: [@typeInfo(rules.Improvements.Building).Enum.fields.len]raylib.Texture2D,
+    edge_textures: [3]raylib.Texture2D,
     hex_radius: f32,
 
     pub fn init() !TextureSet {
@@ -32,7 +33,14 @@ pub const TextureSet = struct {
         return .{
             .font = font,
             .hex_radius = hex_radius,
-
+            .edge_textures = loadTexturesList(
+                &[_][]const u8{
+                    "textures/edge1.png",
+                    "textures/edge2.png",
+                    "textures/edge3.png",
+                },
+                universal_fallback,
+            ),
             .base_textures = loadEnumTextures(
                 "textures/{s}.png",
                 universal_fallback,
@@ -77,6 +85,20 @@ pub const TextureSet = struct {
         for (self.base_textures) |texture| raylib.UnloadTexture(texture);
     }
 };
+
+pub fn loadTexturesList(
+    comptime paths: []const []const u8,
+    fallback: ?raylib.Texture2D,
+) [paths.len]raylib.Texture2D {
+    var textures = [_]raylib.Texture2D{undefined} ** (paths.len);
+    for (paths, 0..) |path, i| {
+        var path_buf: [256]u8 = undefined;
+        const path_0 = std.fmt.bufPrintZ(&path_buf, "{s}", .{path}) catch unreachable;
+        textures[i] = loadTexture(path_0, fallback);
+    }
+
+    return textures;
+}
 
 pub fn loadEnumTextures(
     comptime path_fmt: []const u8,
@@ -176,7 +198,16 @@ pub fn renderUnit(unit: Unit, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
 pub fn renderTile(world: World, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
     renderTerrain(world.terrain[tile_idx], tile_idx, grid, ts);
+    renderHexTextureArgs(tile_idx, grid, ts.edge_textures[tile_idx % 3], .{ .tint = .{
+        .a = 60,
+        .r = 250,
+        .g = 250,
+        .b = 150,
+    } }, ts);
     renderImprovement(world.improvements[tile_idx], tile_idx, grid, ts);
+
+    const resource = world.resources.get(tile_idx);
+    if (resource != null) renderResource(resource.?, tile_idx, world.grid, ts);
 }
 
 pub fn renderTerrain(terrain: Terrain, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
@@ -227,24 +258,22 @@ pub fn renderImprovement(improvement: rules.Improvements, tile_idx: Idx, grid: G
     }
 }
 
-pub fn renderResource(world: *World, tile_idx: Idx, ts: TextureSet) void {
-    const res_amt = world.resources.get(tile_idx) orelse return;
-
+pub fn renderResource(resource_and_amt: World.ResourceAndAmount, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
     renderInHexTexture(
         tile_idx,
-        world.grid,
-        ts.resource_icons[@intFromEnum(res_amt.type)],
+        grid,
+        ts.resource_icons[@intFromEnum(resource_and_amt.type)],
         -0.4,
         -0.4,
         .{ .scale = 0.4 },
         ts,
     );
 
-    if (res_amt.amount > 1) {
+    if (resource_and_amt.amount > 1) {
         var buf: [8]u8 = [_]u8{0} ** 8;
-        const amt_str = std.fmt.bufPrintZ(&buf, "x{}", .{res_amt.amount}) catch unreachable;
+        const amt_str = std.fmt.bufPrintZ(&buf, "x{}", .{resource_and_amt.amount}) catch unreachable;
 
-        renderInHexText(tile_idx, world.grid, amt_str, -0.2, -0.25, .{ .font_size = 14 }, ts);
+        renderInHexText(tile_idx, grid, amt_str, -0.2, -0.25, .{ .font_size = 14 }, ts);
     }
 }
 
@@ -259,6 +288,19 @@ pub fn renderHexTexture(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, ts
         .x = hex_x,
         .y = hex_y,
     }, 0.0, 1.0, raylib.WHITE);
+}
+
+/// Render hex texture but with args! NOTE THAT NOT ALL ARGS WILL HAVE THE INTENDED/ANY EFFECT
+pub fn renderHexTextureArgs(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, args: RenderTextureArgs, ts: TextureSet) void {
+    const x = grid.xFromIdx(tile_idx);
+    const y = grid.yFromIdx(tile_idx);
+    const hex_x = hex.tilingX(x, y, ts.hex_radius);
+    const hex_y = hex.tilingY(y, ts.hex_radius);
+
+    raylib.DrawTextureEx(texture, raylib.Vector2{
+        .x = hex_x,
+        .y = hex_y,
+    }, args.rotation, args.scale, args.tint);
 }
 
 pub const RenderTextArgs = struct {
@@ -335,4 +377,107 @@ pub fn renderInHexTexture(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, 
     };
 
     raylib.DrawTextureEx(texture, pos, args.rotation, args.scale, raylib.WHITE);
+}
+
+pub fn cameraRenderBoundBox(camera: raylib.Camera2D, grid: *Grid, screen_width: usize, screen_height: usize, ts: TextureSet) Grid.BoundBox {
+    const min_x, const min_y, const max_x, const max_y = blk: {
+        const top_left = raylib.GetScreenToWorld2D(raylib.Vector2{}, camera);
+        const bottom_right = raylib.GetScreenToWorld2D(raylib.Vector2{
+            .x = @floatFromInt(screen_width),
+            .y = @as(f32, @floatFromInt(screen_height)),
+        }, camera);
+
+        const fwidth: f32 = @floatFromInt(grid.width);
+        const fheight: f32 = @floatFromInt(grid.height);
+
+        const min_x: usize = @intFromFloat(std.math.clamp(
+            @round(top_left.x / hex.widthFromRadius(ts.hex_radius)) - 2.0,
+            0.0,
+            fwidth,
+        ));
+        const max_x: usize = @intFromFloat(std.math.clamp(
+            @round(bottom_right.x / hex.widthFromRadius(ts.hex_radius)) + 2.0,
+            0.0,
+            fwidth,
+        ));
+
+        const min_y: usize = @intFromFloat(std.math.clamp(
+            @round(top_left.y / (ts.hex_radius * 1.5)) - 2.0,
+            0.0,
+            fheight,
+        ));
+        const max_y: usize = @intFromFloat(std.math.clamp(
+            @round(bottom_right.y / (ts.hex_radius * 1.5)) + 2.0,
+            0.0,
+            fheight,
+        ));
+
+        break :blk .{ min_x, min_y, max_x, max_y };
+    };
+    return Grid.BoundBox{
+        .xmax = max_x,
+        .xmin = min_x,
+        .ymax = max_y,
+        .ymin = min_y,
+        .grid = grid,
+    };
+}
+
+/// VERY PLACEHOLDER AND SHIT
+pub fn getMouseTile(
+    camera: *raylib.Camera2D,
+    grid: Grid,
+    ts: TextureSet,
+) usize {
+    const click_point = raylib.GetScreenToWorld2D(raylib.GetMousePosition(), camera.*);
+    const click_x: f32 = click_point.x;
+    const click_y: f32 = click_point.y;
+    var click_idx: Grid.Idx = 0; // = world.tiles.coordToIdx(click_x, click_y);
+
+    var min_dist: f32 = std.math.floatMax(f32);
+    for (0..grid.width) |x| {
+        for (0..grid.height) |y| {
+            const real_x = hex.tilingX(x, y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) * 0.5;
+            const real_y = hex.tilingY(y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) * 0.5;
+            const dist = std.math.pow(f32, real_x - click_x, 2) + std.math.pow(f32, real_y - click_y, 2);
+            if (dist < min_dist) {
+                click_idx = grid.idxFromCoords(x, y);
+                min_dist = dist;
+            }
+        }
+    }
+    return click_idx;
+}
+
+pub fn updateCamera(camera: *raylib.Camera2D, speed: f32) bool {
+    const last_zoom = camera.zoom;
+    const last_target = camera.target;
+
+    // Drag controls
+    if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_MIDDLE)) {
+        const delta = raylib.Vector2Scale(raylib.GetMouseDelta(), -1.0 / camera.zoom);
+
+        camera.target = raylib.Vector2Add(camera.target, delta);
+    }
+
+    // Zoom controls
+    const wheel = raylib.GetMouseWheelMove();
+    if (wheel != 0.0) {
+        const world_pos = raylib.GetScreenToWorld2D(raylib.GetMousePosition(), camera.*);
+
+        camera.offset = raylib.GetMousePosition();
+        camera.target = world_pos;
+
+        const zoom_inc = 0.3;
+        camera.zoom += (wheel * zoom_inc);
+        camera.zoom = std.math.clamp(camera.zoom, 0.3, 2.0);
+    }
+
+    // Arrow key controls
+    if (raylib.IsKeyDown(raylib.KEY_RIGHT) or raylib.IsKeyDown(raylib.KEY_D)) camera.target.x += speed / camera.zoom;
+    if (raylib.IsKeyDown(raylib.KEY_LEFT) or raylib.IsKeyDown(raylib.KEY_A)) camera.target.x -= speed / camera.zoom;
+    if (raylib.IsKeyDown(raylib.KEY_UP) or raylib.IsKeyDown(raylib.KEY_W)) camera.target.y -= speed / camera.zoom;
+    if (raylib.IsKeyDown(raylib.KEY_DOWN) or raylib.IsKeyDown(raylib.KEY_S)) camera.target.y += speed / camera.zoom;
+
+    return camera.zoom != last_zoom or raylib.Vector2Equals(camera.target, last_target) != 0;
 }

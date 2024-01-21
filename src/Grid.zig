@@ -4,6 +4,34 @@ const Self = @This();
 
 pub const Idx = usize;
 
+pub const BoundBox = struct {
+    xmin: usize,
+    xmax: usize,
+    ymin: usize,
+    ymax: usize,
+    grid: *const Self,
+
+    iter: ?Idx = null,
+
+    /// Start with Null, outputs null when done
+    pub fn iterNext(self: *BoundBox) ?Idx {
+        if (self.iter == null) {
+            self.iter = self.grid.idxFromCoords(self.xmin, self.ymin);
+        } else {
+            self.iter = self.iter.? + 1;
+            const x = self.grid.xFromIdx(self.iter.?);
+            const y = self.grid.yFromIdx(self.iter.?);
+            if (x >= self.xmax) self.iter = self.grid.idxFromCoords(self.xmin, y + 1);
+        }
+        if (!self.grid.contains(self.iter.?)) self.iter = null;
+        return self.iter;
+    }
+
+    pub fn restart(self: *BoundBox) void {
+        self.iter = null;
+    }
+};
+
 /// The lowest index is always in low :))
 pub const Edge = struct {
     low: Idx,
@@ -67,6 +95,10 @@ pub fn xFromIdx(self: Self, idx: Idx) usize {
 
 pub fn yFromIdx(self: Self, idx: Idx) usize {
     return idx / self.width;
+}
+
+pub fn contains(self: Self, idx: Idx) bool {
+    return idx < self.len;
 }
 
 /// Returns edge "dir" of given hexs
