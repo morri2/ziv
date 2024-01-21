@@ -93,14 +93,14 @@ pub fn main() !void {
                 const res = try world.resources.getOrPut(world.allocator, mouse_tile);
 
                 if (res.found_existing) {
-                    const next_enum_int: u8 = @intFromEnum(res.value_ptr.type) + 1;
-                    if (next_enum_int >= @typeInfo(rules.Resource).Enum.fields.len) {
-                        _ = world.resources.swapRemove(mouse_tile);
-                    } else {
-                        res.value_ptr.type = @enumFromInt(next_enum_int);
-                    }
+                    //const next_enum_int: u8 = @intFromEnum(res.value_ptr.type) + 1;
+                    //if (next_enum_int >= @typeInfo(rules.Resource).Enum.fields.len) {
+                    //    _ = world.resources.swapRemove(mouse_tile);
+                    //} else {
+                    //    res.value_ptr.type = @enumFromInt(next_enum_int);
+                    //}
                 } else {
-                    try world.resources.put(world.allocator, mouse_tile, .{ .type = @enumFromInt(0), .amount = 1 });
+                    //try world.resources.put(world.allocator, mouse_tile, .{ .type = @enumFromInt(0), .amount = 1 });
                 }
             }
             if (raylib.IsKeyPressed(raylib.KEY_T)) {
@@ -169,7 +169,7 @@ pub fn main() !void {
                 //render.renderTerrain(select_terrain, index, world.grid, texture_set);
             } else {
                 // Normal mode render
-                render.renderTile(world, index, world.grid, texture_set);
+                render.renderTile(world, index, world.grid, texture_set, &rules);
 
                 render.renderUnits(&world, index, texture_set);
 
@@ -180,7 +180,7 @@ pub fn main() !void {
                     render.renderHexTextureArgs(
                         index,
                         world.grid,
-                        texture_set.base_textures[@intFromEnum(rules.Base.snow)],
+                        texture_set.base_textures[1],
                         .{ .tint = .{ .r = 100, .g = 100, .b = 100, .a = 100 } },
                         texture_set,
                     );

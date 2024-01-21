@@ -35,14 +35,11 @@ pub const TextureSet = struct {
             .allocator = allocator,
             .font = font,
             .hex_radius = hex_radius,
-            .edge_textures = try loadTexturesList(
-                &[_][]const u8{
-                    "textures/edge1.png",
-                    "textures/edge2.png",
-                    "textures/edge3.png",
-                },
-                universal_fallback,
-            ),
+            .edge_textures = try loadTexturesList(&[_][]const u8{
+                "textures/edge1.png",
+                "textures/edge2.png",
+                "textures/edge3.png",
+            }, universal_fallback, 3, allocator),
 
             .base_textures = try loadTextures(
                 "textures/{s}.png",
@@ -111,6 +108,7 @@ pub const TextureSet = struct {
         self.allocator.free(self.vegetation_textures);
         self.allocator.free(self.feature_textures);
         self.allocator.free(self.base_textures);
+        self.allocator.free(self.edge_textures);
     }
 };
 
