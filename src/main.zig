@@ -180,6 +180,9 @@ pub fn main() !void {
                     render.renderResource(&world, index, texture_set);
                     render.renderUnits(&world, index, texture_set);
 
+                    if (selected_tile == index)
+                        render.renderYields(&world, index, texture_set);
+
                     // Selection menu render :)
                     if (selected_tile != null) {
                         if (selected_tile == index) {

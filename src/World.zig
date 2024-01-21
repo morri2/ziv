@@ -1,5 +1,6 @@
 const Self = @This();
 const std = @import("std");
+const foundation = @import("foundation");
 
 const rules = @import("rules");
 const Terrain = rules.Terrain;
@@ -145,6 +146,18 @@ pub fn refreshUnits(self: *Self) void {
             uc = self.nextUnitContainerPtr(uc.?);
         }
     }
+}
+
+pub fn tileYield(self: *Self, idx: Idx) foundation.Yield {
+    const terrain = self.terrain[idx];
+    const resource = self.resources.get(idx);
+
+    var y = terrain.yield();
+
+    if (resource != null) {
+        y = y.add(resource.?.type.yield());
+    }
+    return y;
 }
 
 pub fn init(

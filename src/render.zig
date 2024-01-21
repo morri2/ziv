@@ -252,3 +252,19 @@ pub fn renderResource(world: *World, tile_idx: Idx, ts: TextureSet) void {
         }, 12, 0.0, raylib.WHITE);
     }
 }
+
+pub fn renderYields(world: *World, tile_idx: Idx, ts: TextureSet) void {
+    const yields = world.tileYield(tile_idx);
+    const x = world.grid.xFromIdx(tile_idx);
+    const y = world.grid.yFromIdx(tile_idx);
+    const base_x = hex.tilingX(x, y, ts.hex_radius) + 0.2 * ts.hex_radius;
+    const base_y = hex.tilingY(y, ts.hex_radius) + 0.2 * ts.hex_radius;
+
+    var buf: [16:0]u8 = [_:0]u8{0} ** 16;
+    const yields_str = std.fmt.bufPrint(&buf, "{}P  {}F  {}G", .{ yields.production, yields.food, yields.gold }) catch unreachable;
+
+    raylib.DrawTextEx(ts.font, yields_str.ptr, raylib.Vector2{
+        .x = base_x + 0.04 * ts.hex_radius,
+        .y = base_y + 1.1 * ts.hex_radius,
+    }, 12, 0.0, raylib.WHITE);
+}

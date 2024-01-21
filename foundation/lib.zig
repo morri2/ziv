@@ -9,6 +9,17 @@ pub const Yield = packed struct {
     culture: u5 = 0,
     faith: u5 = 0,
     science: u5 = 0,
+
+    pub fn add(self: Yield, other: Yield) Yield {
+        return .{
+            .food = self.food + other.food,
+            .gold = self.gold + other.gold,
+            .production = self.production + other.production,
+            .culture = self.culture + other.culture,
+            .faith = self.faith + other.faith,
+            .science = self.science + other.science,
+        };
+    }
 };
 
 /// Atomic effects of promotions
