@@ -202,6 +202,8 @@ pub fn deinit(self: *Self) void {
     self.rivers.deinit(self.allocator);
     self.work_in_progress.deinit(self.allocator);
     self.resources.deinit(self.allocator);
+    self.unit_stack.deinit(self.allocator);
+    self.allocator.free(self.unit_map);
     self.allocator.free(self.improvements);
     self.allocator.free(self.terrain);
 }
