@@ -176,7 +176,7 @@ pub fn renderUnit(unit: Unit, stack_pos: usize, tile_idx: Idx, grid: Grid, ts: T
         raylib.DrawTextEx(ts.font, hp_str.ptr, raylib.Vector2{
             .x = base_x,
             .y = base_y + 0.5 * ts.hex_radius,
-        }, 10, 0.0, raylib.RED);
+        }, 10, 0.0, raylib.YELLOW);
     }
 }
 

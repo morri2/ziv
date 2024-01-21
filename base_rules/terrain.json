@@ -288,8 +288,12 @@
     {
       "name": "atoll",
       "bases": [
-        "ocean"
-      ]
+        "coast"
+      ],
+      "yields": {
+        "food": 2,
+        "production": 1
+      }
     }
   ],
   "vegetation": [
@@ -334,7 +338,7 @@
         "grassland"
       ],
       "yields": {
-        "food": 2
+        "food": 1
       },
       "attributes": [
         "rough"
@@ -346,7 +350,9 @@
     {
       "name": "floodplain",
       "base": "desert",
-      "attributes": [ "river" ],
+      "attributes": [
+        "river"
+      ],
       "yields": {
         "food": 2
       },

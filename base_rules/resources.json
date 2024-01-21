@@ -205,31 +205,36 @@
     {
       "name": "crab",
       "yields": {
-        "gold": 2
+        "gold": 1,
+        "food": 1
       }
     },
     {
       "name": "salt",
       "yields": {
-        "gold": 2
+        "gold": 1,
+        "food": 1
       }
     },
     {
       "name": "whales",
       "yields": {
-        "gold": 2
+        "gold": 1,
+        "food": 1
       }
     },
     {
       "name": "citrus",
       "yields": {
-        "gold": 2
+        "gold": 1,
+        "food": 1
       }
     },
     {
       "name": "cocoa",
       "yields": {
-        "gold": 2
+        "gold": 1,
+        "food": 1
       }
     },
     {
