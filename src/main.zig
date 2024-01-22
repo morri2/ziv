@@ -46,6 +46,7 @@ pub fn main() !void {
     a1.promotions.set(5); // Shock I
     a1.promotions.set(6); // Shock II
     a1.promotions.set(7); // Shock III
+    a1.promotions.set(13); // CanEmbark
 
     const b1 = Unit.new(@enumFromInt(6), &rules); // Trireme
 
@@ -53,6 +54,8 @@ pub fn main() !void {
     s1.promotions.set(8); // Drill I
     s1.promotions.set(9); // Drill II
     s1.promotions.set(10); // Drill III
+    s1.promotions.set(13); // CanEmbark
+
     world.unit_map.putUnitDefaultSlot(1200, w1, &rules);
     world.unit_map.putUnitDefaultSlot(1201, a1, &rules);
     world.unit_map.putUnitDefaultSlot(1203, b1, &rules);

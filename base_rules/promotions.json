@@ -141,6 +141,17 @@
 					"value": 1
 				}
 			]
+		},
+		{
+			"name": "CanEmbark",
+			"requires": [
+				"CanEmbark"
+			],
+			"effects": [
+				{
+					"effect": "can_embark"
+				}
+			]
 		}
 	]
 }

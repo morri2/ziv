@@ -1197,6 +1197,9 @@ fn parsePromotions(
         rules.effect_promotions = effect_promotions.ptr;
     }
 
+    rules.promotion_names = promotion_names.ptr;
+    rules.promotion_strings = promotion_strings;
+
     return promotion_map;
 }
 

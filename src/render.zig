@@ -239,20 +239,20 @@ pub fn renderUnit(unit: Unit, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
         .{unit.hit_points},
         0.0,
         -0.3,
-        .{},
+        .{ .tint = raylib.YELLOW },
         ts,
     );
 
     renderInHexTextFormat(
         tile_idx,
         grid,
-        "{d:.0}/{d:.0}",
-        .{ unit.movement, 0.0 },
+        "{d:.0}",
+        .{unit.movement},
         // TODO: FIX
         // .{ unit.movement, unit.maxMovement() },
-        0.0,
-        0.3,
-        .{},
+        -0.2,
+        0.2,
+        .{ .tint = raylib.YELLOW, .font_size = 12 },
         ts,
     );
 }
