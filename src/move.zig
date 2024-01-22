@@ -4,24 +4,27 @@ const Idx = @import("Grid.zig").Idx;
 const std = @import("std");
 pub const MoveCostAmt = f32;
 
-pub fn tryMoveUnit(unit_key: World.UnitKey, dest: Idx, world: *World) bool {
-    const unit_ptr = world.getUnitPtr(unit_key) orelse return false;
+const UnitMap = @import("UnitMap.zig");
+const UnitSlot = UnitMap.UnitSlot;
+const UnitKey = UnitMap.UnitKey;
+
+pub fn tryMoveUnit(unit_key: UnitKey, dest: Idx, world: *World) bool {
+    const unit_ptr = world.unit_map.getUnitPtr(unit_key) orelse return false;
     if (!world.grid.adjacentTo(unit_key.idx, dest)) return false;
     const cost = moveCost(dest, unit_key.idx, unit_ptr, world);
-    std.debug.print("COST: {}\n", .{cost});
-    return moveUnit(unit_key, dest, cost, world);
+    return moveUnit(unit_key, dest, cost, &(world.unit_map));
 }
 
-pub fn moveUnit(unit_key: World.UnitKey, dest: Idx, cost: MoveCost, world: *World) bool {
+pub fn moveUnit(unit_key: UnitKey, dest: Idx, cost: MoveCost, um: *UnitMap) bool {
     if (cost == .disallowed) return false;
-    const unit_ptr = world.getUnitPtr(unit_key) orelse return false;
+    const unit_ptr = um.getUnitPtr(unit_key) orelse return false;
     if (unit_ptr.movement <= 0 and cost != .cheat_move) return false;
 
     const dest_slot = unit_ptr.slotAfterMove(cost);
 
-    if (world.getFirstSlotUnitPtr(dest, dest_slot) != null) return false;
+    if (um.getFirstSlotUnitPtr(dest, dest_slot) != null) return false;
 
-    var unit = world.fetchRemoveUnit(unit_key) orelse return false;
+    var unit = um.fetchRemoveUnit(unit_key) orelse return false;
 
     switch (cost) {
         .cheat_move => {}, // no cost
@@ -38,7 +41,7 @@ pub fn moveUnit(unit_key: World.UnitKey, dest: Idx, cost: MoveCost, world: *Worl
         else => unreachable,
     }
 
-    world.putUnit(.{ .idx = dest, .slot = dest_slot }, unit);
+    um.putUnit(.{ .idx = dest, .slot = dest_slot }, unit);
     return true;
 }
 
@@ -49,6 +52,13 @@ pub const MoveCost = union(enum) {
     allowed_final: void, // ends move after
     embarkation: void,
     disembarkation: void,
+
+    pub fn allowsAttack(self: MoveCost) bool {
+        return switch (self) {
+            .allowed, .allowed_final, .disembarkation => true,
+            else => false,
+        };
+    }
 };
 
 pub fn moveCost(dest: Idx, src: Idx, unit: *const Unit, world: *const World) MoveCost {

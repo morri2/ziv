@@ -208,8 +208,8 @@ pub fn renderYields(world: *World, tile_idx: Idx, ts: TextureSet) void {
 }
 
 pub fn renderAllUnits(world: *World, ts: TextureSet) void {
-    for (world.units.keys()) |key| {
-        const unit = world.units.get(key) orelse unreachable;
+    for (world.unit_map.units.keys()) |key| {
+        const unit = world.unit_map.units.get(key) orelse unreachable;
         renderUnit(unit, key.idx, world.grid, ts);
     }
 }

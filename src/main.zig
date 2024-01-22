@@ -7,6 +7,7 @@ const Unit = @import("Unit.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
 const move = @import("move.zig");
+const UnitMap = @import("UnitMap.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -52,10 +53,10 @@ pub fn main() !void {
     s1.promotions.set(@intFromEnum(Rules.Promotion.DrillI));
     s1.promotions.set(@intFromEnum(Rules.Promotion.DrillII));
     s1.promotions.set(@intFromEnum(Rules.Promotion.DrillIII));
-    world.putUnitDefaultSlot(1200, w1);
-    world.putUnitDefaultSlot(1201, a1);
-    world.putUnitDefaultSlot(1203, b1);
-    world.putUnitDefaultSlot(1198, s1);
+    world.unit_map.putUnitDefaultSlot(1200, w1);
+    world.unit_map.putUnitDefaultSlot(1201, a1);
+    world.unit_map.putUnitDefaultSlot(1203, b1);
+    world.unit_map.putUnitDefaultSlot(1198, s1);
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -80,6 +81,7 @@ pub fn main() !void {
     defer texture_set.deinit();
 
     var selected_tile: ?Idx = null;
+    var selected_unit: ?UnitMap.UnitKey = null;
     selected_tile = selected_tile; // autofix
 
     var camera_bound_box = render.cameraRenderBoundBox(camera, &world.grid, screen_width, screen_height, texture_set);
@@ -135,22 +137,24 @@ pub fn main() !void {
             }
 
             if (!in_edit_mode) {
-                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.refreshUnits();
+                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.unit_map.refreshUnits();
                 // SELECTION
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
                     const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
                     if (selected_tile == clicked_tile) {
-                        selected_tile = null;
+                        if (selected_unit != null) {
+                            selected_unit = world.unit_map.nextOccupiedKey(selected_unit.?);
+                        }
                     } else if (selected_tile == null) {
                         selected_tile = clicked_tile;
+                        selected_unit = world.unit_map.firstOccupiedKey(selected_tile.?);
                     } else {
                         // UNIT MOVEMENT
                         if (raylib.IsKeyDown(raylib.KEY_Q)) {
                             Unit.tryBattle(selected_tile.?, clicked_tile, &world);
                         } else {
-                            const unit_key = World.UnitKey.firstOccupied(selected_tile.?, &world);
-                            if (unit_key != null) {
-                                _ = move.tryMoveUnit(unit_key.?, clicked_tile, &world);
+                            if (selected_unit != null) {
+                                _ = move.tryMoveUnit(selected_unit.?, clicked_tile, &world);
                             }
                             // _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
                         }
@@ -197,8 +201,6 @@ pub fn main() !void {
                 render.renderTile(world, index, world.grid, texture_set, &rules);
 
             camera_bound_box.restart();
-            //while (camera_bound_box.iterNext()) |index|
-            //    render.renderUnits(&world, index, texture_set);
 
             if (selected_tile != null) {
                 render.renderYields(&world, selected_tile.?, texture_set);

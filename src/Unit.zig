@@ -4,6 +4,9 @@ const Rules = @import("Rules.zig");
 const World = @import("World.zig");
 const Idx = @import("Grid.zig").Idx;
 const move = @import("move.zig");
+const UnitMap = @import("UnitMap.zig");
+const UnitSlot = UnitMap.UnitSlot;
+const UnitKey = UnitMap.UnitKey;
 
 const Terrain = Rules.Terrain;
 const Improvements = Rules.Improvements;
@@ -32,7 +35,7 @@ pub fn maxMovement(self: Self) f32 {
 }
 
 /// Slot type when not embarked
-pub fn defaultSlot(self: Self) World.UnitSlot {
+pub fn defaultSlot(self: Self) UnitSlot {
     // PLACEHOLDER CIVILIAN UNITS ARE NOT A THING YET, will need reworking when the rapture comes
     if (self.type.baseStats().domain == .SEA) {
         if (self.type == .work_boat) return .civilian;
@@ -46,7 +49,7 @@ pub fn defaultSlot(self: Self) World.UnitSlot {
     unreachable;
 }
 
-pub fn slotAfterMove(self: *Self, cost: move.MoveCost) World.UnitSlot {
+pub fn slotAfterMove(self: *Self, cost: move.MoveCost) UnitSlot {
     if (cost == .disembarkation) return self.defaultSlot();
     if (cost == .embarkation or self.embarked) return .embarked;
     return self.defaultSlot();
@@ -91,14 +94,29 @@ const CombatContext = struct {
     river_crossing: bool = false,
 };
 
-pub fn tryBattle(src: Idx, dest: Idx, world: *World) void {
-    const attacker = world.getFirstUnitPtr(src) orelse return;
-    const defender = world.getFirstUnitPtr(dest) orelse return;
+pub fn tryBattle(from: Idx, target: Idx, world: *World) void {
+    const a_key = world.unit_map.firstOccupiedKey(from) orelse return;
+    const d_key = world.unit_map.firstOccupiedKey(target) orelse return;
+    const attacker = world.unit_map.getUnitPtr(a_key) orelse return;
+    const defender = world.unit_map.getUnitPtr(d_key) orelse return;
+
+    const mc = move.moveCost(target, from, attacker, world);
+
+    if (!mc.allowsAttack()) return;
 
     const context: CombatContext = .{
-        .target_terrain = world.terrain[src],
+        .target_terrain = world.terrain[target],
     };
     battle(attacker, defender, false, context, world.rules, true);
+
+    const attacker_alive = !(attacker.hit_points <= 0);
+    const defender_alive = !(defender.hit_points <= 0);
+
+    if (!attacker_alive) _ = world.unit_map.fetchRemoveUnit(a_key);
+    if (!defender_alive) _ = world.unit_map.fetchRemoveUnit(d_key);
+    if (!defender_alive and attacker_alive) _ = move.tryMoveUnit(a_key, target, world);
+
+    if (attacker_alive) attacker.movement = 0;
 }
 
 /// battle sim
@@ -118,8 +136,16 @@ pub fn battle(attacker: *Self, defender: *Self, range: bool, context: CombatCont
     std.debug.print("DEFENDER TAKES {d:.0} damage\n", .{defender_dmg});
     if (!range) std.debug.print("ATTACKER TAKES {d:.0} damage\n", .{attacker_dmg});
 
+    const attacker_higher_hp = attacker.hit_points > defender.hit_points;
     attacker.hit_points -|= attacker_dmg;
     defender.hit_points -|= defender_dmg;
+
+    if (attacker.hit_points == 0 and defender.hit_points == 0) {
+        if (attacker_higher_hp)
+            attacker.hit_points = 1
+        else
+            defender.hit_points = 1;
+    }
 }
 
 pub fn calculateStr(unit: *Self, is_attacker: bool, is_range: bool, context: CombatContext, log: bool, rules: *const Rules) f32 {
