@@ -198,10 +198,6 @@ pub fn init(
     errdefer allocator.free(terrain);
     @memset(improvements, std.mem.zeroes(Improvements));
 
-    const unit_map = try allocator.alloc(?UnitContainer, grid.len);
-    errdefer allocator.free(unit_map);
-    @memset(unit_map, null);
-
     return Self{
         .allocator = allocator,
         .grid = grid,
