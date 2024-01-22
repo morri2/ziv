@@ -72,32 +72,23 @@ pub fn main() !void {
     var texture_set = try render.TextureSet.init(&rules, gpa.allocator());
     defer texture_set.deinit();
 
-    // MAP DRAW MODE
-    var draw_terrain: ?Rules.Terrain = null;
-    draw_terrain = draw_terrain; // autofix
-    var edit_mode: bool = false;
-    edit_mode = edit_mode;
-
     var selected_tile: ?Idx = null;
     selected_tile = selected_tile; // autofix
 
     var camera_bound_box = render.cameraRenderBoundBox(camera, &world.grid, screen_width, screen_height, texture_set);
 
     // MAP EDIT MODE
-    var in_edit_mode = true;
+    var in_edit_mode = false;
     var in_pallet = false;
     var terrain_brush: ?Rules.Terrain = null;
     terrain_brush = terrain_brush; // autofix
 
-    //
-
     while (!raylib.WindowShouldClose()) {
         {
-            if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) in_edit_mode = true;
+            if (raylib.IsKeyPressed(raylib.KEY_Y)) in_edit_mode = !in_edit_mode;
 
             // EDIT MODE CONTROLLS
             if (in_edit_mode) {
-                if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) in_edit_mode = false;
                 if (raylib.IsKeyPressed(raylib.KEY_E)) in_pallet = !in_pallet;
                 const mouse_tile = render.getMouseTile(&camera, world.grid, texture_set);
                 if (raylib.IsKeyPressed(raylib.KEY_R)) {
@@ -129,28 +120,30 @@ pub fn main() !void {
                     if (in_pallet) terrain_brush = @enumFromInt(mouse_tile % rules.terrain_count);
                 }
             }
+
             // SAVE MAP
             if (raylib.IsKeyPressed(raylib.KEY_C)) {
                 try world.saveToFile("maps/last_saved.map");
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-            const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
-
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.refreshUnits();
-
-            // UNIT MOVEMENT
-            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and !edit_mode and (draw_terrain == null)) {
-                if (draw_terrain != null) {
-                    world.terrain[clicked_tile] = draw_terrain.?;
-                } else {
-                    if (selected_tile == null) {
+            if (!in_edit_mode) {
+                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.refreshUnits();
+                // SELECTION
+                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                    const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
+                    if (selected_tile == clicked_tile) {
+                        selected_tile = null;
+                    } else if (selected_tile == null) {
                         selected_tile = clicked_tile;
                     } else {
-                        _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
-                        if (selected_tile == clicked_tile) {
-                            selected_tile = null;
+                        // UNIT MOVEMENT
+                        if (raylib.IsKeyDown(raylib.KEY_Q)) {
+                            Unit.tryBattle(selected_tile.?, clicked_tile, &world);
+                        } else {
+                            _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
                         }
+
                         selected_tile = null;
                     }
                 }

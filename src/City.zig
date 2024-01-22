@@ -2,16 +2,16 @@ const Self = @This();
 const std = @import("std");
 const World = @import("World.zig");
 const hex = @import("hex.zig");
-const HexIdx = hex.HexIdx;
+const Idx = @import("Grid.zig").Idx;
 const yield = @import("yield.zig");
 const YieldAccumumlator = yield.YieldAccumulator;
 //buildings: // bitfield for all buildings in the game?
 
 name: []const u8,
 
-position: HexIdx = 0,
-claimed_tiles: []HexIdx = &.{},
-worked_tiles: []HexIdx = &.{},
+position: Idx = 0,
+claimed_tiles: std.AutoArrayHashMapUnmanaged(Idx, void) = .{},
+worked_tiles: std.ArrayListUnmanaged(Idx) = .{},
 population: u8 = 1,
 
 // these sould all be floats :'(
@@ -32,10 +32,29 @@ food_til_growth: f32 = 10, // random placeholder value
 culture_til_expansion: f32 = 10, // random placeholder value
 
 current_production_project: ?WorkInProgressProductionProject = null,
-
 halted_production_projects: []WorkInProgressProductionProject = &.{},
 
-pub fn init() Self {
+allocator: std.mem.Allocator,
+
+pub fn claimTile(self: Self, idx: Idx) bool {
+    self.claimed_tiles.put(idx);
+}
+
+pub fn unclaimTile(self: Self, idx: Idx) bool {
+    self.claimed_tiles.swapRemove(idx);
+}
+
+pub fn init(allocator: std.mem.Allocator) Self {
+    const name: []const u8 = "Goteborg";
+    return Self{
+        .name = name,
+        .allocator = allocator,
+    };
+}
+
+pub fn deinit(self: Self) void {
+    self.allocator.free(self.name);
+
     const name: []const u8 = "Goteborg";
     return Self{ .name = name };
 }

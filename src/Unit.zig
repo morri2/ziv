@@ -1,6 +1,8 @@
 const Self = @This();
 const std = @import("std");
 const Rules = @import("Rules.zig");
+const World = @import("World.zig");
+const Idx = @import("Grid.zig").Idx;
 
 const Terrain = Rules.Terrain;
 const Improvements = Rules.Improvements;
@@ -52,28 +54,43 @@ pub fn cumPromotionValues(promotions: PromotionBitSet, effect: UnitEffect) i32 {
 }
 
 const CombatContext = struct {
-    target_terrain: Terrain = .plains,
-    target_improvement: Improvements = .{ .building = .none },
+    target_terrain: Terrain = @enumFromInt(0),
+
     river_crossing: bool = false,
 };
 
+pub fn tryBattle(src: Idx, dest: Idx, world: *World) void {
+    const attacker = world.topUnitContainerPtr(src) orelse return;
+    const defender = world.topUnitContainerPtr(dest) orelse return;
+
+    const context: CombatContext = .{
+        .target_terrain = world.terrain[src],
+    };
+    battle(&attacker.unit, &defender.unit, false, context, world.rules, true);
+}
+
 /// battle sim
-pub fn battle(attacker: Self, defender: Self, range: bool, context: CombatContext, log: bool) void {
+pub fn battle(attacker: *Self, defender: *Self, range: bool, context: CombatContext, rules: *const Rules, log: bool) void {
     std.debug.print("\n### BATTLE BATTLE BATTLE ###\n", .{});
 
     std.debug.print("\n# ATTACKER #\n", .{});
-    const attacker_str = calculateStr(attacker, true, range, context, log);
+    const attacker_str = calculateStr(attacker, true, range, context, log, rules);
     std.debug.print("\n# DEFENDER #\n", .{});
-    const defend_str = calculateStr(defender, false, range, context, log);
+    const defend_str = calculateStr(defender, false, range, context, log, rules);
 
     const ratio = attacker_str / defend_str;
+    const attacker_dmg: u8 = if (!range) @intFromFloat(1 / ratio * 35) else 0;
+    const defender_dmg: u8 = @intFromFloat(ratio * 35);
 
     std.debug.print("\nCOMBAT RATIO: {d:.2}\n", .{ratio});
-    std.debug.print("DEFENDER TAKES {d:.0} damage\n", .{ratio * 35});
-    if (!range) std.debug.print("ATTACKER TAKES {d:.0} damage\n", .{1 / ratio * 35});
+    std.debug.print("DEFENDER TAKES {d:.0} damage\n", .{defender_dmg});
+    if (!range) std.debug.print("ATTACKER TAKES {d:.0} damage\n", .{attacker_dmg});
+
+    attacker.hit_points -|= attacker_dmg;
+    defender.hit_points -|= defender_dmg;
 }
 
-pub fn calculateStr(unit: Self, is_attacker: bool, is_range: bool, context: CombatContext, log: bool) f32 {
+pub fn calculateStr(unit: *Self, is_attacker: bool, is_range: bool, context: CombatContext, log: bool, rules: *const Rules) f32 {
     var str: f32 = @floatFromInt(unit.type.baseStats().melee);
     if (log) std.debug.print("  Base strength: {d:.0}\n", .{str});
 
@@ -92,24 +109,24 @@ pub fn calculateStr(unit: Self, is_attacker: bool, is_range: bool, context: Comb
         unit_mod += mod;
     }
 
-    if (context.target_terrain.attributes().rough) {
+    if (context.target_terrain.attributes(rules).is_rough) {
         const mod = cumPromotionValues(unit.promotions, .RoughTerrainBonus);
         if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
         unit_mod += mod;
     }
-    if (!context.target_terrain.attributes().rough) {
+    if (!context.target_terrain.attributes(rules).is_rough) {
         const mod = cumPromotionValues(unit.promotions, .OpenTerrainBonus);
         if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
         unit_mod += mod;
     }
 
-    if (context.target_terrain.attributes().rough and is_range) {
+    if (context.target_terrain.attributes(rules).is_rough and is_range) {
         const mod = cumPromotionValues(unit.promotions, .RoughTerrainBonusRange);
         if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
         unit_mod += mod;
     }
 
-    if (!context.target_terrain.attributes().rough and is_range) {
+    if (!context.target_terrain.attributes(rules).is_rough and is_range) {
         const mod = cumPromotionValues(unit.promotions, .OpenTerrainBonusRange);
         if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
         unit_mod += mod;

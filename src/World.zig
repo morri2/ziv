@@ -8,6 +8,7 @@ const Resource = Rules.Resource;
 const Building = Rules.Building;
 const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
+const City = @import("City.zig");
 
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
@@ -56,13 +57,19 @@ unit_idx: usize = 0,
 unit_map: []?UnitContainer,
 unit_stack: std.AutoArrayHashMapUnmanaged(usize, UnitContainer),
 
+cities: std.AutoArrayHashMapUnmanaged(Idx, City),
+
 pub const UnitContainer = struct { unit: Unit, stacked_key: ?usize };
+
+pub fn addCity(self: *Self, idx: Idx, allocator: std.mem.Allocator) bool {
+    self.cities[idx] = City.init(allocator);
+}
 
 pub fn topUnitContainerPtr(self: *Self, idx: Idx) ?*UnitContainer {
     return &(self.unit_map[idx] orelse return null);
 }
 
-pub fn nextUnitContainerPtr(self: *Self, unit_container: *UnitContainer) ?*UnitContainer {
+pub fn nextUnitContainerPtr(self: *Self, unit_container: *const UnitContainer) ?*UnitContainer {
     const next_uc = self.unit_stack.getPtr(unit_container.stacked_key orelse return null);
 
     return next_uc;
@@ -139,9 +146,12 @@ pub fn pushUnit(self: *Self, idx: Idx, unit: Unit) void {
 }
 
 pub fn popFirstUnit(self: *Self, idx: Idx) ?Unit {
-    const uc = self.unit_map[idx] orelse return null;
-    const next_uc = self.removeUnitAfter(uc);
-    self.unit_map[idx] = next_uc;
+    const uc = (self.unit_map[idx] orelse return null);
+    const next_uc = self.nextUnitContainerPtr(&uc);
+    if (next_uc != null) {
+        self.unit_map[idx] = next_uc.?.*;
+        _ = self.unit_stack.swapRemove(uc.stacked_key.?);
+    }
     return uc.unit;
 }
 
@@ -198,6 +208,7 @@ pub fn init(
         .rivers = .{},
         .unit_map = unit_map,
         .unit_stack = .{},
+        .cities = .{},
         .rules = rules,
     };
 }

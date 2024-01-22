@@ -35,8 +35,22 @@ pub fn moveUnit(src: Idx, dest: Idx, stack_depth: usize, world: *World) bool {
         else => return false,
     }
 
-    changePosition(src, dest, stack_depth, world);
+    const target_uc = world.topUnitContainerPtr(dest);
+    if (target_uc != null) {
+        Unit.tryBattle(src, dest, world);
+        if (target_uc.?.unit.hit_points == 0) {
+            _ = world.removeNthStackedUnit(dest, 0);
+        }
+        if (uc.unit.hit_points == 0) {
+            _ = world.removeNthStackedUnit(src, 0);
+        }
+    }
 
+    _ = world.getNthStackedPtr(src, stack_depth) orelse return false;
+
+    if (world.getNthStackedPtr(dest, stack_depth) == null) {
+        changePosition(src, dest, stack_depth, world);
+    }
     return true;
 }
 
