@@ -204,13 +204,12 @@ pub fn main() !void {
                 render.renderTile(world, index, world.grid, texture_set, &rules);
 
             camera_bound_box.restart();
-
             if (selected_tile != null) {
                 render.renderYields(&world, selected_tile.?, texture_set);
                 render.renderHexTextureArgs(
                     selected_tile.?,
                     world.grid,
-                    texture_set.base_textures[1],
+                    texture_set.base_textures[6],
                     .{ .tint = .{ .r = 200, .g = 200, .b = 100, .a = 100 } },
                     texture_set,
                 );
