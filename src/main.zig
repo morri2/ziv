@@ -39,10 +39,10 @@ pub fn main() !void {
     try world.loadFromFile("maps/last_saved.map");
 
     var w1 = Unit.new(@enumFromInt(3), &rules); // Warrior
-    w1.promotions.set(12); // Mobility
+    w1.promotions.set(11); // Mobility
 
     var a1 = Unit.new(@enumFromInt(4), &rules);
-    a1.promotions.set(12); // Mobility
+    a1.promotions.set(11); // Mobility
     a1.promotions.set(5); // Shock I
     a1.promotions.set(6); // Shock II
     a1.promotions.set(7); // Shock III
