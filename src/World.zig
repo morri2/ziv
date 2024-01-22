@@ -53,11 +53,108 @@ work_in_progress: std.AutoArrayHashMapUnmanaged(Idx, WorkInProgress),
 // Tile edge data
 rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
 
-unit_idx: usize = 0,
-unit_map: []?UnitContainer,
-unit_stack: std.AutoArrayHashMapUnmanaged(usize, UnitContainer),
-
 cities: std.AutoArrayHashMapUnmanaged(Idx, City),
+
+units: std.AutoArrayHashMapUnmanaged(UnitKey, Unit),
+
+pub const UnitKey = struct {
+    idx: Idx,
+    slot: UnitSlot,
+    stack_depth: u8 = 0,
+
+    pub fn nextInStack(self: UnitKey) UnitKey {
+        return .{ .slot = self.slot, .stack_depth = self.stack_depth + 1, .idx = self.idx };
+    }
+
+    /// Start iter
+    pub fn firstOccupied(idx: Idx, world: *const Self) ?UnitKey {
+        var first = .{ .idx = idx, .slot = UnitSlot.first() };
+        while (world.getUnitPtr(first) == null)
+            first = .{ .slot = first.slot.next() orelse return null, .idx = first.idx };
+        return first;
+    }
+
+    /// Iterate though occupied for a tile
+    pub fn nextOccupied(self: UnitKey, world: *const Self) ?UnitKey {
+        var next = self.nextInStack();
+        while (world.getUnitPtr(next) == null)
+            next = .{ .slot = next.slot.next() orelse return null, .idx = self.idx };
+        return next;
+    }
+
+    /// First free key in a slot
+    pub fn firstFree(idx: Idx, slot: UnitSlot, world: *const Self) ?UnitKey {
+        var key: UnitKey = .{ .idx = idx, .slot = slot, .stack_depth = 0 };
+        while (world.getUnitPtr(key) != null) key = key.nextInStack();
+        return key;
+    }
+};
+
+pub const UnitSlot = enum {
+    civilian,
+    military,
+    naval,
+    embarked,
+    trade,
+    pub fn first() UnitSlot {
+        return @enumFromInt(0);
+    }
+    pub fn next(self: UnitSlot) ?UnitSlot {
+        const next_int = @intFromEnum(self) + 1;
+        if (next_int >= @typeInfo(UnitSlot).Enum.fields.len) return null;
+        return @enumFromInt(next_int);
+    }
+};
+
+/// All unit entries
+pub fn allUnitsEntries(self: Self, idx: Idx, world: Self) []Unit {
+    _ = self; // autofix
+    _ = idx; // autofix
+    _ = world; // autofix
+
+    //TODO
+}
+
+/// First unit in a slot
+pub fn getFirstSlotUnitPtr(self: *const Self, idx: Idx, slot: UnitSlot) ?*Unit {
+    return self.getUnitPtr(.{ .idx = idx, .slot = slot });
+}
+
+/// First unit on tile
+pub fn getFirstUnitPtr(self: *const Self, idx: Idx) ?*Unit {
+    return self.getUnitPtr(UnitKey.firstOccupied(idx, self) orelse return null);
+}
+
+pub fn getUnitPtr(self: *const Self, ukey: UnitKey) ?*Unit {
+    return self.units.getPtr(ukey);
+}
+
+pub fn putUnitDefaultSlot(self: *Self, idx: Idx, unit: Unit) void {
+    self.putUnit(.{ .idx = idx, .slot = unit.defaultSlot() }, unit);
+}
+
+pub fn putUnit(self: *Self, ukey: UnitKey, unit: Unit) void {
+    var prev_kv = self.units.fetchPut(self.allocator, ukey, unit) catch unreachable;
+
+    if (prev_kv != null) {
+        if (!std.meta.eql(prev_kv.?.key, ukey)) unreachable;
+        prev_kv.?.key.stack_depth = ukey.stack_depth + 1;
+        self.putUnit(prev_kv.?.key, prev_kv.?.value);
+    }
+}
+
+pub fn fetchRemoveUnit(self: *Self, ukey: UnitKey) ?Unit {
+    const unit = self.units.fetchSwapRemove(ukey) orelse return null;
+    self.cascadeUnitStack(ukey);
+    return unit.value;
+}
+
+fn cascadeUnitStack(self: *Self, dest_ukey: UnitKey) void {
+    const src_ukey = dest_ukey.nextInStack();
+    const kv = self.units.fetchSwapRemove(src_ukey) orelse return;
+    self.units.put(self.allocator, dest_ukey, kv.value) catch unreachable;
+    self.cascadeUnitStack(src_ukey);
+}
 
 pub const UnitContainer = struct { unit: Unit, stacked_key: ?usize };
 
@@ -65,103 +162,10 @@ pub fn addCity(self: *Self, idx: Idx, allocator: std.mem.Allocator) bool {
     self.cities[idx] = City.init(allocator);
 }
 
-pub fn topUnitContainerPtr(self: *Self, idx: Idx) ?*UnitContainer {
-    return &(self.unit_map[idx] orelse return null);
-}
-
-pub fn nextUnitContainerPtr(self: *Self, unit_container: *const UnitContainer) ?*UnitContainer {
-    const next_uc = self.unit_stack.getPtr(unit_container.stacked_key orelse return null);
-
-    return next_uc;
-}
-
-pub fn secoundToLastUnitContainer(self: *Self, idx: Idx) ?*UnitContainer {
-    var secound_to_last_uc: ?*UnitContainer = null;
-    var last_uc = topUnitContainerPtr(self, idx) orelse return null;
-    while (last_uc.stacked_key != null) {
-        secound_to_last_uc = last_uc;
-        last_uc = nextUnitContainerPtr(self, last_uc);
-    }
-    return secound_to_last_uc;
-}
-
-pub fn insertUnitAfter(self: *Self, pred: *UnitContainer, unit: Unit) void {
-    const next_key = pred.stacked_key;
-    self.unit_stack.put(
-        self.allocator,
-        self.unit_idx,
-        .{ .unit = unit, .stacked_key = next_key },
-    ) catch unreachable; // should probably check for clobber :)
-    pred.stacked_key = self.unit_idx;
-    self.unit_idx +%= 1;
-}
-
-pub fn removeUnitAfter(self: *Self, prev: *UnitContainer) ?Unit {
-    const next_key = prev.stacked_key orelse return null;
-    const entry = self.unit_stack.fetchSwapRemove(next_key) orelse unreachable;
-    prev.stacked_key = entry.value.stacked_key;
-    return entry.value.unit;
-}
-
-pub fn getNthStackedPtr(self: *Self, idx: Idx, n: usize) ?*UnitContainer {
-    var last_uc = topUnitContainerPtr(self, idx) orelse return null;
-    for (0..n) |_| last_uc = nextUnitContainerPtr(self, last_uc) orelse return null;
-    return last_uc;
-}
-
-pub fn removeNthStackedUnit(self: *Self, idx: Idx, n: usize) ?Unit {
-    var last_uc = topUnitContainerPtr(self, idx) orelse return null;
-    if (n == 0) {
-        const uc = last_uc.*;
-        if (uc.stacked_key != null) {
-            self.unit_map[idx] = self.unit_stack.get(uc.stacked_key.?);
-            _ = self.unit_stack.swapRemove(uc.stacked_key.?);
-        } else {
-            self.unit_map[idx] = null;
-        }
-        return uc.unit;
-    }
-    for (0..(n - 1)) |_| {
-        last_uc = self.nextUnitContainerPtr(last_uc) orelse return null;
-    }
-    return self.removeUnitAfter(last_uc);
-}
-
-// Need to give a unit layer (eg civilian, military etc)
-
-pub fn lastUnitContainer(self: *Self, idx: Idx) ?*UnitContainer {
-    var last_uc = topUnitContainerPtr(self, idx) orelse return null;
-    while (last_uc.stacked_key != null) last_uc = nextUnitContainerPtr(self, last_uc) orelse unreachable;
-    return last_uc;
-}
-
-pub fn pushUnit(self: *Self, idx: Idx, unit: Unit) void {
-    const last = self.lastUnitContainer(idx) orelse {
-        self.unit_map[idx] = .{ .unit = unit, .stacked_key = null };
-        return;
-    };
-    std.debug.print("last: {}\n", .{last.unit.type});
-    self.insertUnitAfter(last, unit);
-    std.debug.print("last: {?}\n", .{last.stacked_key});
-}
-
-pub fn popFirstUnit(self: *Self, idx: Idx) ?Unit {
-    const uc = (self.unit_map[idx] orelse return null);
-    const next_uc = self.nextUnitContainerPtr(&uc);
-    if (next_uc != null) {
-        self.unit_map[idx] = next_uc.?.*;
-        _ = self.unit_stack.swapRemove(uc.stacked_key.?);
-    }
-    return uc.unit;
-}
-
 pub fn refreshUnits(self: *Self) void {
-    for (0..self.grid.len) |i| {
-        var uc: ?*UnitContainer = &(self.unit_map[i] orelse continue);
-        while (uc != null) {
-            uc.?.unit.refresh();
-            uc = self.nextUnitContainerPtr(uc.?);
-        }
+    var unit_iter = self.units.iterator();
+    while (unit_iter.next()) |e| {
+        e.value_ptr.refresh();
     }
 }
 
@@ -206,8 +210,7 @@ pub fn init(
         .resources = .{},
         .work_in_progress = .{},
         .rivers = .{},
-        .unit_map = unit_map,
-        .unit_stack = .{},
+        .units = .{},
         .cities = .{},
         .rules = rules,
     };
@@ -217,8 +220,8 @@ pub fn deinit(self: *Self) void {
     self.rivers.deinit(self.allocator);
     self.work_in_progress.deinit(self.allocator);
     self.resources.deinit(self.allocator);
-    self.unit_stack.deinit(self.allocator);
-    self.allocator.free(self.unit_map);
+    self.units.deinit(self.allocator);
+
     self.allocator.free(self.improvements);
     self.allocator.free(self.terrain);
 }

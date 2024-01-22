@@ -3,6 +3,7 @@ const std = @import("std");
 const Rules = @import("Rules.zig");
 const World = @import("World.zig");
 const Idx = @import("Grid.zig").Idx;
+const move = @import("move.zig");
 
 const Terrain = Rules.Terrain;
 const Improvements = Rules.Improvements;
@@ -29,6 +30,28 @@ pub fn maxMovement(self: Self) f32 {
     const move_mod = cumPromotionValues(self.promotions, .ModifyMovement);
     return @as(f32, @floatFromInt(move_mod)) + @as(f32, @floatFromInt(self.type.baseStats().moves));
 }
+
+/// Slot type when not embarked
+pub fn defaultSlot(self: Self) World.UnitSlot {
+    // PLACEHOLDER CIVILIAN UNITS ARE NOT A THING YET, will need reworking when the rapture comes
+    if (self.type.baseStats().domain == .SEA) {
+        if (self.type == .work_boat) return .civilian;
+        return .naval;
+    }
+    if (self.type.baseStats().domain == .LAND) {
+        if (self.type == .worker or self.type == .settler) return .civilian;
+
+        return .military;
+    }
+    unreachable;
+}
+
+pub fn slotAfterMove(self: *Self, cost: move.MoveCost) World.UnitSlot {
+    if (cost == .disembarkation) return self.defaultSlot();
+    if (cost == .embarkation or self.embarked) return .embarked;
+    return self.defaultSlot();
+}
+
 // restore movement
 pub fn refresh(self: *Self) void {
     self.movement = self.maxMovement();
@@ -41,6 +64,15 @@ pub fn effectPromotions(effect: UnitEffect) PromotionBitSet {
         bitset = bitset.unionWith(variant.promotions);
     }
     return bitset;
+}
+
+/// returns a bitset for the promotions that grant the effect :)
+pub fn grantsEffect(promotions: PromotionBitSet, effect: UnitEffect) bool {
+    for (Rules.effect_promotions(effect)) |variant| {
+        const u = variant.promotions.intersectWith(promotions);
+        if (u.mask != 0) return true;
+    }
+    return false;
 }
 
 /// returns the sum of the values of all the promotions.
@@ -60,13 +92,13 @@ const CombatContext = struct {
 };
 
 pub fn tryBattle(src: Idx, dest: Idx, world: *World) void {
-    const attacker = world.topUnitContainerPtr(src) orelse return;
-    const defender = world.topUnitContainerPtr(dest) orelse return;
+    const attacker = world.getFirstUnitPtr(src) orelse return;
+    const defender = world.getFirstUnitPtr(dest) orelse return;
 
     const context: CombatContext = .{
         .target_terrain = world.terrain[src],
     };
-    battle(&attacker.unit, &defender.unit, false, context, world.rules, true);
+    battle(attacker, defender, false, context, world.rules, true);
 }
 
 /// battle sim

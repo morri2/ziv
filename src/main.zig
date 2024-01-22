@@ -39,16 +39,23 @@ pub fn main() !void {
 
     var w1 = Unit.new(.warrior);
     w1.promotions.set(@intFromEnum(Rules.Promotion.Mobility));
-    //world.pushUnit(1200, .{ .type = .Archer });
-    world.pushUnit(1200, w1);
 
-    var w2 = Unit.new(.archer);
-    w2.promotions.set(@intFromEnum(Rules.Promotion.Mobility));
-    //world.pushUnit(1200, .{ .type = .Archer });
-    world.pushUnit(1201, w2);
+    var a1 = Unit.new(.archer);
+    a1.promotions.set(@intFromEnum(Rules.Promotion.ShockI));
+    a1.promotions.set(@intFromEnum(Rules.Promotion.ShockII));
+    a1.promotions.set(@intFromEnum(Rules.Promotion.ShockIII));
 
-    std.debug.print("unita {} \n", .{world.topUnitContainerPtr(1200).?.unit.type});
-    //std.debug.print("unitb {} \n", .{world.nextUnitContainerPtr(world.topUnitContainerPtr(1200).?).?.unit.type});
+    var b1 = Unit.new(.trireme);
+    b1 = b1;
+
+    var s1 = Unit.new(.scout);
+    s1.promotions.set(@intFromEnum(Rules.Promotion.DrillI));
+    s1.promotions.set(@intFromEnum(Rules.Promotion.DrillII));
+    s1.promotions.set(@intFromEnum(Rules.Promotion.DrillIII));
+    world.putUnitDefaultSlot(1200, w1);
+    world.putUnitDefaultSlot(1201, a1);
+    world.putUnitDefaultSlot(1203, b1);
+    world.putUnitDefaultSlot(1198, s1);
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -141,7 +148,11 @@ pub fn main() !void {
                         if (raylib.IsKeyDown(raylib.KEY_Q)) {
                             Unit.tryBattle(selected_tile.?, clicked_tile, &world);
                         } else {
-                            _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
+                            const unit_key = World.UnitKey.firstOccupied(selected_tile.?, &world);
+                            if (unit_key != null) {
+                                _ = move.tryMoveUnit(unit_key.?, clicked_tile, &world);
+                            }
+                            // _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
                         }
 
                         selected_tile = null;
@@ -163,13 +174,16 @@ pub fn main() !void {
         camera_bound_box.ymax = @min(camera_bound_box.ymax, world.grid.height);
         camera_bound_box.xmax = @min(camera_bound_box.xmax, world.grid.width - 1);
 
+        // ///////// //
+        // RENDERING //
+        // ///////// //
         raylib.BeginDrawing();
         raylib.ClearBackground(raylib.BLACK);
 
         raylib.BeginMode2D(camera);
-
-        while (camera_bound_box.iterNext()) |index| {
-            if (in_pallet) {
+        if (in_pallet) {
+            camera_bound_box.restart();
+            while (camera_bound_box.iterNext()) |index|
                 render.renderTerrain(
                     @enumFromInt(index % rules.terrain_count),
                     index,
@@ -177,29 +191,29 @@ pub fn main() !void {
                     texture_set,
                     &rules,
                 );
-            } else {
-                // Normal mode render
+        } else {
+            camera_bound_box.restart();
+            while (camera_bound_box.iterNext()) |index|
                 render.renderTile(world, index, world.grid, texture_set, &rules);
 
-                render.renderUnits(&world, index, texture_set);
+            camera_bound_box.restart();
+            //while (camera_bound_box.iterNext()) |index|
+            //    render.renderUnits(&world, index, texture_set);
 
-                if (selected_tile == index)
-                    render.renderYields(&world, index, texture_set);
-
-                if (selected_tile == index) {
-                    render.renderHexTextureArgs(
-                        index,
-                        world.grid,
-                        texture_set.base_textures[1],
-                        .{ .tint = .{ .r = 100, .g = 100, .b = 100, .a = 100 } },
-                        texture_set,
-                    );
-                }
+            if (selected_tile != null) {
+                render.renderYields(&world, selected_tile.?, texture_set);
+                render.renderHexTextureArgs(
+                    selected_tile.?,
+                    world.grid,
+                    texture_set.base_textures[1],
+                    .{ .tint = .{ .r = 200, .g = 200, .b = 100, .a = 100 } },
+                    texture_set,
+                );
             }
+            render.renderAllUnits(&world, texture_set);
         }
 
         raylib.EndMode2D();
-
         raylib.EndDrawing();
     }
 }

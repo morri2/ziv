@@ -207,14 +207,10 @@ pub fn renderYields(world: *World, tile_idx: Idx, ts: TextureSet) void {
     );
 }
 
-pub fn renderUnits(world: *World, tile_idx: Idx, ts: TextureSet) void {
-    var unit_container = world.topUnitContainerPtr(tile_idx);
-    for (0..32) |i| {
-        _ = i; // autofix
-
-        const unit = (unit_container orelse break).unit;
-        renderUnit(unit, tile_idx, world.grid, ts);
-        unit_container = world.nextUnitContainerPtr(unit_container.?);
+pub fn renderAllUnits(world: *World, ts: TextureSet) void {
+    for (world.units.keys()) |key| {
+        const unit = world.units.get(key) orelse unreachable;
+        renderUnit(unit, key.idx, world.grid, ts);
     }
 }
 
