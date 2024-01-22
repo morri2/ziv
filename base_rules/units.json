@@ -4,7 +4,7 @@
 			"name": "worker",
 			"production_cost": 70,
 			"moves": 2,
-			"domain": "LAND",
+			"domain": "land",
 			"starting_promotions": [
 				"CannotMelee",
 				"BuildImprovements"
@@ -14,7 +14,7 @@
 			"name": "settler",
 			"production_cost": 106,
 			"moves": 2,
-			"domain": "LAND",
+			"domain": "land",
 			"starting_promotions": [
 				"SettleCity",
 				"CannotMelee"
@@ -24,7 +24,7 @@
 			"name": "work_boat",
 			"production_cost": 30,
 			"moves": 4,
-			"domain": "SEA",
+			"domain": "sea",
 			"starting_promotions": [
 				"CannotMelee",
 				"BuildImprovements"
@@ -37,7 +37,7 @@
 			"production_cost": 40,
 			"moves": 2,
 			"combat_strength": 8,
-			"domain": "LAND",
+			"domain": "land",
 			"starting_promotions": [
 				"Fortify"
 			]
@@ -49,7 +49,7 @@
 			"combat_strength": 5,
 			"ranged_strength": 7,
 			"range": 2,
-			"domain": "LAND",
+			"domain": "land",
 			"starting_promotions": [
 				"CannotMelee"
 			]
@@ -59,7 +59,7 @@
 			"production_cost": 25,
 			"moves": 2,
 			"combat_strength": 5,
-			"domain": "LAND",
+			"domain": "land",
 			"starting_promotions": [
 				"IgnoreTerrain",
 				"Fortify"
@@ -72,7 +72,7 @@
 			"production_cost": 45,
 			"moves": 4,
 			"combat_strength": 10,
-			"domain": "SEA",
+			"domain": "sea",
 			"starting_promotions": []
 		}
 	]

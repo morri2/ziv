@@ -87,19 +87,26 @@ pub const TextureSet = struct {
                 Rules.Transport,
                 allocator,
             ),
-            .unit_icons = try loadEnumTextures(
+            .unit_icons = try loadTextures(
                 "textures/unit_{s}.png",
                 universal_fallback,
                 Rules.UnitType,
+                rules,
+                rules.unit_type_count,
                 allocator,
             ),
         };
     }
 
     pub fn deinit(self: *TextureSet) void {
+        for (self.unit_icons) |texture| raylib.UnloadTexture(texture);
+        for (self.transport_textures) |texture| raylib.UnloadTexture(texture);
+        for (self.improvement_textures) |texture| raylib.UnloadTexture(texture);
+        for (self.resource_icons) |texture| raylib.UnloadTexture(texture);
         for (self.vegetation_textures) |texture| raylib.UnloadTexture(texture);
         for (self.feature_textures) |texture| raylib.UnloadTexture(texture);
         for (self.base_textures) |texture| raylib.UnloadTexture(texture);
+        for (self.edge_textures) |texture| raylib.UnloadTexture(texture);
 
         self.allocator.free(self.unit_icons);
         self.allocator.free(self.transport_textures);
@@ -240,7 +247,9 @@ pub fn renderUnit(unit: Unit, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
         tile_idx,
         grid,
         "{d:.0}/{d:.0}",
-        .{ unit.movement, unit.maxMovement() },
+        .{ unit.movement, 0.0 },
+        // TODO: FIX
+        // .{ unit.movement, unit.maxMovement() },
         0.0,
         0.3,
         .{},

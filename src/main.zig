@@ -38,25 +38,25 @@ pub fn main() !void {
 
     try world.loadFromFile("maps/last_saved.map");
 
-    var w1 = Unit.new(.warrior);
-    w1.promotions.set(@intFromEnum(Rules.Promotion.Mobility));
+    var w1 = Unit.new(@enumFromInt(3), &rules); // Warrior
+    w1.promotions.set(12); // Mobility
 
-    var a1 = Unit.new(.archer);
-    a1.promotions.set(@intFromEnum(Rules.Promotion.ShockI));
-    a1.promotions.set(@intFromEnum(Rules.Promotion.ShockII));
-    a1.promotions.set(@intFromEnum(Rules.Promotion.ShockIII));
+    var a1 = Unit.new(@enumFromInt(4), &rules);
+    a1.promotions.set(12); // Mobility
+    a1.promotions.set(5); // Shock I
+    a1.promotions.set(6); // Shock II
+    a1.promotions.set(7); // Shock III
 
-    var b1 = Unit.new(.trireme);
-    b1 = b1;
+    const b1 = Unit.new(@enumFromInt(6), &rules); // Trireme
 
-    var s1 = Unit.new(.scout);
-    s1.promotions.set(@intFromEnum(Rules.Promotion.DrillI));
-    s1.promotions.set(@intFromEnum(Rules.Promotion.DrillII));
-    s1.promotions.set(@intFromEnum(Rules.Promotion.DrillIII));
-    world.unit_map.putUnitDefaultSlot(1200, w1);
-    world.unit_map.putUnitDefaultSlot(1201, a1);
-    world.unit_map.putUnitDefaultSlot(1203, b1);
-    world.unit_map.putUnitDefaultSlot(1198, s1);
+    var s1 = Unit.new(@enumFromInt(5), &rules);
+    s1.promotions.set(8); // Drill I
+    s1.promotions.set(9); // Drill II
+    s1.promotions.set(10); // Drill III
+    world.unit_map.putUnitDefaultSlot(1200, w1, &rules);
+    world.unit_map.putUnitDefaultSlot(1201, a1, &rules);
+    world.unit_map.putUnitDefaultSlot(1203, b1, &rules);
+    world.unit_map.putUnitDefaultSlot(1198, s1, &rules);
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -137,7 +137,7 @@ pub fn main() !void {
             }
 
             if (!in_edit_mode) {
-                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.unit_map.refreshUnits();
+                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.unit_map.refreshUnits(&rules);
                 // SELECTION
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
                     const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);

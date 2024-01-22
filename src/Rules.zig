@@ -39,6 +39,23 @@ building_allowed_map: std.AutoHashMapUnmanaged(struct {
 building_names: [*]const u16,
 building_strings: []const u8,
 
+promotion_count: usize,
+promotion_prerequisites: [*]const u16,
+promotion_storage: [*]const Promotion,
+
+promotion_names: [*]const u16,
+promotion_strings: []const u8,
+
+effects: [std.meta.fields(Promotion.Effect).len + 1]u16,
+effect_promotions: [*]const Promotion.Set, // TODO: compress bit field
+effect_values: [*]const u32,
+
+unit_type_count: usize,
+unit_type_stats: [*]const UnitType.Stats,
+
+unit_type_names: [*]const u16,
+unit_type_strings: []const u8,
+
 pub fn deinit(self: *Rules) void {
     self.arena.deinit();
 }
@@ -99,6 +116,8 @@ pub const Terrain = enum(u8) {
     };
 
     pub const Attributes = packed struct(u7) {
+        pub const Integer = @typeInfo(Attributes).Struct.backing_integer.?;
+
         is_water: bool = false,
         is_freshwater: bool = false,
         is_impassable: bool = false,
@@ -106,6 +125,29 @@ pub const Terrain = enum(u8) {
         is_wonder: bool = false,
         has_river: bool = false,
         has_freshwater: bool = false,
+
+        pub fn eql(self: Attributes, other: Attributes) bool {
+            const self_int: Integer = @bitCast(self);
+            const other_int: Integer = @bitCast(other);
+            return self_int == other_int;
+        }
+
+        pub fn count(self: Attributes) usize {
+            const self_int: Integer = @bitCast(self);
+            return @popCount(self_int);
+        }
+
+        pub fn intersectWith(self: Attributes, other: Attributes) Attributes {
+            const self_int: Integer = @bitCast(self);
+            const other_int: Integer = @bitCast(other);
+            return @bitCast(self_int & other_int);
+        }
+
+        pub fn unionWith(self: Attributes, other: Attributes) Attributes {
+            const self_int: Integer = @bitCast(self);
+            const other_int: Integer = @bitCast(other);
+            return @bitCast(self_int | other_int);
+        }
     };
 
     pub const Unpacked = struct {
@@ -226,145 +268,133 @@ pub const Improvements = packed struct(u12) {
     pillaged_transport: bool = false,
 };
 
-/// Atomic effects of promotions
-pub const UnitEffect = enum {
-    CombatBonusAttacking, // +(value)%
-    CombatBonus, // +(value)%
-    RoughTerrainBonus, // +(value)%
-    RoughTerrainBonusRange, // +(value)%
-    OpenTerrainBonus, // +(value)%
-    OpenTerrainBonusRange, // +(value)%
-    SettleCity,
-    CanFortify,
-    BuildRoads,
-    BuildRail,
-    BuildImprovement,
-    ModifyAttackRange, // +(value)
-    ModifyMovement, // +(value)
-    ModifySightRange, // +(value)
-    IgnoreTerrainMove,
-    CanEmbark,
-    CannotMelee,
-};
+pub const Promotion = enum(u8) {
+    _,
 
-// TODO: Remove TEMP
-pub const PromotionBitSet: type = std.bit_set.IntegerBitSet(13);
-pub const Promotion = enum(u4) {
-    CannotMelee,
-    SettleCity,
-    Fortify,
-    IgnoreTerrain,
-    BuildImprovements,
-    ShockI,
-    ShockII,
-    ShockIII,
-    DrillI,
-    DrillII,
-    DrillIII,
-    Mobility,
-    MobilityII,
-    pub const promotion_prereqs = [13]?PromotionBitSet{
-        .{ .mask = 0b1 },
-        .{ .mask = 0b10 },
-        .{ .mask = 0b100 },
-        .{ .mask = 0b1000 },
-        .{ .mask = 0b10000 },
-        null,
-        .{ .mask = 0b100000 },
-        .{ .mask = 0b1000000 },
-        null,
-        .{ .mask = 0b100000000 },
-        .{ .mask = 0b1000000000 },
-        null,
-        .{ .mask = 0b100000000000 },
-    };
-};
+    pub const Set: type = std.bit_set.IntegerBitSet(256);
 
-pub fn effect_promotions(effect: UnitEffect) []const struct { promotions: PromotionBitSet, value: ?u32 } {
-    return switch (effect) {
-        .CombatBonusAttacking => &.{},
-        .CombatBonus => &.{},
-        .RoughTerrainBonus => &.{
-            .{ .promotions = .{ .mask = 0b100000000 }, .value = 10 },
-            .{ .promotions = .{ .mask = 0b11000000000 }, .value = 15 },
-        },
-        .RoughTerrainBonusRange => &.{},
-        .OpenTerrainBonus => &.{
-            .{ .promotions = .{ .mask = 0b11100000 }, .value = 15 },
-        },
-        .OpenTerrainBonusRange => &.{},
-        .SettleCity => &.{
-            .{ .promotions = .{ .mask = 0b10 }, .value = null },
-        },
-        .CanFortify => &.{
-            .{ .promotions = .{ .mask = 0b100 }, .value = null },
-        },
-        .BuildRoads => &.{},
-        .BuildRail => &.{},
-        .BuildImprovement => &.{
-            .{ .promotions = .{ .mask = 0b10000 }, .value = null },
-        },
-        .ModifyAttackRange => &.{},
-        .ModifyMovement => &.{
-            .{ .promotions = .{ .mask = 0b1100000000000 }, .value = 1 },
-        },
-        .ModifySightRange => &.{},
-        .IgnoreTerrainMove => &.{
-            .{ .promotions = .{ .mask = 0b1000 }, .value = null },
-        },
-        .CanEmbark => &.{},
-        .CannotMelee => &.{
-            .{ .promotions = .{ .mask = 0b1 }, .value = null },
-        },
-    };
-}
-pub const UnitStats = packed struct {
-    production: u16, // Max cost, Nuclear Missile 1000
-    moves: u8, // Max movement, Nuclear Sub etc. 6
-    melee: u8, // Max combat strength, Giant Death Robot 150
-    ranged: u8,
-    range: u8, // Max range, Nuclear Missile 12
-    sight: u8, // Max 10 = 2 + 4 promotions + 1 scout + 1 nation + 1 Exploration + 1 Great Lighthouse
-    domain: UnitType.Domain,
-    promotions: PromotionBitSet,
+    pub const Effect = enum(u8) {
+        combat_bonus_attacking = 0, // +(value)%
+        combat_bonus = 1, // +(value)%
+        rough_terrain_bonus = 2, // +(value)%
+        rough_terrain_bonus_range = 3, // +(value)%
+        open_terrain_bonus = 4, // +(value)%
+        open_terrain_bonus_range = 5, // +(value)%
+        settle_city = 6,
+        can_fortify = 7,
+        build_roads = 8,
+        build_rail = 9,
+        build_improvement = 10,
+        modify_attack_range = 11, // +(value)
+        modify_movement = 12, // +(value)
+        modify_sight_range = 13, // +(value)
+        ignore_terrain_move = 14,
+        can_embark = 15,
+        cannot_melee = 16,
 
-    pub fn init(production: u16, moves: u8, melee: u8, ranged: u8, range: u8, sight: u8, domain: UnitType.Domain, promotions: PromotionBitSet) UnitStats {
-        return UnitStats{
-            .production = production,
-            .moves = moves,
-            .melee = melee,
-            .ranged = ranged,
-            .range = range,
-            .sight = sight,
-            .domain = domain,
-            .promotions = promotions,
+        pub const Iterator = struct {
+            effect: Effect,
+            index: usize = 0,
+
+            pub fn init(effect: Effect) Iterator {
+                return .{ .effect = effect };
+            }
+
+            pub fn next(self: *Iterator, rules: *const Rules) ?struct {
+                value: u32,
+                promotions: Promotion.Set,
+            } {
+                const start = rules.effects[@intFromEnum(self.effect)];
+                const end = rules.effects[@intFromEnum(self.effect) + 1];
+                const real_index = start + self.index;
+                if (real_index >= end) return null;
+                self.index += 1;
+
+                return .{
+                    .value = rules.effect_values[real_index],
+                    .promotions = rules.effect_promotions[real_index],
+                };
+            }
+
+            pub fn totalLen(self: *Iterator, rules: *const Rules) usize {
+                const start = rules.effects[@intFromEnum(self.effect)];
+                const end = rules.effects[@intFromEnum(self.effect) + 1];
+                return end - start;
+            }
         };
+    };
+
+    pub fn prerequisites(self: Promotion, rules: *const Rules) []const Promotion {
+        const start = rules.promotion_prerequisites[@intFromEnum(self)];
+        const end = rules.promotion_prerequisites[@intFromEnum(self) + 1];
+        return rules.promotion_prerequisite_storage[start..end];
+    }
+
+    pub fn prerequisitesSet(self: Promotion, rules: *const Rules) Set {
+        const prereqs = self.prerequisites(rules);
+        var set = Set.initEmpty();
+        for (prereqs) |prereq| {
+            set.set(@intFromEnum(prereq));
+        }
+        return set;
+    }
+
+    pub fn name(self: Promotion, rules: *const Rules) []const u8 {
+        const start = rules.promotion_names[@intFromEnum(self)];
+        const end = rules.promotion_names[@intFromEnum(self) + 1];
+        return rules.promotion_strings[start..end];
     }
 };
-pub const UnitType = enum(u3) {
-    worker,
-    settler,
-    work_boat,
-    warrior,
-    archer,
-    scout,
-    trireme,
+
+pub const UnitType = enum(u8) {
+    _,
 
     pub const Domain = enum(u1) {
-        LAND,
-        SEA,
+        land = 0,
+        sea = 1,
     };
 
-    pub fn baseStats(unit_type: UnitType) UnitStats {
-        return switch (unit_type) {
-            .worker => UnitStats.init(70, 2, 0, 0, 0, 2, .LAND, .{ .mask = 0b10001 }),
-            .settler => UnitStats.init(106, 2, 0, 0, 0, 2, .LAND, .{ .mask = 0b11 }),
-            .work_boat => UnitStats.init(30, 4, 0, 0, 0, 2, .SEA, .{ .mask = 0b10001 }),
-            .warrior => UnitStats.init(40, 2, 8, 0, 0, 2, .LAND, .{ .mask = 0b100 }),
-            .archer => UnitStats.init(40, 2, 5, 7, 2, 2, .LAND, .{ .mask = 0b1 }),
-            .scout => UnitStats.init(25, 2, 5, 0, 0, 2, .LAND, .{ .mask = 0b1100 }),
-            .trireme => UnitStats.init(45, 4, 10, 0, 0, 2, .SEA, .{ .mask = 0b0 }),
-        };
+    pub const Stats = struct {
+        production: u16, // Max cost, Nuclear Missile 1000
+        moves: u8, // Max movement, Nuclear Sub etc. 6
+        melee: u8, // Max combat strength, Giant Death Robot 150
+        ranged: u8,
+        range: u8, // Max range, Nuclear Missile 12
+        sight: u8, // Max 10 = 2 + 4 promotions + 1 scout + 1 nation + 1 Exploration + 1 Great Lighthouse
+        domain: Domain,
+        promotions: Promotion.Set,
+
+        pub fn init(
+            production: u16,
+            moves: u8,
+            melee: u8,
+            ranged: u8,
+            range: u8,
+            sight: u8,
+            domain: Domain,
+            promotions: Promotion.Set,
+        ) Stats {
+            return Stats{
+                .production = production,
+                .moves = moves,
+                .melee = melee,
+                .ranged = ranged,
+                .range = range,
+                .sight = sight,
+                .domain = domain,
+                .promotions = promotions,
+            };
+        }
+    };
+
+    pub fn stats(self: UnitType, rules: *const Rules) Stats {
+        return rules.unit_type_stats[@intFromEnum(self)];
+    }
+
+    pub fn name(self: UnitType, rules: *const Rules) []const u8 {
+        const start = rules.unit_type_names[@intFromEnum(self)];
+        const end = rules.unit_type_names[@intFromEnum(self) + 1];
+        return rules.unit_type_strings[start..end];
     }
 };
 
@@ -447,6 +477,17 @@ pub fn parse(rules_dir: std.fs.Dir, allocator: std.mem.Allocator) !Rules {
         &resource_map,
         allocator,
     );
+
+    var promotions_file = try rules_dir.openFile("promotions.json", .{});
+    defer promotions_file.close();
+
+    var promotion_map = try parsePromotions(promotions_file, &rules, allocator);
+    defer promotion_map.deinit();
+
+    var units_file = try rules_dir.openFile("units.json", .{});
+    defer units_file.close();
+
+    try parseUnits(units_file, &rules, &promotion_map, allocator);
 
     return rules;
 }
@@ -578,10 +619,12 @@ fn parseTerrain(
     errdefer tiles.deinit(allocator);
 
     var maps = TerrainMaps.init(allocator);
+    errdefer maps.deinit();
 
     // Add base tiles
-    for (terrain.bases) |base| {
-        const base_index = try maps.base.add(base.name);
+    for (terrain.bases, 0..) |base, base_index| {
+        const base_enum: Terrain.Base = @enumFromInt(base_index);
+        _ = try maps.base.add(base_enum.name(rules));
         try tiles.append(allocator, .{
             .unpacked = .{
                 .base = @enumFromInt(base_index),
@@ -600,7 +643,8 @@ fn parseTerrain(
         _ = try maps.feature.add("none");
         const tiles_len = tiles.items.len;
         for (terrain.features, 1..) |feature, feature_index| {
-            _ = try maps.feature.add(feature.name);
+            const feature_enum: Terrain.Feature = @enumFromInt(feature_index);
+            _ = try maps.feature.add(feature_enum.name(rules));
             const allowed_bases = maps.base.flagsFromKeys(feature.bases);
             for (0..tiles_len) |tile_index| {
                 const tile = tiles.items[tile_index];
@@ -626,8 +670,9 @@ fn parseTerrain(
     {
         _ = try maps.vegetation.add("none");
         const tiles_len = tiles.items.len;
-        for (terrain.vegetation) |vegetation| {
-            const vegetation_index = try maps.vegetation.add(vegetation.name);
+        for (terrain.vegetation, 1..) |vegetation, vegetation_index| {
+            const vegetation_enum: Terrain.Vegetation = @enumFromInt(vegetation_index);
+            _ = try maps.vegetation.add(vegetation_enum.name(rules));
 
             const allowed_bases = maps.base.flagsFromKeys(vegetation.bases);
             const allowed_features = maps.feature.flagsFromKeys(vegetation.features);
@@ -856,15 +901,15 @@ fn parseImprovements(
             bases: []struct {
                 name: []const u8,
                 no_feature: bool = false,
-                required_attributes: []const []const u8 = &.{},
+                required_attributes: Terrain.Attributes = .{},
             } = &.{},
             features: []struct {
                 name: []const u8,
-                required_attributes: []const []const u8 = &.{},
+                required_attributes: Terrain.Attributes = .{},
             } = &.{},
             vegetation: []struct {
                 name: []const u8,
-                required_attributes: []const []const u8 = &.{},
+                required_attributes: Terrain.Attributes = .{},
             } = &.{},
         },
         yield: Yield = .{},
@@ -932,83 +977,316 @@ fn parseImprovements(
     var allowed_on_map: @TypeOf(rules.building_allowed_map) = .{};
     defer allowed_on_map.deinit(allocator);
 
-    // for (buildings, 0..) |building, building_index| {
-    //     const building_enum: Building = @enumFromInt(building_index + 1);
+    for (buildings, 0..) |building, building_index| {
+        const building_enum: Building = @enumFromInt(building_index + 1);
 
-    //     const veg_flags = blk: {
-    //         var flags = TerrainMaps.FlagIndexMap.Flags.initEmpty();
-    //         for (building.allow_on.vegetation) |vegetation| {
-    //             flags.set(terrain_maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation);
-    //         }
-    //         break :blk flags;
-    //     };
+        const veg_flags = blk: {
+            var flags = TerrainMaps.FlagIndexMap.Flags.initEmpty();
+            for (building.allow_on.vegetation) |vegetation| {
+                flags.set(terrain_maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation);
+            }
+            break :blk flags;
+        };
 
-    //     terrain_loop: for (terrain_tiles, 0..) |tile, terrain_index| {
-    //         const terrain: Terrain = @enumFromInt(terrain_index);
+        terrain_loop: for (terrain_tiles, 0..) |tile, terrain_index| {
+            const terrain: Terrain = @enumFromInt(terrain_index);
 
-    //         const tag: Building.Allowed = if (veg_flags.isSet(@intFromEnum(tile.unpacked.vegetation))) .allowed else .allowed_after_clear;
+            const tag: Building.Allowed = if (veg_flags.isSet(@intFromEnum(tile.unpacked.vegetation))) .allowed else .allowed_after_clear;
 
-    //         for (building.allow_on.bases) |base| {
-    //             const base_index: Terrain.Base = @enumFromInt(terrain_maps.base.get(base.name) orelse return error.UnknownBase);
-    //             if (tile.unpacked.base != base_index) continue;
+            for (building.allow_on.bases) |base| {
+                const base_enum: Terrain.Base = @enumFromInt(
+                    terrain_maps.base.get(base.name) orelse return error.UnknownBase,
+                );
+                if (tile.unpacked.base != base_enum) continue;
 
-    //             if (base.no_feature and tile.unpacked.feature != .none) continue;
+                if (base.no_feature and tile.unpacked.feature != .none) continue;
 
-    //             const required_attributes = terrain_maps.attributes.flagsFromKeys(base.required_attributes);
-    //             if (!tile.attributes.intersectWith(required_attributes).eql(required_attributes)) continue;
+                if (!tile.attributes.intersectWith(base.required_attributes).eql(base.required_attributes)) continue;
 
-    //             try allowed_on_map.put(allocator, .{
-    //                 .building = building_enum,
-    //                 .terrain = terrain,
-    //             }, tag);
+                try allowed_on_map.put(allocator, .{
+                    .building = building_enum,
+                    .terrain = terrain,
+                }, tag);
 
-    //             continue :terrain_loop;
-    //         }
+                continue :terrain_loop;
+            }
 
-    //         for (building.allow_on.features) |feature| {
-    //             const feature_index = terrain.maps.features.get(feature.name) orelse return error.UnknownFeature;
-    //             if (tile.feature == .none) continue;
-    //             if (tile.feature != feature_index) continue;
+            for (building.allow_on.features) |feature| {
+                if (tile.unpacked.feature == .none) continue;
 
-    //             const required_attributes = terrain.maps.attributes.flagsFromKeys(feature.required_attributes);
-    //             if (!tile.attributes.intersectWith(required_attributes).eql(required_attributes)) continue;
+                const feature_enum: Terrain.Feature = @enumFromInt(
+                    terrain_maps.feature.get(feature.name) orelse return error.UnknownFeature,
+                );
+                if (tile.unpacked.feature != feature_enum) continue;
 
-    //             try allowed_on_map.put(allocator, .{
-    //                 .building = building_enum,
-    //                 .terrain = terrain,
-    //             }, tag);
-    //             continue :terrain_loop;
-    //         }
+                if (!tile.attributes.intersectWith(feature.required_attributes).eql(feature.required_attributes)) continue;
 
-    //         for (building.allow_on.vegetation) |vegetation| {
-    //             const vegetation_index = terrain.maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation;
-    //             if (tile.vegetation == .none) continue;
-    //             if (tile.vegetation != vegetation_index) continue;
+                try allowed_on_map.put(allocator, .{
+                    .building = building_enum,
+                    .terrain = terrain,
+                }, tag);
+                continue :terrain_loop;
+            }
 
-    //             const required_attributes = terrain.maps.attributes.flagsFromKeys(vegetation.required_attributes);
+            for (building.allow_on.vegetation) |vegetation| {
+                const vegetation_enum: Terrain.Vegetation = @enumFromInt(
+                    terrain_maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation,
+                );
+                if (tile.unpacked.vegetation == .none) continue;
+                if (tile.unpacked.vegetation != vegetation_enum) continue;
 
-    //             if (!tile.attributes.intersectWith(required_attributes).eql(required_attributes)) continue;
-    //             try allowed_on_map.put(allocator, .{
-    //                 .building = building_enum,
-    //                 .terrain = terrain,
-    //             }, .allowed);
+                if (!tile.attributes.intersectWith(vegetation.required_attributes).eql(vegetation.required_attributes)) continue;
 
-    //             continue :terrain_loop;
-    //         }
+                try allowed_on_map.put(allocator, .{
+                    .building = building_enum,
+                    .terrain = terrain,
+                }, .allowed);
 
-    //         if (tile.vegetation != .none and building.allow_on.resources.len != 0) {
-    //             try allowed_on_map.put(allocator, .{
-    //                 .building = building_enum,
-    //                 .terrain = terrain,
-    //             }, switch (tag) {
-    //                 .allowed => .allowed_if_resource,
-    //                 .allowed_after_clear => .allowed_after_clear_if_resource,
-    //             });
-    //         }
-    //     }
-    // }
-    _ = terrain_maps;
-    _ = terrain_tiles;
+                continue :terrain_loop;
+            }
+
+            if (tile.unpacked.vegetation != .none and building.allow_on.resources.len != 0) {
+                try allowed_on_map.put(allocator, .{
+                    .building = building_enum,
+                    .terrain = terrain,
+                }, switch (tag) {
+                    .allowed => .allowed_if_resource,
+                    .allowed_after_clear => .allowed_after_clear_if_resource,
+                    else => unreachable,
+                });
+            }
+        }
+    }
 
     rules.building_allowed_map = try allowed_on_map.clone(arena_allocator);
+}
+
+fn parsePromotions(
+    file: std.fs.File,
+    rules: *Rules,
+    allocator: std.mem.Allocator,
+) !flag_index_map.FlagIndexMap(256) {
+    const Effect = struct {
+        effect: Promotion.Effect,
+        value: u32 = 0,
+    };
+
+    const JsonPromotion = struct {
+        name: []const u8,
+        requires: []const []const u8 = &.{}, // Seem to only be either of the listed, never 2 different
+        effects: []const Effect = &.{},
+    };
+
+    const json_text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(json_text);
+
+    const parsed = try std.json.parseFromSlice(struct {
+        promotions: []const JsonPromotion,
+    }, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const promotions = parsed.value.promotions;
+
+    rules.promotion_count = promotions.len;
+
+    std.debug.assert(rules.promotion_count <= 256);
+
+    const arena_allocator = rules.arena.allocator();
+
+    var promotion_map = flag_index_map.FlagIndexMap(256).init(allocator);
+    errdefer promotion_map.deinit();
+
+    const strings_len = blk: {
+        var strings_len: usize = 0;
+        for (promotions) |promotion| {
+            strings_len += promotion.name.len;
+        }
+        break :blk strings_len;
+    };
+
+    const promotion_strings = try arena_allocator.alloc(u8, strings_len);
+    const promotion_names = try arena_allocator.alloc(u16, rules.promotion_count + 1);
+
+    {
+        var string_index: usize = 0;
+        for (promotions, 0..) |promotion, promotion_index| {
+            const name = promotion_strings[string_index..(string_index + promotion.name.len)];
+            std.mem.copyForwards(
+                u8,
+                name,
+                promotion.name,
+            );
+            promotion_names[promotion_index] = @truncate(string_index);
+            _ = try promotion_map.add(name);
+            string_index += promotion.name.len;
+        }
+        promotion_names[promotion_names.len - 1] = @truncate(string_index);
+    }
+
+    {
+        const promotion_storage = try arena_allocator.alloc(Promotion, blk: {
+            var promotion_storage_len: usize = 0;
+            for (promotions) |promotion| {
+                promotion_storage_len += promotion.requires.len;
+            }
+            break :blk promotion_storage_len;
+        });
+
+        var promotion_storage_index: usize = 0;
+
+        const promotion_prerequisites = try arena_allocator.alloc(u16, rules.promotion_count + 1);
+
+        for (promotions, 0..) |promotion, promotion_index| {
+            promotion_prerequisites[promotion_index] = @truncate(promotion_storage_index);
+            for (promotion.requires) |prereq| {
+                const prereq_promotion = promotion_map.get(prereq) orelse return error.UnknownPromotion;
+
+                promotion_storage[promotion_storage_index] = @enumFromInt(prereq_promotion);
+                promotion_storage_index += 1;
+            }
+        }
+        promotion_prerequisites[promotion_prerequisites.len - 1] = @truncate(promotion_storage_index);
+
+        rules.promotion_prerequisites = promotion_prerequisites.ptr;
+        rules.promotion_storage = promotion_storage.ptr;
+    }
+
+    {
+        var effects = [_]std.ArrayListUnmanaged(struct {
+            value: u32,
+            promotions: Promotion.Set = Promotion.Set.initEmpty(),
+        }){.{}} ** std.meta.fields(Promotion.Effect).len;
+        defer {
+            for (&effects) |*effect| {
+                effect.deinit(allocator);
+            }
+        }
+
+        var storage_required: usize = 0;
+        for (promotions, 0..) |promotion, promotion_index| {
+            effects_loop: for (promotion.effects) |effect| {
+                const effect_variants = &effects[@intFromEnum(effect.effect)];
+                for (effect_variants.items) |*variant| {
+                    if (variant.value != effect.value) continue;
+
+                    variant.promotions.set(promotion_index);
+                    continue :effects_loop;
+                }
+
+                try effect_variants.append(allocator, .{ .value = effect.value });
+                effect_variants.items[effect_variants.items.len - 1].promotions.set(promotion_index);
+                storage_required += 1;
+            }
+        }
+
+        const effect_promotions = try arena_allocator.alloc(Promotion.Set, storage_required);
+        const effect_values = try arena_allocator.alloc(u32, storage_required);
+
+        var storage_index: usize = 0;
+        for (effects, 0..) |effect, effect_index| {
+            rules.effects[effect_index] = @truncate(storage_index);
+            for (effect.items) |promotions_value| {
+                effect_values[storage_index] = promotions_value.value;
+                effect_promotions[storage_index] = promotions_value.promotions;
+                storage_index += 1;
+            }
+        }
+        rules.effects[rules.effects.len - 1] = @truncate(storage_index);
+
+        rules.effect_values = effect_values.ptr;
+        rules.effect_promotions = effect_promotions.ptr;
+    }
+
+    return promotion_map;
+}
+
+fn parseUnits(
+    file: std.fs.File,
+    rules: *Rules,
+    promotion_map: *const flag_index_map.FlagIndexMap(256),
+    allocator: std.mem.Allocator,
+) !void {
+    const JsonUnitType = struct {
+        name: []const u8,
+        production_cost: u16, // Max cost, Nuclear Missile 1000
+        moves: u8, // Max movement, Nuclear Sub etc. 6
+        combat_strength: u8 = 0, // Max combat strength, Giant Death Robot 150
+        ranged_strength: u8 = 0,
+        range: u8 = 0, // Max range, Nuclear Missile 12
+        sight: u8 = 2, // Max 10 = 2 + 4 promotions + 1 scout + 1 nation + 1 Exploration + 1 Great Lighthouse
+        domain: UnitType.Domain,
+        starting_promotions: []const []const u8 = &.{},
+    };
+
+    const json_text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(json_text);
+
+    const parsed = try std.json.parseFromSlice(struct {
+        civilian: []const JsonUnitType,
+        land: []const JsonUnitType,
+        naval: []const JsonUnitType,
+    }, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const units = parsed.value;
+
+    rules.unit_type_count = units.civilian.len + units.land.len + units.naval.len;
+
+    std.debug.assert(rules.unit_type_count <= 256);
+
+    const arena_allocator = rules.arena.allocator();
+
+    const strings_len = blk: {
+        var strings_len: usize = 0;
+        for (units.civilian) |unit| {
+            strings_len += unit.name.len;
+        }
+        for (units.land) |unit| {
+            strings_len += unit.name.len;
+        }
+        for (units.naval) |unit| {
+            strings_len += unit.name.len;
+        }
+        break :blk strings_len;
+    };
+
+    const unit_strings = try arena_allocator.alloc(u8, strings_len);
+    const unit_names = try arena_allocator.alloc(u16, rules.unit_type_count + 1);
+    const unit_stats = try arena_allocator.alloc(UnitType.Stats, rules.unit_type_count);
+
+    {
+        var string_index: usize = 0;
+        var unit_index: usize = 0;
+        inline for (&[_][]const u8{ "civilian", "land", "naval" }) |field_name| {
+            for (@field(units, field_name)) |promotion| {
+                const name = unit_strings[string_index..(string_index + promotion.name.len)];
+                std.mem.copyForwards(
+                    u8,
+                    name,
+                    promotion.name,
+                );
+
+                unit_stats[unit_index] = .{
+                    .production = promotion.production_cost,
+                    .moves = promotion.moves,
+                    .melee = promotion.combat_strength,
+                    .ranged = promotion.ranged_strength,
+                    .range = promotion.range,
+                    .sight = promotion.sight,
+                    .domain = promotion.domain,
+                    .promotions = promotion_map.flagsFromKeys(promotion.starting_promotions),
+                };
+
+                unit_names[unit_index] = @truncate(string_index);
+                string_index += promotion.name.len;
+                unit_index += 1;
+            }
+        }
+
+        unit_names[unit_names.len - 1] = @truncate(string_index);
+    }
+
+    rules.unit_type_stats = unit_stats.ptr;
+    rules.unit_type_names = unit_names.ptr;
+    rules.unit_type_strings = unit_strings;
 }

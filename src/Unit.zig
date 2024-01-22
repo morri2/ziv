@@ -10,7 +10,7 @@ const UnitKey = UnitMap.UnitKey;
 
 const Terrain = Rules.Terrain;
 const Improvements = Rules.Improvements;
-const PromotionBitSet = Rules.PromotionBitSet;
+const Promotion = Rules.Promotion;
 const UnitType = Rules.UnitType;
 const UnitEffect = Rules.UnitEffect;
 
@@ -19,59 +19,68 @@ hit_points: u8 = 100, // All units have 100 HP
 prepared: bool = false,
 embarked: bool = false,
 fortified: bool = false,
-promotions: PromotionBitSet = PromotionBitSet.initEmpty(),
+promotions: Promotion.Set = Promotion.Set.initEmpty(),
 movement: f32 = 0,
 
-pub fn new(unit_type: UnitType) Self {
+pub fn new(unit_type: UnitType, rules: *const Rules) Self {
     var unit = Self{ .type = unit_type };
-    unit.promotions = unit_type.baseStats().promotions;
-    unit.movement = unit.maxMovement();
+    unit.promotions = unit_type.stats(rules).promotions;
+    unit.movement = unit.maxMovement(rules);
     return unit;
 }
 
-pub fn maxMovement(self: Self) f32 {
-    const move_mod = cumPromotionValues(self.promotions, .ModifyMovement);
-    return @as(f32, @floatFromInt(move_mod)) + @as(f32, @floatFromInt(self.type.baseStats().moves));
+pub fn maxMovement(self: Self, rules: *const Rules) f32 {
+    const move_mod = cumPromotionValues(self.promotions, .modify_movement, rules);
+    return @as(f32, @floatFromInt(move_mod)) + @as(f32, @floatFromInt(self.type.stats(rules).moves));
 }
 
 /// Slot type when not embarked
-pub fn defaultSlot(self: Self) UnitSlot {
+pub fn defaultSlot(self: Self, rules: *const Rules) UnitSlot {
     // PLACEHOLDER CIVILIAN UNITS ARE NOT A THING YET, will need reworking when the rapture comes
-    if (self.type.baseStats().domain == .SEA) {
-        if (self.type == .work_boat) return .civilian;
+    const domain = self.type.stats(rules).domain;
+    if (domain == .sea) {
+        // TODO: Fix
+        // if (self.type == .work_boat) return .civilian;
         return .naval;
     }
-    if (self.type.baseStats().domain == .LAND) {
-        if (self.type == .worker or self.type == .settler) return .civilian;
+    if (domain == .land) {
+        // TODO: Fix
+        // if (self.type == .worker or self.type == .settler) return .civilian;
 
         return .military;
     }
     unreachable;
 }
 
-pub fn slotAfterMove(self: *Self, cost: move.MoveCost) UnitSlot {
-    if (cost == .disembarkation) return self.defaultSlot();
+pub fn slotAfterMove(self: *Self, cost: move.MoveCost, rules: *const Rules) UnitSlot {
+    if (cost == .disembarkation) return self.defaultSlot(rules);
     if (cost == .embarkation or self.embarked) return .embarked;
-    return self.defaultSlot();
+    return self.defaultSlot(rules);
 }
 
 // restore movement
-pub fn refresh(self: *Self) void {
-    self.movement = self.maxMovement();
+pub fn refresh(self: *Self, rules: *const Rules) void {
+    self.movement = self.maxMovement(rules);
 }
 
 /// returns a bitset for the promotions that grant the effect :)
-pub fn effectPromotions(effect: UnitEffect) PromotionBitSet {
-    var bitset = PromotionBitSet.initEmpty();
-    for (Rules.effect_promotions(effect)) |variant| {
+pub fn effectPromotions(effect: Promotion.Effect, rules: *const Rules) Promotion.Set {
+    var bitset = Promotion.Set.initEmpty();
+    var effect_promotions_it = Promotion.Effect.Iterator.init(effect);
+    while (effect_promotions_it.next(rules)) |variant| {
         bitset = bitset.unionWith(variant.promotions);
     }
     return bitset;
 }
 
 /// returns a bitset for the promotions that grant the effect :)
-pub fn grantsEffect(promotions: PromotionBitSet, effect: UnitEffect) bool {
-    for (Rules.effect_promotions(effect)) |variant| {
+pub fn grantsEffect(
+    promotions: Promotion.Set,
+    effect: Promotion.Effect,
+    rules: *const Rules,
+) bool {
+    var effect_promotions_it = Promotion.Effect.Iterator.init(effect);
+    while (effect_promotions_it.next(rules)) |variant| {
         const u = variant.promotions.intersectWith(promotions);
         if (u.mask != 0) return true;
     }
@@ -79,11 +88,16 @@ pub fn grantsEffect(promotions: PromotionBitSet, effect: UnitEffect) bool {
 }
 
 /// returns the sum of the values of all the promotions.
-pub fn cumPromotionValues(promotions: PromotionBitSet, effect: UnitEffect) i32 {
+pub fn cumPromotionValues(
+    promotions: Promotion.Set,
+    effect: Promotion.Effect,
+    rules: *const Rules,
+) i32 {
     var cum: i32 = 0;
-    for (Rules.effect_promotions(effect)) |variant| {
+    var effect_promotions_it = Promotion.Effect.Iterator.init(effect);
+    while (effect_promotions_it.next(rules)) |variant| {
         const u = variant.promotions.intersectWith(promotions);
-        cum += @as(i32, @intCast(u.count())) * @as(i32, @intCast(variant.value.?));
+        cum += @as(i32, @intCast(u.count())) * @as(i32, @intCast(variant.value));
     }
     return cum;
 }
@@ -148,46 +162,59 @@ pub fn battle(attacker: *Self, defender: *Self, range: bool, context: CombatCont
     }
 }
 
-pub fn calculateStr(unit: *Self, is_attacker: bool, is_range: bool, context: CombatContext, log: bool, rules: *const Rules) f32 {
-    var str: f32 = @floatFromInt(unit.type.baseStats().melee);
+pub fn calculateStr(
+    unit: *Self,
+    is_attacker: bool,
+    is_range: bool,
+    context: CombatContext,
+    log: bool,
+    rules: *const Rules,
+) f32 {
+    var str: f32 = @floatFromInt(unit.type.stats(rules).melee);
     if (log) std.debug.print("  Base strength: {d:.0}\n", .{str});
 
     var unit_mod: i32 = 100;
 
     {
-        const mod = cumPromotionValues(unit.promotions, .CombatBonus);
+        const mod = cumPromotionValues(unit.promotions, .combat_bonus, rules);
 
         if (log and mod > 0) std.debug.print("    Combat bonus: +{}%\n", .{mod});
         unit_mod += mod;
     }
 
     if (is_attacker) {
-        const mod = cumPromotionValues(unit.promotions, .CombatBonusAttacking);
+        const mod = cumPromotionValues(unit.promotions, .combat_bonus_attacking, rules);
         if (log and mod > 0) std.debug.print("    Attacking bonus: +{}%\n", .{mod});
         unit_mod += mod;
     }
 
-    if (context.target_terrain.attributes(rules).is_rough) {
-        const mod = cumPromotionValues(unit.promotions, .RoughTerrainBonus);
-        if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
-        unit_mod += mod;
-    }
-    if (!context.target_terrain.attributes(rules).is_rough) {
-        const mod = cumPromotionValues(unit.promotions, .OpenTerrainBonus);
-        if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
-        unit_mod += mod;
-    }
+    const target_attributes = context.target_terrain.attributes(rules);
+    const is_rough = target_attributes.is_rough;
 
-    if (context.target_terrain.attributes(rules).is_rough and is_range) {
-        const mod = cumPromotionValues(unit.promotions, .RoughTerrainBonusRange);
-        if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
-        unit_mod += mod;
-    }
+    if (is_rough) {
+        {
+            const mod = cumPromotionValues(unit.promotions, .rough_terrain_bonus, rules);
+            if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
+            unit_mod += mod;
+        }
 
-    if (!context.target_terrain.attributes(rules).is_rough and is_range) {
-        const mod = cumPromotionValues(unit.promotions, .OpenTerrainBonusRange);
-        if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
-        unit_mod += mod;
+        if (is_range) {
+            const mod = cumPromotionValues(unit.promotions, .rough_terrain_bonus_range, rules);
+            if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
+            unit_mod += mod;
+        }
+    } else {
+        {
+            const mod = cumPromotionValues(unit.promotions, .open_terrain_bonus, rules);
+            if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
+            unit_mod += mod;
+        }
+
+        if (is_range) {
+            const mod = cumPromotionValues(unit.promotions, .open_terrain_bonus_range, rules);
+            if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
+            unit_mod += mod;
+        }
     }
 
     if (log and unit_mod > 0) std.debug.print("    STR MOD: {}%\n", .{unit_mod});

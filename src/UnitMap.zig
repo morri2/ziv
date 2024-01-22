@@ -22,10 +22,10 @@ pub fn deinit(self: *Self) void {
     self.units.deinit(self.allocator);
 }
 
-pub fn refreshUnits(self: *Self) void {
+pub fn refreshUnits(self: *Self, rules: *Rules) void {
     var unit_iter = self.units.iterator();
     while (unit_iter.next()) |e| {
-        e.value_ptr.refresh();
+        e.value_ptr.refresh(rules);
     }
 }
 
@@ -54,8 +54,8 @@ pub fn getUnitPtr(self: *const Self, ukey: UnitKey) ?*Unit {
     return self.units.getPtr(ukey);
 }
 
-pub fn putUnitDefaultSlot(self: *Self, idx: Idx, unit: Unit) void {
-    self.putUnit(.{ .idx = idx, .slot = unit.defaultSlot() }, unit);
+pub fn putUnitDefaultSlot(self: *Self, idx: Idx, unit: Unit, rules: *const Rules) void {
+    self.putUnit(.{ .idx = idx, .slot = unit.defaultSlot(rules) }, unit);
 }
 
 pub fn putUnit(self: *Self, ukey: UnitKey, unit: Unit) void {

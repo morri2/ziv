@@ -7,7 +7,7 @@
 			],
 			"effects": [
 				{
-					"effect": "CannotMelee"
+					"effect": "cannot_melee"
 				}
 			]
 		},
@@ -18,7 +18,7 @@
 			],
 			"effects": [
 				{
-					"effect": "SettleCity"
+					"effect": "settle_city"
 				}
 			]
 		},
@@ -29,7 +29,7 @@
 			],
 			"effects": [
 				{
-					"effect": "CanFortify"
+					"effect": "can_fortify"
 				}
 			]
 		},
@@ -40,7 +40,7 @@
 			],
 			"effects": [
 				{
-					"effect": "IgnoreTerrainMove"
+					"effect": "ignore_terrain_move"
 				}
 			]
 		},
@@ -51,7 +51,7 @@
 			],
 			"effects": [
 				{
-					"effect": "BuildImprovement"
+					"effect": "build_improvement"
 				}
 			]
 		},
@@ -59,7 +59,7 @@
 			"name": "ShockI",
 			"effects": [
 				{
-					"effect": "OpenTerrainBonus",
+					"effect": "open_terrain_bonus",
 					"value": 15
 				}
 			]
@@ -71,7 +71,7 @@
 			],
 			"effects": [
 				{
-					"effect": "OpenTerrainBonus",
+					"effect": "open_terrain_bonus",
 					"value": 15
 				}
 			]
@@ -83,7 +83,7 @@
 			],
 			"effects": [
 				{
-					"effect": "OpenTerrainBonus",
+					"effect": "open_terrain_bonus",
 					"value": 15
 				}
 			]
@@ -92,7 +92,7 @@
 			"name": "DrillI",
 			"effects": [
 				{
-					"effect": "RoughTerrainBonus",
+					"effect": "rough_terrain_bonus",
 					"value": 10
 				}
 			]
@@ -104,7 +104,7 @@
 			],
 			"effects": [
 				{
-					"effect": "RoughTerrainBonus",
+					"effect": "rough_terrain_bonus",
 					"value": 15
 				}
 			]
@@ -116,7 +116,7 @@
 			],
 			"effects": [
 				{
-					"effect": "RoughTerrainBonus",
+					"effect": "rough_terrain_bonus",
 					"value": 15
 				}
 			]
@@ -125,7 +125,7 @@
 			"name": "Mobility",
 			"effects": [
 				{
-					"effect": "ModifyMovement",
+					"effect": "modify_movement",
 					"value": 1
 				}
 			]
@@ -137,7 +137,7 @@
 			],
 			"effects": [
 				{
-					"effect": "ModifyMovement",
+					"effect": "modify_movement",
 					"value": 1
 				}
 			]
