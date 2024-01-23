@@ -30,7 +30,7 @@ pub fn new(unit_type: UnitType, rules: *const Rules) Self {
 }
 
 pub fn maxMovement(self: Self, rules: *const Rules) f32 {
-    const move_mod = cumPromotionValues(self.promotions, .modify_movement, rules);
+    const move_mod = Promotion.Effect.modify_movement.promotionsSum(self.promotions, rules);
     return @as(f32, @floatFromInt(move_mod)) + @as(f32, @floatFromInt(self.type.stats(rules).moves));
 }
 
@@ -61,45 +61,6 @@ pub fn slotAfterMove(self: *Self, cost: move.MoveCost, rules: *const Rules) Unit
 // restore movement
 pub fn refresh(self: *Self, rules: *const Rules) void {
     self.movement = self.maxMovement(rules);
-}
-
-/// returns a bitset for the promotions that grant the effect :)
-pub fn effectPromotions(effect: Promotion.Effect, rules: *const Rules) Promotion.Set {
-    var bitset = Promotion.Set.initEmpty();
-    var effect_promotions_it = Promotion.Effect.Iterator.init(effect);
-    while (effect_promotions_it.next(rules)) |variant| {
-        bitset = bitset.unionWith(variant.promotions);
-    }
-    return bitset;
-}
-
-/// returns a bitset for the promotions that grant the effect :)
-pub fn grantsEffect(
-    promotions: Promotion.Set,
-    effect: Promotion.Effect,
-    rules: *const Rules,
-) bool {
-    var effect_promotions_it = Promotion.Effect.Iterator.init(effect);
-    while (effect_promotions_it.next(rules)) |variant| {
-        const u = variant.promotions.intersectWith(promotions);
-        if (u.mask != 0) return true;
-    }
-    return false;
-}
-
-/// returns the sum of the values of all the promotions.
-pub fn cumPromotionValues(
-    promotions: Promotion.Set,
-    effect: Promotion.Effect,
-    rules: *const Rules,
-) i32 {
-    var cum: i32 = 0;
-    var effect_promotions_it = Promotion.Effect.Iterator.init(effect);
-    while (effect_promotions_it.next(rules)) |variant| {
-        const u = variant.promotions.intersectWith(promotions);
-        cum += @as(i32, @intCast(u.count())) * @as(i32, @intCast(variant.value));
-    }
-    return cum;
 }
 
 const CombatContext = struct {
@@ -173,17 +134,17 @@ pub fn calculateStr(
     var str: f32 = @floatFromInt(unit.type.stats(rules).melee);
     if (log) std.debug.print("  Base strength: {d:.0}\n", .{str});
 
-    var unit_mod: i32 = 100;
+    var unit_mod: u32 = 100;
 
     {
-        const mod = cumPromotionValues(unit.promotions, .combat_bonus, rules);
+        const mod = Promotion.Effect.combat_bonus.promotionsSum(unit.promotions, rules);
 
         if (log and mod > 0) std.debug.print("    Combat bonus: +{}%\n", .{mod});
         unit_mod += mod;
     }
 
     if (is_attacker) {
-        const mod = cumPromotionValues(unit.promotions, .combat_bonus_attacking, rules);
+        const mod = Promotion.Effect.combat_bonus_attacking.promotionsSum(unit.promotions, rules);
         if (log and mod > 0) std.debug.print("    Attacking bonus: +{}%\n", .{mod});
         unit_mod += mod;
     }
@@ -193,25 +154,25 @@ pub fn calculateStr(
 
     if (is_rough) {
         {
-            const mod = cumPromotionValues(unit.promotions, .rough_terrain_bonus, rules);
+            const mod = Promotion.Effect.rough_terrain_bonus.promotionsSum(unit.promotions, rules);
             if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
             unit_mod += mod;
         }
 
         if (is_range) {
-            const mod = cumPromotionValues(unit.promotions, .rough_terrain_bonus_range, rules);
+            const mod = Promotion.Effect.rough_terrain_bonus_range.promotionsSum(unit.promotions, rules);
             if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
             unit_mod += mod;
         }
     } else {
         {
-            const mod = cumPromotionValues(unit.promotions, .open_terrain_bonus, rules);
+            const mod = Promotion.Effect.open_terrain_bonus.promotionsSum(unit.promotions, rules);
             if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
             unit_mod += mod;
         }
 
         if (is_range) {
-            const mod = cumPromotionValues(unit.promotions, .open_terrain_bonus_range, rules);
+            const mod = Promotion.Effect.open_terrain_bonus_range.promotionsSum(unit.promotions, rules);
             if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
             unit_mod += mod;
         }
