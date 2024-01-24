@@ -55,6 +55,7 @@ pub fn main() !void {
     s1.promotions.set(9); // Drill II
     s1.promotions.set(10); // Drill III
     s1.promotions.set(13); // CanEmbark
+    s1.promotions.set(14); // Can cross ocean
 
     world.unit_map.putUnitDefaultSlot(1200, w1, &rules);
     world.unit_map.putUnitDefaultSlot(1201, a1, &rules);
