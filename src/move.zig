@@ -74,6 +74,12 @@ pub fn moveCost(dest: Idx, src: Idx, unit: *const Unit, world: *const World) Mov
     if (terrain_attributes.is_impassable) return .disallowed;
     if (!world.grid.adjacentTo(src, dest)) return .disallowed;
 
+    if (terrain_attributes.is_deep_water and !Unit.grantsEffect(
+        unit.promotions,
+        .can_cross_ocean,
+        world.rules,
+    )) return .disallowed;
+
     if (is_river) return .allowed_final;
 
     // SEA units

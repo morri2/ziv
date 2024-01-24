@@ -6,7 +6,8 @@
         "food": 1
       },
       "attributes": {
-        "is_water": true
+        "is_water": true,
+        "is_deep_water": true
       }
     },
     {

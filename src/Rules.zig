@@ -115,10 +115,11 @@ pub const Terrain = enum(u8) {
         }
     };
 
-    pub const Attributes = packed struct(u7) {
+    pub const Attributes = packed struct(u8) {
         pub const Integer = @typeInfo(Attributes).Struct.backing_integer.?;
 
         is_water: bool = false,
+        is_deep_water: bool = false,
         is_freshwater: bool = false,
         is_impassable: bool = false,
         is_rough: bool = false,
@@ -291,6 +292,7 @@ pub const Promotion = enum(u8) {
         ignore_terrain_move = 14,
         can_embark = 15,
         cannot_melee = 16,
+        can_cross_ocean = 17,
 
         pub const Iterator = struct {
             effect: Effect,

@@ -152,6 +152,17 @@
 					"effect": "can_embark"
 				}
 			]
+		},
+		{
+			"name": "CanCrossOcean",
+			"requires": [
+				"CanCrossOcean"
+			],
+			"effects": [
+				{
+					"effect": "can_cross_ocean"
+				}
+			]
 		}
 	]
 }
