@@ -8,6 +8,9 @@ const UnitMap = @import("UnitMap.zig");
 const UnitSlot = UnitMap.UnitSlot;
 const UnitKey = UnitMap.UnitKey;
 
+const Rules = @import("Rules.zig");
+const Promotion = Rules.Promotion;
+
 pub fn tryMoveUnit(unit_key: UnitKey, dest: Idx, world: *World) bool {
     const unit_ptr = world.unit_map.getUnitPtr(unit_key) orelse return false;
     if (!world.grid.adjacentTo(unit_key.idx, dest)) return false;
@@ -93,11 +96,10 @@ pub fn moveCost(dest: Idx, src: Idx, unit: *const Unit, world: *const World) Mov
 
     // LAND units
     var cost_amt: f32 = 1;
-    if (terrain_attributes.is_rough and !Unit.grantsEffect(unit.promotions, .ignore_terrain_move, world.rules))
-        cost_amt += 1;
+    if (terrain_attributes.is_rough and !Promotion.Effect.ignore_terrain_move.in(unit.promotions, world.rules)) cost_amt += 1;
 
     if (terrain_attributes.is_water and !unit.embarked) {
-        if (Unit.grantsEffect(unit.promotions, .can_embark, world.rules)) return .embarkation;
+        if (Promotion.Effect.can_embark.in(unit.promotions, world.rules)) return .embarkation;
         return .disallowed;
     }
 

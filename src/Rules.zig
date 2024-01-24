@@ -324,6 +324,33 @@ pub const Promotion = enum(u8) {
                 return end - start;
             }
         };
+
+        pub fn promotionsSum(self: Effect, promotions: Promotion.Set, rules: *const Rules) u32 {
+            var sum: u32 = 0;
+            var effect_promotions_it = Promotion.Effect.Iterator.init(self);
+            while (effect_promotions_it.next(rules)) |variant| {
+                const u = variant.promotions.intersectWith(promotions);
+                sum += @as(u32, @truncate(u.count())) * variant.value;
+            }
+            return sum;
+        }
+
+        pub fn promotionsWith(self: Effect, rules: *const Rules) Promotion.Set {
+            var promotions = Promotion.Set.initEmpty();
+            var effect_promotions_it = Promotion.Effect.Iterator.init(self);
+            while (effect_promotions_it.next(rules)) |variant| {
+                promotions = promotions.unionWith(variant.promotions);
+            }
+            return promotions;
+        }
+
+        pub fn in(self: Effect, promotions: Promotion.Set, rules: *const Rules) bool {
+            var effect_promotions_it = Promotion.Effect.Iterator.init(self);
+            while (effect_promotions_it.next(rules)) |variant| {
+                if (promotions.intersectWith(variant.promotions).count() != 0) return true;
+            }
+            return false;
+        }
     };
 
     pub fn prerequisites(self: Promotion, rules: *const Rules) []const Promotion {
