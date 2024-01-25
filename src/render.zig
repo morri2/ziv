@@ -228,8 +228,8 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
 
         for (city.claimed_tiles.keys()) |claimed| {
             renderInHexTexture(claimed, world.grid, ts.city_border_texture, 0, 0, .{
-                .tint = .{ .r = 250, .g = 50, .b = 50, .a = 90 },
-                .scale = 0.99,
+                .tint = .{ .r = 250, .g = 50, .b = 50, .a = 180 },
+                .scale = 0.95,
             }, ts);
 
             if (city.worked_tiles.contains(claimed)) {
@@ -240,7 +240,8 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
         }
 
         renderInHexTexture(key, world.grid, ts.city_border_texture, 0, 0, .{
-            .tint = .{ .r = 250, .g = 50, .b = 50, .a = 90 },
+            .tint = .{ .r = 250, .g = 50, .b = 50, .a = 180 },
+            .scale = 0.95,
         }, ts);
 
         renderInHexTexture(
@@ -257,9 +258,9 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
             world.grid,
             ts.green_pop,
             city.laborers,
+            -0.6,
             -0.5,
-            -0.5,
-            0.05,
+            0.00,
             .{ .scale = 0.15 },
             ts,
         );
@@ -271,12 +272,32 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
             city.population -| city.laborers,
             off,
             -0.5,
-            0.05,
+            0.00,
             .{ .scale = 0.15 },
             ts,
         );
 
-        renderInHexText(key, world.grid, "CITY NAME", 0.0, -0.8, .{ .font_size = 14 }, ts);
+        renderInHexTextFormat(
+            key,
+            world.grid,
+            "{s} ({})",
+            .{ city.name, city.population },
+            0.0,
+            -0.85,
+            .{ .font_size = 14 },
+            ts,
+        );
+
+        renderInHexTextFormat(
+            key,
+            world.grid,
+            "{d:.0}/{d:.0}",
+            .{ city.food_stockpile, city.food_til_growth },
+            0.9,
+            -0.55,
+            .{ .font_size = 8, .anchor = .right },
+            ts,
+        );
     }
 }
 
@@ -517,7 +538,7 @@ pub fn renderInHexTexture(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, 
         },
     };
 
-    raylib.DrawTextureEx(texture, pos, args.rotation, args.scale, raylib.WHITE);
+    raylib.DrawTextureEx(texture, pos, args.rotation, args.scale, args.tint);
 }
 
 pub fn cameraRenderBoundBox(camera: raylib.Camera2D, grid: *Grid, screen_width: usize, screen_height: usize, ts: TextureSet) Grid.BoundBox {

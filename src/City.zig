@@ -81,7 +81,7 @@ pub fn init(allocator: std.mem.Allocator) Self {
 }
 
 pub fn deinit(self: *Self) void {
-    self.allocator.free(self.name);
+    //self.allocator.free(self.name);
     self.worked_tiles.deinit(self.allocator);
     self.claimed_tiles.deinit(self.allocator);
 }
