@@ -226,13 +226,13 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
     for (world.cities.keys()) |key| {
         const city = world.cities.get(key) orelse unreachable;
 
-        for (city.claimed_tiles.keys()) |claimed| {
+        for (city.claimed.slice()) |claimed| {
             renderInHexTexture(claimed, world.grid, ts.city_border_texture, 0, 0, .{
                 .tint = .{ .r = 250, .g = 50, .b = 50, .a = 180 },
                 .scale = 0.95,
             }, ts);
 
-            if (city.worked_tiles.contains(claimed)) {
+            if (city.worked.contains(claimed)) {
                 renderInHexTexture(claimed, world.grid, ts.green_pop, -0.5, -0.5, .{
                     .scale = 0.15,
                 }, ts);

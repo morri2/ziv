@@ -63,10 +63,7 @@ pub fn main() !void {
     world.unit_map.putUnitDefaultSlot(1203, b1, &rules);
     world.unit_map.putUnitDefaultSlot(1198, s1, &rules);
 
-    var goteborg: City = City.init(world.allocator);
-    defer goteborg.deinit();
-
-    world.addCity(&goteborg, 1089);
+    try world.addCity(1089);
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -197,7 +194,7 @@ pub fn main() !void {
 
                     for (world.cities.keys()) |city_key| {
                         var city = world.cities.getPtr(city_key) orelse continue;
-                        if (city.claimed_tiles.contains(clicked_tile)) {
+                        if (city.claimed.contains(clicked_tile)) {
                             if (city.unsetWorked(clicked_tile)) break;
                             if (city.setWorkedWithAutoReassign(clicked_tile, &world)) break;
                         }

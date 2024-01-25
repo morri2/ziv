@@ -58,17 +58,9 @@ cities: std.AutoArrayHashMapUnmanaged(Idx, City),
 
 unit_map: UnitMap,
 
-pub fn addCity(self: *Self, city: *City, idx: Idx) void {
-    const adjacent = self.grid.neighbours(idx);
-    city.position = idx;
-
-    for (adjacent) |i| {
-        if (i == null) continue;
-        _ = city.claimTile(i.?);
-    }
-
-    // remove forest
-    self.cities.put(self.allocator, idx, city.*) catch unreachable;
+pub fn addCity(self: *Self, idx: Idx) !void {
+    const city = City.new(idx, self);
+    try self.cities.put(self.allocator, idx, city);
 }
 
 pub fn tileYield(self: *const Self, idx: Idx) Yield {
@@ -131,6 +123,9 @@ pub fn deinit(self: *Self) void {
 
     self.allocator.free(self.improvements);
     self.allocator.free(self.terrain);
+
+    for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
+    self.cities.deinit(self.allocator);
 }
 
 pub fn saveToFile(self: *Self, path: []const u8) !void {
