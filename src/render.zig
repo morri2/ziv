@@ -257,7 +257,7 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
             key,
             world.grid,
             ts.green_pop,
-            city.laborers,
+            city.unassignedPopulation(),
             -0.6,
             -0.5,
             0.00,
@@ -269,7 +269,7 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
             key,
             world.grid,
             ts.red_pop,
-            city.population -| city.laborers,
+            city.population -| city.unassignedPopulation(),
             off,
             -0.5,
             0.00,
@@ -465,13 +465,13 @@ pub const RenderTextArgs = struct {
     anchor: enum { center, right, left } = .center,
 };
 
-pub fn renderInHexTextureSeries(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, repeats: u8, off_x: f32, off_y: f32, spaceing: f32, args: RenderTextureArgs, ts: TextureSet) f32 {
+pub fn renderInHexTextureSeries(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, repeats: u8, off_x_start: f32, off_y: f32, spaceing: f32, args: RenderTextureArgs, ts: TextureSet) f32 {
     const step_off = (@as(f32, @floatFromInt(texture.width)) * args.scale / ts.hex_radius + spaceing);
     for (0..repeats) |i| {
-        const tot_off_x = off_x + @as(f32, @floatFromInt(i)) * step_off;
+        const tot_off_x = off_x_start + @as(f32, @floatFromInt(i)) * step_off;
         renderInHexTexture(tile_idx, grid, texture, tot_off_x, off_y, args, ts);
     }
-    return off_x + @as(f32, @floatFromInt(repeats)) * step_off;
+    return off_x_start + @as(f32, @floatFromInt(repeats)) * step_off;
 }
 
 /// Format print can do UP TO 31 characters
@@ -495,17 +495,22 @@ pub fn renderInHexText(tile_idx: Idx, grid: Grid, text: []const u8, off_x: f32, 
     const center_x = hex.tilingX(x, y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) / 2.0;
     const center_y = hex.tilingY(y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) / 2.0;
 
+    renderText(text, center_x + off_x * ts.hex_radius, center_y + off_y * ts.hex_radius, args, ts);
+}
+
+/// Render text in hex. Render text with a relative position form tile center (offset messured in hex radius)
+pub fn renderText(text: []const u8, x: f32, y: f32, args: RenderTextArgs, ts: TextureSet) void {
     const text_messurements = raylib.MeasureTextEx(ts.font, text.ptr, args.font_size, args.spaceing);
 
     const pos = switch (args.anchor) {
         .center => raylib.Vector2{
-            .x = center_x + off_x * ts.hex_radius - text_messurements.x / 2,
-            .y = center_y + off_y * ts.hex_radius - text_messurements.y / 2,
+            .x = x - text_messurements.x / 2,
+            .y = y - text_messurements.y / 2,
         },
-        .left => raylib.Vector2{ .x = center_x + off_x * ts.hex_radius, .y = center_y + off_y * ts.hex_radius },
+        .left => raylib.Vector2{ .x = x, .y = y },
         .right => raylib.Vector2{
-            .x = center_x + off_x * ts.hex_radius - text_messurements.x,
-            .y = center_y + off_y * ts.hex_radius - text_messurements.y,
+            .x = x - text_messurements.x,
+            .y = y - text_messurements.y,
         },
     };
 
@@ -526,19 +531,24 @@ pub fn renderInHexTexture(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, 
     const center_x = hex.tilingX(x, y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) / 2.0;
     const center_y = hex.tilingY(y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) / 2.0;
 
-    const pos = switch (args.anchor) {
+    renderTexture(texture, center_x + off_x * ts.hex_radius, center_y + off_y * ts.hex_radius, args, ts);
+}
+
+fn renderTexture(texture: raylib.Texture2D, x: f32, y: f32, args: RenderTextureArgs, ts: TextureSet) void {
+    _ = ts;
+    const position = switch (args.anchor) {
         .center => raylib.Vector2{
-            .x = center_x + off_x * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.width)) / 2,
-            .y = center_y + off_y * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.height)) / 2,
+            .x = x - args.scale * @as(f32, @floatFromInt(texture.width)) / 2,
+            .y = y - args.scale * @as(f32, @floatFromInt(texture.height)) / 2,
         },
-        .top_left => raylib.Vector2{ .x = center_x + off_x * ts.hex_radius, .y = center_y + off_y * ts.hex_radius },
+        .top_left => raylib.Vector2{ .x = x, .y = y },
         .bot_right => raylib.Vector2{
-            .x = center_x + off_x * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.width)),
-            .y = center_y + off_y * ts.hex_radius - args.scale * @as(f32, @floatFromInt(texture.height)),
+            .x = x - args.scale * @as(f32, @floatFromInt(texture.width)),
+            .y = y - args.scale * @as(f32, @floatFromInt(texture.height)),
         },
     };
 
-    raylib.DrawTextureEx(texture, pos, args.rotation, args.scale, args.tint);
+    raylib.DrawTextureEx(texture, position, args.rotation, args.scale, args.tint);
 }
 
 pub fn cameraRenderBoundBox(camera: raylib.Camera2D, grid: *Grid, screen_width: usize, screen_height: usize, ts: TextureSet) Grid.BoundBox {

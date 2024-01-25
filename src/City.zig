@@ -13,7 +13,6 @@ position: Idx = 0,
 claimed_tiles: std.AutoArrayHashMapUnmanaged(Idx, void) = .{},
 worked_tiles: std.AutoArrayHashMapUnmanaged(Idx, void) = .{},
 population: u8 = 1,
-laborers: u8 = 1,
 
 // these sould all be floats :'(
 food_stockpile: f32 = 0.0,
@@ -48,27 +47,32 @@ pub fn unclaimTile(self: *Self, idx: Idx) bool {
 }
 
 pub fn setWorked(self: *Self, idx: Idx) bool {
-    if (self.laborers < 1) return false;
+    if (self.unassignedPopulation() < 1) return false;
     if (self.worked_tiles.contains(idx)) return false;
     self.worked_tiles.put(self.allocator, idx, {}) catch unreachable;
-    self.laborers -= 1;
     return true;
+}
+
+pub fn setWorkedWithAutoReassign(self: *Self, idx: Idx, world: *const World) bool {
+    if (self.unassignedPopulation() < 1) {
+        const worst_idx = self.worstWorkedTile(world) orelse return false;
+        if (!self.unsetWorked(worst_idx)) unreachable;
+    }
+    return self.setWorked(idx);
 }
 
 pub fn unsetWorked(self: *Self, idx: Idx) bool {
-    const prev = self.worked_tiles.fetchSwapRemove(idx);
-    if (prev == null) return false;
-    self.laborers += 1;
+    _ = self.worked_tiles.fetchSwapRemove(idx) orelse return false;
     return true;
 }
 
-pub fn getWorkedTileYields(self: Self, world: *const World) YieldAccumumlator {
+pub fn getWorkedTileYields(self: *const Self, world: *const World) YieldAccumumlator {
     var ya: YieldAccumumlator = .{};
     for (self.worked_tiles.keys()) |worked_idx| {
         ya.add(world.tileYield(worked_idx));
     }
     ya.add(world.tileYield(self.position));
-    ya.production += self.laborers * 1; // 2 prod in Tak?
+    ya.production += self.unassignedPopulation() * 1; // 2 prod in Tak?
     return ya;
 }
 
@@ -118,9 +122,9 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAc
     }
 
     // food consumption
-    food -= @as(f32, @floatFromInt(self.population)) * 2.0; // consumption - CAN BE MODIFIED (rationalism etc)
-
+    food -= self.foodConsumption();
     // Building Maintnence
+    //TODO
 
     // apply to stuff
     self.food_stockpile += food;
@@ -173,45 +177,60 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAc
 }
 
 /// checks and updates the city if it is growing or starving
-pub fn checkGrowth(self: *Self) GrowthResult {
+pub fn checkGrowth(self: *Self, world: *const World) GrowthResult {
     // new pop
     if (self.food_stockpile >= self.food_til_growth) {
         self.food_stockpile -= self.food_til_growth * (1.0 - self.retained_food_fraction);
         self.food_til_growth *= 1.5; // close but no cigar
-        self.populationGrowth(1);
+        self.populationGrowth(1, world);
         return .growth;
     }
     // dead pop
     if (self.food_stockpile < 0) {
         self.food_til_growth = @round(self.food_til_growth * 0.666); // :)) shut up ((:
         self.food_stockpile = 0;
-        self.populationStavation(1);
+        self.populationStavation(1, world);
         return .starvation;
     }
     // starvation is also a thing
     return .no_change;
 }
 
-pub fn populationGrowth(self: *Self, amt: u8) void {
-    self.population += amt;
-    self.laborers += amt;
+pub fn foodConsumption(self: *const Self) f32 {
+    // consumption - CAN BE MODIFIED (rationalism etc) TODO! fix
+    return @as(f32, @floatFromInt(self.population)) * 2.0;
+}
+/// equals number of labourers :)
+pub fn unassignedPopulation(self: *const Self) u8 {
+    return self.population - @as(u8, @intCast(self.worked_tiles.count()));
 }
 
-pub fn populationStavation(self: *Self, amt: u8) void {
-    self.population -|= amt;
-    if (self.laborers > 0) {
-        self.laborers -= amt;
-    } else {
-        const first_key = self.worked_tiles.keys()[0];
-        _ = self.worked_tiles.swapRemove(first_key);
+pub fn populationGrowth(self: *Self, amt: u8, world: *const World) void {
+    self.population += amt;
+    for (0..amt) |_| {
+        const best_idx = self.bestUnworkedTile(world) orelse continue;
+        self.worked_tiles.put(self.allocator, best_idx, {}) catch unreachable;
     }
 }
-pub fn tileValueHeuristic(self: *Self, idx: Idx, world: *const World) u32 {
+
+pub fn populationStavation(self: *Self, amt: u8, world: *const World) void {
+    self.population -|= amt;
+    for (0..amt) |_| {
+        const worst_idx = self.worstWorkedTile(world) orelse continue;
+        _ = self.worked_tiles.swapRemove(worst_idx);
+    }
+}
+pub fn tileValueHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
     const y = world.tileYield(idx);
-    var value = 0;
+    var value: u32 = 0;
     value += y.production * 10;
-    value += y.food * (9 + if (self.population < 3) 4 else 0);
+    value += y.food * 9;
+    if (self.foodConsumption() + 2 > @as(f32, @floatFromInt(self.getWorkedTileYields(world).food)))
+        value += y.food * 13; // if starving more food
+    if (self.population < 3)
+        value += y.food * 3; // if small, more food
     value += (y.faith + y.gold + y.science + y.culture) * 4;
+    return value;
 }
 
 pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
@@ -220,7 +239,7 @@ pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
     for (self.claimed_tiles.keys()) |idx| {
         if (self.worked_tiles.contains(idx)) continue;
         const val = self.tileValueHeuristic(idx, world);
-        if (val > best) {
+        if (val >= best) {
             best = val;
             best_idx = idx;
         }
@@ -228,18 +247,18 @@ pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
     return best_idx;
 }
 
-pub fn worstWorkedTile(self: *Self, world: *const World) Idx {
-    var best: u32 = 0;
-    var best_idx: ?Idx = 0;
+pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
+    var worst: u32 = 9999999;
+    var worst_idx: ?Idx = null;
     for (self.claimed_tiles.keys()) |idx| {
         if (!self.worked_tiles.contains(idx)) continue;
         const val = self.tileValueHeuristic(idx, world);
-        if (val > best) {
-            best = val;
-            best_idx = idx;
+        if (val < worst) {
+            worst = val;
+            worst_idx = idx;
         }
     }
-    return best_idx;
+    return worst_idx;
 }
 
 /// check if production project is done

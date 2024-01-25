@@ -155,7 +155,7 @@ pub fn main() !void {
                         const ya = city.getWorkedTileYields(&world);
                         std.debug.print("[{s}] yields: {}f {}p {}g", .{ city.name, ya.food, ya.production, ya.gold });
                         _ = city.processYields(&ya);
-                        const growth_res = city.checkGrowth();
+                        const growth_res = city.checkGrowth(&world);
                         _ = city.checkExpansion();
                         _ = city.checkProduction();
 
@@ -198,8 +198,8 @@ pub fn main() !void {
                     for (world.cities.keys()) |city_key| {
                         var city = world.cities.getPtr(city_key) orelse continue;
                         if (city.claimed_tiles.contains(clicked_tile)) {
-                            if (city.setWorked(clicked_tile)) break;
                             if (city.unsetWorked(clicked_tile)) break;
+                            if (city.setWorkedWithAutoReassign(clicked_tile, &world)) break;
                         }
                     }
                 }
