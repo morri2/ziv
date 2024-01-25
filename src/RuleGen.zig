@@ -303,7 +303,6 @@ fn parseTerrain(
                 }
                 new_tile.normalize();
                 new_tile.yield = vegetation.yield;
-                new_tile.unpacked.vegetation = @enumFromInt(vegetation_index);
                 new_tile.combat_bonus = vegetation.combat_bonus;
                 try tiles.append(allocator, new_tile);
             }
@@ -344,6 +343,7 @@ fn parseTerrain(
     const terrain_attributes = try arena_allocator.alloc(Terrain.Attributes, tiles.items.len);
     const terrain_happiness = try arena_allocator.alloc(u8, tiles.items.len);
     const terrain_combat_bonus = try arena_allocator.alloc(i8, tiles.items.len);
+    const terrain_no_vegetation = try arena_allocator.alloc(Terrain, tiles.items.len);
     var terrain_unpacked_map: @TypeOf(rules.terrain_unpacked_map) = .{};
     try terrain_unpacked_map.ensureUnusedCapacity(arena_allocator, @intCast(rules.terrain_count));
     for (tiles.items, 0..) |tile, tile_index| {
@@ -357,6 +357,16 @@ fn parseTerrain(
         terrain_unpacked_map.putAssumeCapacity(tile.unpacked, @enumFromInt(tile_index));
     }
 
+    for (tiles.items, 0..) |tile, tile_index| {
+        if (tile.unpacked.vegetation != .none) {
+            var no_vegetation = tile.unpacked;
+            no_vegetation.vegetation = .none;
+            terrain_no_vegetation[tile_index] = terrain_unpacked_map.get(no_vegetation) orelse return error.InvalidTerrain;
+        } else {
+            terrain_no_vegetation[tile_index] = @enumFromInt(tile_index);
+        }
+    }
+
     rules.terrain_bases = terrain_bases.ptr;
     rules.terrain_features = terrain_features.ptr;
     rules.terrain_vegetation = terrain_vegetation.ptr;
@@ -364,6 +374,7 @@ fn parseTerrain(
     rules.terrain_attributes = terrain_attributes.ptr;
     rules.terrain_happiness = terrain_happiness.ptr;
     rules.terrain_combat_bonus = terrain_combat_bonus.ptr;
+    rules.terrain_no_vegetation = terrain_no_vegetation.ptr;
     rules.terrain_unpacked_map = terrain_unpacked_map;
 
     return .{

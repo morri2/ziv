@@ -22,6 +22,7 @@ terrain_attributes: [*]const Terrain.Attributes,
 terrain_yields: [*]const Yield,
 terrain_happiness: [*]const u8,
 terrain_combat_bonus: [*]const i8,
+terrain_no_vegetation: [*]const Terrain,
 terrain_unpacked_map: std.AutoHashMapUnmanaged(Terrain.Unpacked, Terrain),
 
 resource_count: usize,
@@ -172,6 +173,10 @@ pub const Terrain = enum(u8) {
 
     pub fn combatBonus(self: Terrain, rules: *const Rules) i8 {
         return rules.terrain_combat_bonus[@intFromEnum(self)];
+    }
+
+    pub fn withoutVegetation(self: Terrain, rules: *const Rules) Terrain {
+        return rules.terrain_no_vegetation[@intFromEnum(self)];
     }
 };
 
