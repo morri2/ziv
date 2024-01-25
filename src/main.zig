@@ -8,6 +8,7 @@ const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
 const move = @import("move.zig");
 const UnitMap = @import("UnitMap.zig");
+const City = @import("City.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -61,6 +62,11 @@ pub fn main() !void {
     world.unit_map.putUnitDefaultSlot(1201, a1, &rules);
     world.unit_map.putUnitDefaultSlot(1203, b1, &rules);
     world.unit_map.putUnitDefaultSlot(1198, s1, &rules);
+
+    var goteborg: City = City.init(world.allocator);
+    defer goteborg.deinit();
+
+    world.addCity(&goteborg, 1089);
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -141,7 +147,26 @@ pub fn main() !void {
             }
 
             if (!in_edit_mode) {
-                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) world.unit_map.refreshUnits(&rules);
+                if (raylib.IsKeyPressed(raylib.KEY_B)) {}
+
+                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
+                    for (world.cities.keys()) |city_key| {
+                        var city = world.cities.getPtr(city_key) orelse continue;
+                        const ya = city.getWorkedTileYields(&world);
+                        std.debug.print("[{s}] yields: {}f {}p {}g", .{ city.name, ya.food, ya.production, ya.gold });
+                        _ = city.processYields(&ya);
+                        const growth_res = city.checkGrowth();
+                        _ = city.checkExpansion();
+                        _ = city.checkProduction();
+
+                        switch (growth_res) {
+                            .growth => std.debug.print("TOWN HAS GROWN! \n", .{}),
+                            else => {},
+                        }
+                    }
+
+                    world.unit_map.refreshUnits(&rules);
+                }
                 // SELECTION
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
                     const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
@@ -164,6 +189,18 @@ pub fn main() !void {
                         }
 
                         selected_tile = null;
+                    }
+                }
+
+                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
+                    const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
+
+                    for (world.cities.keys()) |city_key| {
+                        var city = world.cities.getPtr(city_key) orelse continue;
+                        if (city.claimed_tiles.contains(clicked_tile)) {
+                            if (city.setWorked(clicked_tile)) break;
+                            if (city.unsetWorked(clicked_tile)) break;
+                        }
                     }
                 }
             }
@@ -204,7 +241,6 @@ pub fn main() !void {
             while (camera_bound_box.iterNext()) |index|
                 render.renderTile(world, index, world.grid, texture_set, &rules);
 
-            camera_bound_box.restart();
             if (selected_tile != null) {
                 render.renderYields(&world, selected_tile.?, texture_set);
                 render.renderHexTextureArgs(
@@ -215,6 +251,8 @@ pub fn main() !void {
                     texture_set,
                 );
             }
+
+            render.renderCities(&world, texture_set);
             render.renderAllUnits(&world, texture_set);
         }
 

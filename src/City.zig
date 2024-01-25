@@ -7,12 +7,13 @@ const yield = @import("yield.zig");
 const YieldAccumumlator = yield.YieldAccumulator;
 //buildings: // bitfield for all buildings in the game?
 
-name: []const u8,
+name: []const u8 = "shithole",
 
 position: Idx = 0,
 claimed_tiles: std.AutoArrayHashMapUnmanaged(Idx, void) = .{},
-worked_tiles: std.ArrayListUnmanaged(Idx) = .{},
+worked_tiles: std.AutoArrayHashMapUnmanaged(Idx, void) = .{},
 population: u8 = 1,
+laborers: u8 = 1,
 
 // these sould all be floats :'(
 food_stockpile: f32 = 0.0,
@@ -36,12 +37,39 @@ halted_production_projects: []WorkInProgressProductionProject = &.{},
 
 allocator: std.mem.Allocator,
 
-pub fn claimTile(self: Self, idx: Idx) bool {
-    self.claimed_tiles.put(idx);
+pub fn claimTile(self: *Self, idx: Idx) bool {
+    self.claimed_tiles.put(self.allocator, idx, {}) catch unreachable;
+    return true;
 }
 
-pub fn unclaimTile(self: Self, idx: Idx) bool {
+pub fn unclaimTile(self: *Self, idx: Idx) bool {
     self.claimed_tiles.swapRemove(idx);
+    return true;
+}
+
+pub fn setWorked(self: *Self, idx: Idx) bool {
+    if (self.laborers < 1) return false;
+    if (self.worked_tiles.contains(idx)) return false;
+    self.worked_tiles.put(self.allocator, idx, {}) catch unreachable;
+    self.laborers -= 1;
+    return true;
+}
+
+pub fn unsetWorked(self: *Self, idx: Idx) bool {
+    const prev = self.worked_tiles.fetchSwapRemove(idx);
+    if (prev == null) return false;
+    self.laborers += 1;
+    return true;
+}
+
+pub fn getWorkedTileYields(self: Self, world: *const World) YieldAccumumlator {
+    var ya: YieldAccumumlator = .{};
+    for (self.worked_tiles.keys()) |worked_idx| {
+        ya.add(world.tileYield(worked_idx));
+    }
+    ya.add(world.tileYield(self.position));
+    ya.production += self.laborers * 1; // 2 prod in Tak?
+    return ya;
 }
 
 pub fn init(allocator: std.mem.Allocator) Self {
@@ -52,11 +80,10 @@ pub fn init(allocator: std.mem.Allocator) Self {
     };
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     self.allocator.free(self.name);
-
-    const name: []const u8 = "Goteborg";
-    return Self{ .name = name };
+    self.worked_tiles.deinit(self.allocator);
+    self.claimed_tiles.deinit(self.allocator);
 }
 
 pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAccumumlator {
@@ -151,18 +178,68 @@ pub fn checkGrowth(self: *Self) GrowthResult {
     if (self.food_stockpile >= self.food_til_growth) {
         self.food_stockpile -= self.food_til_growth * (1.0 - self.retained_food_fraction);
         self.food_til_growth *= 1.5; // close but no cigar
-        self.population += 1;
+        self.populationGrowth(1);
         return .growth;
     }
     // dead pop
     if (self.food_stockpile < 0) {
-        self.food_til_growth *= @round(self.food_stockpile * 0.666); // :)) shut up ((:
+        self.food_til_growth = @round(self.food_til_growth * 0.666); // :)) shut up ((:
         self.food_stockpile = 0;
-        self.population -= 1;
+        self.populationStavation(1);
         return .starvation;
     }
     // starvation is also a thing
     return .no_change;
+}
+
+pub fn populationGrowth(self: *Self, amt: u8) void {
+    self.population += amt;
+    self.laborers += amt;
+}
+
+pub fn populationStavation(self: *Self, amt: u8) void {
+    self.population -|= amt;
+    if (self.laborers > 0) {
+        self.laborers -= amt;
+    } else {
+        const first_key = self.worked_tiles.keys()[0];
+        _ = self.worked_tiles.swapRemove(first_key);
+    }
+}
+pub fn tileValueHeuristic(self: *Self, idx: Idx, world: *const World) u32 {
+    const y = world.tileYield(idx);
+    var value = 0;
+    value += y.production * 10;
+    value += y.food * (9 + if (self.population < 3) 4 else 0);
+    value += (y.faith + y.gold + y.science + y.culture) * 4;
+}
+
+pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
+    var best: u32 = 0;
+    var best_idx: ?Idx = null;
+    for (self.claimed_tiles.keys()) |idx| {
+        if (self.worked_tiles.contains(idx)) continue;
+        const val = self.tileValueHeuristic(idx, world);
+        if (val > best) {
+            best = val;
+            best_idx = idx;
+        }
+    }
+    return best_idx;
+}
+
+pub fn worstWorkedTile(self: *Self, world: *const World) Idx {
+    var best: u32 = 0;
+    var best_idx: ?Idx = 0;
+    for (self.claimed_tiles.keys()) |idx| {
+        if (!self.worked_tiles.contains(idx)) continue;
+        const val = self.tileValueHeuristic(idx, world);
+        if (val > best) {
+            best = val;
+            best_idx = idx;
+        }
+    }
+    return best_idx;
 }
 
 /// check if production project is done

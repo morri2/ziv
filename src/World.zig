@@ -2,7 +2,7 @@ const Self = @This();
 const std = @import("std");
 
 const Rules = @import("Rules.zig");
-const Yield = Rules.Yield;
+const Yield = @import("yield.zig").Yield;
 const Terrain = Rules.Terrain;
 const Resource = Rules.Resource;
 const Building = Rules.Building;
@@ -58,7 +58,20 @@ cities: std.AutoArrayHashMapUnmanaged(Idx, City),
 
 unit_map: UnitMap,
 
-pub fn tileYield(self: *Self, idx: Idx) Yield {
+pub fn addCity(self: *Self, city: *City, idx: Idx) void {
+    const adjacent = self.grid.neighbours(idx);
+    city.position = idx;
+
+    for (adjacent) |i| {
+        if (i == null) continue;
+        _ = city.claimTile(i.?);
+    }
+
+    // remove forest
+    self.cities.put(self.allocator, idx, city.*) catch unreachable;
+}
+
+pub fn tileYield(self: *const Self, idx: Idx) Yield {
     const terrain = self.terrain[idx];
     const resource = self.resources.get(idx);
 
@@ -67,6 +80,13 @@ pub fn tileYield(self: *Self, idx: Idx) Yield {
     if (resource != null) {
         yield = yield.add(resource.?.type.yield(self.rules));
     }
+
+    // city yeilds
+    if (self.cities.contains(idx)) {
+        yield.production = @max(yield.production, 1);
+        yield.food = @max(yield.food, 2);
+    }
+
     return yield;
 }
 

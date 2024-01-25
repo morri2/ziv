@@ -24,6 +24,10 @@ pub const TextureSet = struct {
     transport_textures: []const raylib.Texture2D,
     improvement_textures: []const raylib.Texture2D,
     edge_textures: []const raylib.Texture2D,
+    red_pop: raylib.Texture2D,
+    green_pop: raylib.Texture2D,
+    city_texture: raylib.Texture2D,
+    city_border_texture: raylib.Texture2D,
     hex_radius: f32,
 
     pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !TextureSet {
@@ -95,6 +99,10 @@ pub const TextureSet = struct {
                 rules.unit_type_count,
                 allocator,
             ),
+            .city_texture = loadTexture("textures/city.png", null),
+            .red_pop = loadTexture("textures/redpop.png", null),
+            .green_pop = loadTexture("textures/pop.png", null),
+            .city_border_texture = loadTexture("textures/city_border.png", null),
         };
     }
 
@@ -212,6 +220,64 @@ pub fn renderYields(world: *World, tile_idx: Idx, ts: TextureSet) void {
         .{},
         ts,
     );
+}
+
+pub fn renderCities(world: *World, ts: TextureSet) void {
+    for (world.cities.keys()) |key| {
+        const city = world.cities.get(key) orelse unreachable;
+
+        for (city.claimed_tiles.keys()) |claimed| {
+            renderInHexTexture(claimed, world.grid, ts.city_border_texture, 0, 0, .{
+                .tint = .{ .r = 250, .g = 50, .b = 50, .a = 90 },
+                .scale = 0.99,
+            }, ts);
+
+            if (city.worked_tiles.contains(claimed)) {
+                renderInHexTexture(claimed, world.grid, ts.green_pop, -0.5, -0.5, .{
+                    .scale = 0.15,
+                }, ts);
+            }
+        }
+
+        renderInHexTexture(key, world.grid, ts.city_border_texture, 0, 0, .{
+            .tint = .{ .r = 250, .g = 50, .b = 50, .a = 90 },
+        }, ts);
+
+        renderInHexTexture(
+            key,
+            world.grid,
+            ts.city_texture,
+            0,
+            0,
+            .{},
+            ts,
+        );
+        const off = renderInHexTextureSeries(
+            key,
+            world.grid,
+            ts.green_pop,
+            city.laborers,
+            -0.5,
+            -0.5,
+            0.05,
+            .{ .scale = 0.15 },
+            ts,
+        );
+
+        _ = renderInHexTextureSeries(
+            key,
+            world.grid,
+            ts.red_pop,
+            city.population -| city.laborers,
+            off,
+            -0.5,
+            0.05,
+            .{ .scale = 0.15 },
+            ts,
+        );
+
+        renderInHexText(key, world.grid, "CITY NAME", 0.0, -0.8, .{ .font_size = 14 }, ts);
+    }
 }
 
 pub fn renderAllUnits(world: *World, ts: TextureSet) void {
@@ -377,6 +443,15 @@ pub const RenderTextArgs = struct {
     tint: raylib.Color = raylib.WHITE,
     anchor: enum { center, right, left } = .center,
 };
+
+pub fn renderInHexTextureSeries(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, repeats: u8, off_x: f32, off_y: f32, spaceing: f32, args: RenderTextureArgs, ts: TextureSet) f32 {
+    const step_off = (@as(f32, @floatFromInt(texture.width)) * args.scale / ts.hex_radius + spaceing);
+    for (0..repeats) |i| {
+        const tot_off_x = off_x + @as(f32, @floatFromInt(i)) * step_off;
+        renderInHexTexture(tile_idx, grid, texture, tot_off_x, off_y, args, ts);
+    }
+    return off_x + @as(f32, @floatFromInt(repeats)) * step_off;
+}
 
 /// Format print can do UP TO 31 characters
 pub fn renderInHexTextFormat(tile_idx: Idx, grid: Grid, comptime fmt: []const u8, fmt_args: anytype, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
