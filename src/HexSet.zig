@@ -69,9 +69,13 @@ pub fn isSubset(self: *const Self, super: *const Self) bool {
     return true;
 }
 
-/// removes all elements not in super
+/// BROKEN removes all elements not in super
 pub fn shaveToIntersect(self: *Self, super: *const Self) void {
-    for (self.hexes.keys()) |idx| if (!super.contains(idx)) self.remove(idx);
+    var to_remove: std.ArrayListUnmanaged(Idx) = .{};
+    defer to_remove.deinit(self.allocator);
+    for (self.hexes.keys()) |idx|
+        if (!super.contains(idx)) to_remove.append(self.allocator, idx);
+    for (to_remove.items) |idx| self.remove(idx);
 }
 
 pub fn addOther(self: *Self, other: *const Self) void {
@@ -86,11 +90,20 @@ pub fn slice(self: *const Self) []Idx {
     return self.hexes.keys();
 }
 
-pub fn addAllAdjacent(self: *Self, grid: *const Grid) void {
-    for (self.hexes.keys()) |set_idx| {
+pub fn initExternalAdjacent(self: *const Self, grid: *const Grid) Self {
+    var out = Self.init(self.allocator);
+    for (self.slice()) |set_idx| {
         for (grid.neighbours(set_idx)) |n_idx| {
             if (n_idx == null) continue;
-            self.add(n_idx.?);
+            if (self.contains(n_idx.?)) continue;
+            out.add(n_idx.?);
         }
     }
+    return out;
+}
+
+pub fn addAdjacent(self: *Self, grid: *const Grid) void {
+    var adj = initExternalAdjacent(self, grid);
+    defer adj.deinit();
+    self.addOther(&adj);
 }

@@ -10,6 +10,7 @@ const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
 const City = @import("City.zig");
 const UnitMap = @import("UnitMap.zig");
+const HexSet = @import("HexSet.zig");
 
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
@@ -43,6 +44,8 @@ rules: *const Rules,
 
 grid: Grid,
 
+turn_counter: usize,
+
 // Per tile data
 terrain: []Terrain,
 improvements: []Improvements,
@@ -57,6 +60,11 @@ rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
 cities: std.AutoArrayHashMapUnmanaged(Idx, City),
 
 unit_map: UnitMap,
+
+pub fn claimed(self: *const Self, idx: Idx) bool {
+    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
+    return false;
+}
 
 pub fn addCity(self: *Self, idx: Idx) !void {
     const city = City.new(idx, self);
@@ -107,7 +115,7 @@ pub fn init(
         .resources = .{},
         .work_in_progress = .{},
         .rivers = .{},
-
+        .turn_counter = 1,
         .cities = .{},
         .rules = rules,
         .unit_map = UnitMap.init(allocator),

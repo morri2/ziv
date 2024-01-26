@@ -150,7 +150,7 @@ pub fn main() !void {
                     for (world.cities.keys()) |city_key| {
                         var city = world.cities.getPtr(city_key) orelse continue;
                         const ya = city.getWorkedTileYields(&world);
-                        std.debug.print("[{s}] yields: {}f {}p {}g", .{ city.name, ya.food, ya.production, ya.gold });
+
                         _ = city.processYields(&ya);
                         const growth_res = city.checkGrowth(&world);
                         _ = city.checkExpansion();
@@ -167,6 +167,7 @@ pub fn main() !void {
                 // SELECTION
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
                     const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
+
                     if (selected_tile == clicked_tile) {
                         if (selected_unit != null) {
                             selected_unit = world.unit_map.nextOccupiedKey(selected_unit.?);
@@ -175,7 +176,6 @@ pub fn main() !void {
                         selected_tile = clicked_tile;
                         selected_unit = world.unit_map.firstOccupiedKey(selected_tile.?);
                     } else {
-                        // UNIT MOVEMENT
                         if (raylib.IsKeyDown(raylib.KEY_Q)) {
                             Unit.tryBattle(selected_tile.?, clicked_tile, &world);
                         } else {
@@ -194,6 +194,11 @@ pub fn main() !void {
 
                     for (world.cities.keys()) |city_key| {
                         var city = world.cities.getPtr(city_key) orelse continue;
+
+                        if (city_key == clicked_tile) {
+                            std.debug.print("EXPANDING CITY!\n", .{});
+                            _ = city.expandBorder(&world);
+                        }
                         if (city.claimed.contains(clicked_tile)) {
                             if (city.unsetWorked(clicked_tile)) break;
                             if (city.setWorkedWithAutoReassign(clicked_tile, &world)) break;
@@ -247,6 +252,7 @@ pub fn main() !void {
                     .{ .tint = .{ .r = 200, .g = 200, .b = 100, .a = 100 } },
                     texture_set,
                 );
+                camera_bound_box.restart();
             }
 
             render.renderCities(&world, texture_set);

@@ -101,6 +101,15 @@ pub fn contains(self: Self, idx: Idx) bool {
     return idx < self.len;
 }
 
+pub fn distance(self: *const Self, a: Idx, b: Idx) usize {
+    _ = self; // autofix
+    _ = a; // autofix
+    _ = b; // autofix
+
+    // HOW THE FUCK!?
+    unreachable;
+}
+
 /// Returns edge "dir" of given hexs
 pub fn dirEdge(self: Self, src: Idx, dir: Dir) ?Edge {
     const n: Idx = self.getNeighbour(src, dir) orelse return null;

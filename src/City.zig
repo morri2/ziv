@@ -10,12 +10,13 @@ const HexSet = @import("HexSet.zig");
 //buildings: // bitfield for all buildings in the game?
 
 name: []const u8 = "shithole",
-
+city_id: usize,
 position: Idx = 0,
 claimed: HexSet,
 worked: HexSet,
 max_expansion: HexSet, // all hexes in the
 max_workable: HexSet,
+adjacent: HexSet,
 
 population: u8 = 1,
 
@@ -33,7 +34,6 @@ gold_mult: f32 = 1.0,
 science_mult: f32 = 1.0,
 faith_mult: f32 = 1.0,
 
-food_til_growth: f32 = 10, // random placeholder value
 culture_til_expansion: f32 = 10, // random placeholder value
 
 current_production_project: ?WorkInProgressProductionProject = null,
@@ -44,18 +44,23 @@ allocator: std.mem.Allocator,
 pub fn new(position: Idx, world: *const World) Self {
     var claimed = HexSet.init(world.allocator);
     claimed.add(position);
-    claimed.addAllAdjacent(&world.grid);
-    claimed.remove(position);
+    claimed.addAdjacent(&world.grid);
 
     var max_workable = HexSet.init(world.allocator);
     max_workable.add(position);
-    for (0..3) |_| max_workable.addAllAdjacent(&world.grid);
+    for (0..3) |_| max_workable.addAdjacent(&world.grid);
 
     var max_expansion = HexSet.init(world.allocator);
     max_expansion.add(position);
-    for (0..5) |_| max_expansion.addAllAdjacent(&world.grid);
+    for (0..5) |_|
+        max_expansion.addAdjacent(&world.grid);
+
+    const adjacent = claimed.initExternalAdjacent(&world.grid);
+
+    claimed.remove(position);
 
     const out: Self = .{
+        .city_id = (world.turn_counter << 16) & (position & 0xffff), // id will be unique, use for loging etc
         .name = "Goteborg",
         .position = position,
         .max_expansion = max_expansion,
@@ -63,6 +68,7 @@ pub fn new(position: Idx, world: *const World) Self {
         .worked = HexSet.init(world.allocator),
         .claimed = claimed,
         .population = 1,
+        .adjacent = adjacent,
         .allocator = world.allocator,
     };
 
@@ -75,6 +81,7 @@ pub fn deinit(self: *Self) void {
     self.claimed.deinit();
     self.max_expansion.deinit();
     self.max_workable.deinit();
+    self.adjacent.deinit();
 }
 
 pub fn setWorked(self: *Self, idx: Idx) bool {
@@ -157,31 +164,6 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAc
 
     self.unused_city_culture += culture;
 
-    // PRINT THE STATUS OF A CITY
-    if (true) {
-        std.debug.print(
-            \\
-            \\# {s} (pop. {}) 
-            \\  Production: {d:.0}/{d:.0}
-            \\  Growth: {d:.0}/{d:.0}
-            \\  Culture: {d:.0}/{d:.0}
-            \\  Other: +{d:.0} gold, +{d:.0} sci, +{d:.0} faith, 
-            \\
-        , .{
-            self.name,
-            self.population,
-            if (self.current_production_project != null) self.current_production_project.?.progress else self.unspent_production,
-            if (self.current_production_project != null) self.current_production_project.?.project.production_needed else 0.0,
-            self.food_stockpile,
-            self.food_til_growth,
-            self.unused_city_culture,
-            self.culture_til_expansion,
-            gold,
-            science,
-            faith,
-        });
-    }
-
     // Global yields (real global ones)
     return YieldAccumumlator{
         // production and food are discarded
@@ -192,15 +174,77 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAc
     };
 }
 
+pub fn expansionHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
+    const resource_value: u32 = blk: {
+        const res = world.resources.get(idx) orelse {
+            // for (world.grid.neighbours(idx)) |n_idx| {
+            //     if (world.resources.contains(n_idx orelse continue) and
+            //         !self.claimed.contains(n_idx orelse continue))
+            //         break :blk 1;
+            // }
+            break :blk 0;
+        };
+
+        switch (res.type.kind(world.rules)) {
+            .luxury => break :blk 4,
+            .strategic => break :blk 3,
+            .bonus => break :blk 2,
+        }
+    };
+    const workable_mod: u32 = @intFromBool(self.max_workable.contains(idx));
+
+    return workable_mod * 35 + 10 * resource_value;
+}
+
+fn bestExpansionTile(self: *const Self, world: *const World) ?Idx {
+    var best: u32 = 0;
+    var best_idx: ?Idx = null;
+    for (self.adjacent.slice()) |idx| {
+        if (!self.canClaimTile(idx, world)) continue;
+        const val = self.expansionHeuristic(idx, world);
+        if (val >= best) {
+            best = val;
+            best_idx = idx;
+        }
+    }
+    return best_idx;
+}
+
+///
+pub fn expandBorder(self: *Self, world: *const World) bool {
+    const idx = self.bestExpansionTile(world) orelse return false;
+    return claimTile(self, idx, world);
+}
+
+/// Can claim tile
+pub fn canClaimTile(self: *const Self, idx: Idx, world: *const World) bool {
+    if (world.claimed(idx)) return false;
+    if (!self.adjacent.contains(idx)) return false;
+    if (!self.max_expansion.contains(idx)) return false;
+    return true;
+}
+
+/// Claim tile
+pub fn claimTile(self: *Self, idx: Idx, world: *const World) bool {
+    if (!self.canClaimTile(idx, world)) return false;
+
+    self.claimed.add(idx);
+    self.adjacent.deinit();
+    self.adjacent = self.claimed.initExternalAdjacent(&world.grid);
+    return true;
+}
+
 /// checks and updates the city if it is growing or starving
 pub fn checkGrowth(self: *Self, world: *const World) GrowthResult {
     // new pop
     if (self.food_stockpile >= self.foodTilGrowth()) {
+        self.food_stockpile -= self.food_stockpile * (1.0 - self.retained_food_fraction);
         self.populationGrowth(1, world);
         return .growth;
     }
     // dead pop
     if (self.food_stockpile < 0) {
+        self.food_stockpile = 0;
         self.populationStavation(1, world);
         return .starvation;
     }
@@ -237,13 +281,13 @@ pub fn populationStavation(self: *Self, amt: u8, world: *const World) void {
         self.worked.remove(worst_idx);
     }
 }
-pub fn tileValueHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
+pub fn workHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
     const y = world.tileYield(idx);
     var value: u32 = 0;
     value += y.production * 10;
     value += y.food * 9;
     if (self.foodConsumption() + 2 > @as(f32, @floatFromInt(self.getWorkedTileYields(world).food)))
-        value += y.food * 13; // if starving more food
+        value += @as(u32, y.food) * 13; // if starving more food
     if (self.population < 3)
         value += y.food * 3; // if small, more food
     value += (y.faith + y.gold + y.science + y.culture) * 4;
@@ -255,7 +299,7 @@ pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
     var best_idx: ?Idx = null;
     for (self.claimed.slice()) |idx| {
         if (self.worked.contains(idx)) continue;
-        const val = self.tileValueHeuristic(idx, world);
+        const val = self.workHeuristic(idx, world);
         if (val >= best) {
             best = val;
             best_idx = idx;
@@ -269,7 +313,7 @@ pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
     var worst_idx: ?Idx = null;
     for (self.claimed.slice()) |idx| {
         if (!self.worked.contains(idx)) continue;
-        const val = self.tileValueHeuristic(idx, world);
+        const val = self.workHeuristic(idx, world);
         if (val < worst) {
             worst = val;
             worst_idx = idx;
@@ -284,7 +328,8 @@ pub fn checkProduction(self: *Self) ProductionResult {
     if (self.current_production_project.?.project.result == .perpetual) return .perpetual;
 
     if (self.current_production_project.?.progress >= self.current_production_project.?.project.production_needed) {
-        self.unspent_production = self.current_production_project.?.progress - self.current_production_project.?.project.production_needed; // save overproduction :)
+        // save overproduction :)
+        self.unspent_production = self.current_production_project.?.progress - self.current_production_project.?.project.production_needed;
         const compleated_project = self.current_production_project.?.project;
         self.current_production_project = null;
 

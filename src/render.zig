@@ -292,7 +292,7 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
             key,
             world.grid,
             "{d:.0}/{d:.0}",
-            .{ city.food_stockpile, city.food_til_growth },
+            .{ city.food_stockpile, city.foodTilGrowth() },
             0.9,
             -0.55,
             .{ .font_size = 8, .anchor = .right },
