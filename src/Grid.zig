@@ -102,12 +102,23 @@ pub fn contains(self: Self, idx: Idx) bool {
 }
 
 pub fn distance(self: *const Self, a: Idx, b: Idx) usize {
-    _ = self; // autofix
-    _ = a; // autofix
-    _ = b; // autofix
+    const ax = @as(i16, @intCast(self.xFromIdx(a)));
+    const ay = @as(i16, @intCast(self.yFromIdx(a)));
+    const bx = @as(i16, @intCast(self.xFromIdx(b)));
+    const by = @as(i16, @intCast(self.yFromIdx(b)));
 
-    // HOW THE FUCK!?
-    unreachable;
+    const dx: i16 = (ax - bx);
+    const dy: i16 = (ay - by);
+
+    var x: i16 = @max(dx, -dx);
+    const y: i16 = @max(dy, -dy);
+
+    if ((dx < 0 or (@mod(ay, 2) == 0)) and !(dx < 0 and (@mod(ay, 2) == 0))) {
+        x = @max(0, x - @divFloor(y + 1, 2));
+    } else {
+        x = @max(0, x - @divFloor(y, 2));
+    }
+    return @as(usize, @intCast(x)) + @as(usize, @intCast(y));
 }
 
 /// Returns edge "dir" of given hexs

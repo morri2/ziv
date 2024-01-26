@@ -244,6 +244,11 @@ pub fn main() !void {
                 render.renderTile(world, index, world.grid, texture_set, &rules);
 
             if (selected_tile != null) {
+                if (raylib.IsKeyDown(raylib.KEY_M)) {
+                    while (camera_bound_box.iterNext()) |i| {
+                        render.renderInHexTextFormat(i, world.grid, "{}", .{world.grid.distance(selected_tile.?, i)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
+                    }
+                }
                 render.renderYields(&world, selected_tile.?, texture_set);
                 render.renderHexTextureArgs(
                     selected_tile.?,
