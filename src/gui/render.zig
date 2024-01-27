@@ -152,7 +152,15 @@ pub fn renderCities(world: *World, ts: TextureSet) void {
             ts,
         );
 
-        renderChargeCircleInHex(key, world.grid, 0.8, 0.4, -0.6, .{}, ts);
+        renderChargeCircleInHex(
+            key,
+            world.grid,
+            city.food_stockpile / city.foodTilGrowth(),
+            0.0,
+            0.6,
+            .{ .radius = 0.1 },
+            ts,
+        );
 
         renderFormatHexAuto(
             key,
@@ -300,7 +308,7 @@ pub fn renderChargeCircle(pos: raylib.Vector2, fill_up: f32, args: CircleBarArgs
     const pos_anchor = raylib.Vector2Add(pos, args.anchor.getOffsetRelative(
         radius * 2,
         radius * 2,
-        .bottom_right, // .center, //.top_left,
+        .center,
     ));
 
     raylib.DrawCircleSector(pos_anchor, radius, 0, fill_up * 360, 32, args.bar_color);
