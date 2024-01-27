@@ -191,9 +191,10 @@ pub fn expansionHeuristic(self: *const Self, idx: Idx, world: *const World) u32 
             .bonus => break :blk 2,
         }
     };
-    const workable_mod: u32 = @intFromBool(self.max_workable.contains(idx));
+    //const workable_mod: u32 = @intFromBool(self.max_workable.contains(idx));
 
-    return workable_mod * 35 + 10 * resource_value;
+    const dist: u32 = @intCast(world.grid.distance(idx, self.position));
+    return 30 + 10 * resource_value - dist * dist;
 }
 
 fn bestExpansionTile(self: *const Self, world: *const World) ?Idx {
