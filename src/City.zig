@@ -1,7 +1,6 @@
 const Self = @This();
 const std = @import("std");
 const World = @import("World.zig");
-const hex = @import("hex.zig");
 const Idx = @import("Grid.zig").Idx;
 const yield = @import("yield.zig");
 const YieldAccumumlator = yield.YieldAccumulator;

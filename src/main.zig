@@ -1,7 +1,9 @@
 const std = @import("std");
 const Rules = @import("Rules.zig");
-const hex = @import("hex.zig");
-const render = @import("render.zig");
+
+const render = @import("gui/render.zig");
+const control = @import("gui/control.zig");
+const TextureSet = @import("gui/TextureSet.zig");
 const World = @import("World.zig");
 const Unit = @import("Unit.zig");
 const Grid = @import("Grid.zig");
@@ -84,14 +86,14 @@ pub fn main() !void {
         .zoom = 0.5,
     };
 
-    var texture_set = try render.TextureSet.init(&rules, gpa.allocator());
+    var texture_set = try TextureSet.init(&rules, gpa.allocator());
     defer texture_set.deinit();
 
     var selected_tile: ?Idx = null;
     var selected_unit: ?UnitMap.UnitKey = null;
     selected_tile = selected_tile; // autofix
 
-    var camera_bound_box = render.cameraRenderBoundBox(camera, &world.grid, screen_width, screen_height, texture_set);
+    var camera_bound_box = control.cameraRenderBoundBox(camera, &world.grid, screen_width, screen_height, texture_set);
 
     // MAP EDIT MODE
     var in_edit_mode = false;
@@ -106,7 +108,7 @@ pub fn main() !void {
             // EDIT MODE CONTROLLS
             if (in_edit_mode) {
                 if (raylib.IsKeyPressed(raylib.KEY_E)) in_pallet = !in_pallet;
-                const mouse_tile = render.getMouseTile(&camera, world.grid, texture_set);
+                const mouse_tile = control.getMouseTile(&camera, world.grid, texture_set);
                 if (raylib.IsKeyPressed(raylib.KEY_R)) {
                     const res = world.resources.getPtr(mouse_tile);
 
@@ -166,7 +168,7 @@ pub fn main() !void {
                 }
                 // SELECTION
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
+                    const clicked_tile = control.getMouseTile(&camera, world.grid, texture_set);
 
                     if (selected_tile == clicked_tile) {
                         if (selected_unit != null) {
@@ -190,7 +192,7 @@ pub fn main() !void {
                 }
 
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
-                    const clicked_tile = render.getMouseTile(&camera, world.grid, texture_set);
+                    const clicked_tile = control.getMouseTile(&camera, world.grid, texture_set);
 
                     for (world.cities.keys()) |city_key| {
                         var city = world.cities.getPtr(city_key) orelse continue;
@@ -208,9 +210,9 @@ pub fn main() !void {
             }
         }
 
-        _ = render.updateCamera(&camera, 16.0);
+        _ = control.updateCamera(&camera, 16.0);
 
-        camera_bound_box = render.cameraRenderBoundBox(
+        camera_bound_box = control.cameraRenderBoundBox(
             camera,
             &world.grid,
             screen_width,
@@ -246,11 +248,11 @@ pub fn main() !void {
             if (selected_tile != null) {
                 if (raylib.IsKeyDown(raylib.KEY_M)) {
                     while (camera_bound_box.iterNext()) |i| {
-                        render.renderInHexTextFormat(i, world.grid, "{}", .{world.grid.distance(selected_tile.?, i)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
+                        render.renderFormatHexAuto(i, world.grid, "{}", .{world.grid.distance(selected_tile.?, i)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
                     }
                 }
                 render.renderYields(&world, selected_tile.?, texture_set);
-                render.renderHexTextureArgs(
+                render.renderTextureHex(
                     selected_tile.?,
                     world.grid,
                     texture_set.base_textures[6],
