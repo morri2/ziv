@@ -3,6 +3,7 @@
 		{
 			"name": "worker",
 			"production_cost": 70,
+			"resource_cost": [],
 			"moves": 2,
 			"domain": "land",
 			"starting_promotions": [
@@ -13,6 +14,7 @@
 		{
 			"name": "settler",
 			"production_cost": 106,
+			"resource_cost": [],
 			"moves": 2,
 			"domain": "land",
 			"starting_promotions": [
@@ -23,6 +25,7 @@
 		{
 			"name": "work_boat",
 			"production_cost": 30,
+			"resource_cost": [],
 			"moves": 4,
 			"domain": "sea",
 			"starting_promotions": [
@@ -35,6 +38,7 @@
 		{
 			"name": "warrior",
 			"production_cost": 40,
+			"resource_cost": [],
 			"moves": 2,
 			"combat_strength": 8,
 			"domain": "land",
@@ -45,6 +49,7 @@
 		{
 			"name": "archer",
 			"production_cost": 40,
+			"resource_cost": [],
 			"moves": 2,
 			"combat_strength": 5,
 			"ranged_strength": 7,
@@ -55,8 +60,29 @@
 			]
 		},
 		{
+			"name": "chariot_archer",
+			"production_cost": 56,
+			"resource_cost": [
+				{
+					"resource": "horses",
+					"amount": 1
+				}
+			],
+			"moves": 4,
+			"combat_strength": 6,
+			"ranged_strength": 10,
+			"range": 2,
+			"domain": "land",
+			"starting_promotions": [
+				"CannotMelee",
+				"RoughTerrainPenalty",
+				"NoTerrainDefense"
+			]
+		},
+		{
 			"name": "scout",
 			"production_cost": 25,
+			"resource_cost": [],
 			"moves": 2,
 			"combat_strength": 5,
 			"domain": "land",
@@ -70,6 +96,7 @@
 		{
 			"name": "trireme",
 			"production_cost": 45,
+			"resource_cost": [],
 			"moves": 4,
 			"combat_strength": 10,
 			"domain": "sea",

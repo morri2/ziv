@@ -281,6 +281,8 @@ pub const Promotion = enum(u8) {
         can_embark = 15,
         cannot_melee = 16,
         can_cross_ocean = 17,
+        rough_terrain_penalty = 18,
+        no_terrain_defense = 19,
 
         pub const Iterator = struct {
             effect: Effect,
@@ -366,6 +368,11 @@ pub const Promotion = enum(u8) {
 pub const UnitType = enum(u8) {
     _,
 
+    pub const ResourceCost = struct {
+        resource: Resource,
+        amount: u32 = 0,
+    };
+
     pub const Domain = enum(u1) {
         land = 0,
         sea = 1,
@@ -373,6 +380,7 @@ pub const UnitType = enum(u8) {
 
     pub const Stats = struct {
         production: u16, // Max cost, Nuclear Missile 1000
+        resource_cost: []const ResourceCost,
         moves: u8, // Max movement, Nuclear Sub etc. 6
         melee: u8, // Max combat strength, Giant Death Robot 150
         ranged: u8,
@@ -383,6 +391,7 @@ pub const UnitType = enum(u8) {
 
         pub fn init(
             production: u16,
+            resource_cost: []const ResourceCost,
             moves: u8,
             melee: u8,
             ranged: u8,
@@ -393,6 +402,7 @@ pub const UnitType = enum(u8) {
         ) Stats {
             return Stats{
                 .production = production,
+                .resource_cost = resource_cost,
                 .moves = moves,
                 .melee = melee,
                 .ranged = ranged,

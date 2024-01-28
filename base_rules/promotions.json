@@ -45,6 +45,28 @@
 			]
 		},
 		{
+			"name": "RoughTerrainPenalty",
+			"requires": [
+				"RoughTerrainPenalty"
+			],
+			"effects": [
+				{
+					"effect": "rough_terrain_penalty"
+				}
+			]
+		},
+		{
+			"name": "NoTerrainDefense",
+			"requires": [
+				"NoTerrainDefense"
+			],
+			"effects": [
+				{
+					"effect": "no_terrain_defense"
+				}
+			]
+		},
+		{
 			"name": "BuildImprovements",
 			"requires": [
 				"BuildImprovements"
