@@ -11,6 +11,7 @@ const Idx = Grid.Idx;
 const move = @import("move.zig");
 const UnitMap = @import("UnitMap.zig");
 const City = @import("City.zig");
+const graphics = @import("gui/graphics.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -233,7 +234,7 @@ pub fn main() !void {
         if (in_pallet) {
             camera_bound_box.restart();
             while (camera_bound_box.iterNext()) |index|
-                render.renderTerrain(
+                graphics.renderTerrain(
                     @enumFromInt(index % rules.terrain_count),
                     index,
                     world.grid,
@@ -241,17 +242,14 @@ pub fn main() !void {
                     &rules,
                 );
         } else {
-            camera_bound_box.restart();
-            while (camera_bound_box.iterNext()) |index|
-                render.renderTile(world, index, world.grid, texture_set, &rules);
-
+            graphics.renderWorld(&world, &camera_bound_box, &world.players[0].view, texture_set);
             if (selected_tile != null) {
                 if (raylib.IsKeyDown(raylib.KEY_M)) {
                     while (camera_bound_box.iterNext()) |i| {
                         render.renderFormatHexAuto(i, world.grid, "{}", .{world.grid.distance(selected_tile.?, i)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
                     }
                 }
-                render.renderYields(&world, selected_tile.?, texture_set);
+
                 render.renderTextureHex(
                     selected_tile.?,
                     world.grid,
@@ -262,8 +260,8 @@ pub fn main() !void {
                 camera_bound_box.restart();
             }
 
-            render.renderCities(&world, texture_set);
-            render.renderAllUnits(&world, texture_set);
+            //graphics.renderCities(&world, texture_set);
+            //graphics.renderAllUnits(&world, texture_set);
         }
 
         raylib.EndMode2D();

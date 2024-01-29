@@ -26,6 +26,7 @@ red_pop: raylib.Texture2D,
 green_pop: raylib.Texture2D,
 city_texture: raylib.Texture2D,
 city_border_texture: raylib.Texture2D,
+smoke_texture: raylib.Texture2D,
 hex_radius: f32,
 
 pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
@@ -89,6 +90,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             Rules.Transport,
             allocator,
         ),
+
         .unit_icons = try loadTextures(
             "textures/unit_{s}.png",
             universal_fallback,
@@ -97,6 +99,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.unit_type_count,
             allocator,
         ),
+        .smoke_texture = loadTexture("textures/smoke.png", null),
         .city_texture = loadTexture("textures/city.png", null),
         .red_pop = loadTexture("textures/redpop.png", null),
         .green_pop = loadTexture("textures/pop.png", null),
