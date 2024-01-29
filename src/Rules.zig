@@ -54,6 +54,7 @@ effect_values: [*]const u32,
 
 unit_type_count: usize,
 unit_type_stats: [*]const UnitType.Stats,
+unit_type_is_military: std.DynamicBitSetUnmanaged,
 
 unit_type_names: [*]const u16,
 unit_type_strings: []const u8,
@@ -378,6 +379,11 @@ pub const UnitType = enum(u8) {
         sea = 1,
     };
 
+    pub const Type = enum(u1) {
+        civilian = 0,
+        military = 1,
+    };
+
     pub const Stats = struct {
         production: u16, // Max cost, Nuclear Missile 1000
         resource_cost: []const ResourceCost,
@@ -388,34 +394,14 @@ pub const UnitType = enum(u8) {
         sight: u8, // Max 10 = 2 + 4 promotions + 1 scout + 1 nation + 1 Exploration + 1 Great Lighthouse
         domain: Domain,
         promotions: Promotion.Set,
-
-        pub fn init(
-            production: u16,
-            resource_cost: []const ResourceCost,
-            moves: u8,
-            melee: u8,
-            ranged: u8,
-            range: u8,
-            sight: u8,
-            domain: Domain,
-            promotions: Promotion.Set,
-        ) Stats {
-            return Stats{
-                .production = production,
-                .resource_cost = resource_cost,
-                .moves = moves,
-                .melee = melee,
-                .ranged = ranged,
-                .range = range,
-                .sight = sight,
-                .domain = domain,
-                .promotions = promotions,
-            };
-        }
     };
 
     pub fn stats(self: UnitType, rules: *const Rules) Stats {
         return rules.unit_type_stats[@intFromEnum(self)];
+    }
+
+    pub fn ty(self: UnitType, rules: *const Rules) Type {
+        return if (rules.unit_type_is_military.isSet(@intFromEnum(self))) .military else .civilian;
     }
 
     pub fn name(self: UnitType, rules: *const Rules) []const u8 {

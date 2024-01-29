@@ -7,7 +7,6 @@ const YieldAccumumlator = yield.YieldAccumulator;
 const HexSet = @import("HexSet.zig");
 const Rules = @import("Rules.zig");
 const Unit = @import("Unit.zig");
-const UnitMap = @import("UnitMap.zig");
 const Player = @import("Player.zig");
 //buildings: // bitfield for all buildings in the game?
 
@@ -328,17 +327,17 @@ pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
 }
 
 /// check if production project is done
-pub fn checkProduction(self: *Self, world: *World, rules: *Rules) ProductionResult {
+pub fn checkProduction(self: *Self, world: *World) !ProductionResult {
     if (self.current_production_project == null) return .none_selected;
     const work = self.current_production_project.?;
     if (work.project == .Perpetual) return .perpetual;
 
     if (work.progress >= work.production_needed) {
         // If its a new unit, can we place it?
-        if (work.project == .UnitType) {
-            if (!self.create_unit(world, work.project.UnitType, rules)) {
-                return .not_done;
-            }
+        switch (work.project) {
+            .UnitType => |ty| try self.createUnit(world, ty),
+            .Building => unreachable,
+            .Perpetual => unreachable,
         }
 
         // save overproduction :)
@@ -351,13 +350,11 @@ pub fn checkProduction(self: *Self, world: *World, rules: *Rules) ProductionResu
     return .not_done;
 }
 
-pub fn create_unit(self: *Self, world: *World, unit_type: Rules.UnitType, rules: *Rules) bool {
-    // TODO Add occupancy check, seemed very annoying
-    const new_unit = Unit.new(unit_type, self.faction.player, rules);
-    world.unit_map.putUnitDefaultSlot(self.position, new_unit, rules);
+pub fn createUnit(self: *Self, world: *World, unit_type: Rules.UnitType) !void {
+    const new_unit = Unit.new(unit_type, self.faction.player, world.rules);
+    try world.units.putOrStackAutoSlot(self.position, new_unit);
     std.debug.print("UNIT CREATED \n", .{});
-    world.unit_map.refreshUnits(rules);
-    return true;
+    world.units.refresh();
 }
 
 /// check if border expansion

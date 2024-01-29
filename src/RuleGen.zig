@@ -856,14 +856,13 @@ fn parseUnits(
 
     const parsed = try std.json.parseFromSlice(struct {
         civilian: []const JsonUnitType,
-        land: []const JsonUnitType,
-        naval: []const JsonUnitType,
+        military: []const JsonUnitType,
     }, allocator, json_text, .{});
     defer parsed.deinit();
 
     const units = parsed.value;
 
-    rules.unit_type_count = units.civilian.len + units.land.len + units.naval.len;
+    rules.unit_type_count = units.civilian.len + units.military.len;
 
     std.debug.assert(rules.unit_type_count <= 256);
 
@@ -874,10 +873,7 @@ fn parseUnits(
         for (units.civilian) |unit| {
             strings_len += unit.name.len;
         }
-        for (units.land) |unit| {
-            strings_len += unit.name.len;
-        }
-        for (units.naval) |unit| {
+        for (units.military) |unit| {
             strings_len += unit.name.len;
         }
         break :blk strings_len;
@@ -886,11 +882,12 @@ fn parseUnits(
     const unit_strings = try arena_allocator.alloc(u8, strings_len);
     const unit_names = try arena_allocator.alloc(u16, rules.unit_type_count + 1);
     const unit_stats = try arena_allocator.alloc(UnitType.Stats, rules.unit_type_count);
+    var unit_is_military = try std.DynamicBitSetUnmanaged.initEmpty(arena_allocator, rules.unit_type_count);
 
     {
         var string_index: usize = 0;
         var unit_index: usize = 0;
-        inline for (&[_][]const u8{ "civilian", "land", "naval" }) |field_name| {
+        inline for (&[_][]const u8{ "civilian", "military" }) |field_name| {
             for (@field(units, field_name)) |promotion| {
                 const name = unit_strings[string_index..(string_index + promotion.name.len)];
                 std.mem.copyForwards(
@@ -916,6 +913,8 @@ fn parseUnits(
                     .promotions = promotion_map.flagsFromKeys(promotion.starting_promotions),
                 };
 
+                if (comptime std.mem.eql(u8, "military", field_name)) unit_is_military.set(unit_index);
+
                 unit_names[unit_index] = @truncate(string_index);
                 string_index += promotion.name.len;
                 unit_index += 1;
@@ -926,6 +925,7 @@ fn parseUnits(
     }
 
     rules.unit_type_stats = unit_stats.ptr;
+    rules.unit_type_is_military = unit_is_military;
     rules.unit_type_names = unit_names.ptr;
     rules.unit_type_strings = unit_strings;
 }

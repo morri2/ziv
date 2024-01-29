@@ -1,17 +1,17 @@
 const std = @import("std");
 const Rules = @import("Rules.zig");
 
-const render = @import("gui/render.zig");
-const control = @import("gui/control.zig");
 const TextureSet = @import("gui/TextureSet.zig");
 const World = @import("World.zig");
 const Unit = @import("Unit.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
-const move = @import("move.zig");
-const UnitMap = @import("UnitMap.zig");
+const Units = @import("Units.zig");
 const City = @import("City.zig");
 const PlayerView = @import("PlayerView.zig");
+
+const control = @import("gui/control.zig");
+const render = @import("gui/render.zig");
 const graphics = @import("gui/graphics.zig");
 
 const raylib = @cImport({
@@ -63,10 +63,10 @@ pub fn main() !void {
     s1.promotions.set(13); // CanEmbark
     s1.promotions.set(14); // Can cross ocean
 
-    world.unit_map.putUnitDefaultSlot(1200, w1, &rules);
-    world.unit_map.putUnitDefaultSlot(1201, a1, &rules);
-    world.unit_map.putUnitDefaultSlot(1203, b1, &rules);
-    world.unit_map.putUnitDefaultSlot(1198, s1, &rules);
+    try world.units.putNoStackAutoSlot(1200, w1);
+    try world.units.putNoStackAutoSlot(1201, a1);
+    try world.units.putNoStackAutoSlot(1203, b1);
+    try world.units.putNoStackAutoSlot(1198, s1);
 
     try world.addCity(1089);
 
@@ -92,9 +92,8 @@ pub fn main() !void {
     var texture_set = try TextureSet.init(&rules, gpa.allocator());
     defer texture_set.deinit();
 
-    var selected_tile: ?Idx = null;
-    var selected_unit: ?UnitMap.UnitKey = null;
-    selected_tile = selected_tile; // autofix
+    var maybe_selected_idx: ?Idx = null;
+    var maybe_unit_reference: ?Units.Reference = null;
 
     var camera_bound_box = control.cameraRenderBoundBox(camera, &world.grid, screen_width, screen_height, texture_set);
 
@@ -102,7 +101,6 @@ pub fn main() !void {
     var in_edit_mode = false;
     var in_pallet = false;
     var terrain_brush: ?Rules.Terrain = null;
-    terrain_brush = terrain_brush; // autofix
 
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
@@ -160,7 +158,7 @@ pub fn main() !void {
                         _ = city.processYields(&ya);
                         const growth_res = city.checkGrowth(&world);
                         _ = city.checkExpansion();
-                        _ = city.checkProduction(&world, &rules);
+                        _ = try city.checkProduction(&world);
 
                         switch (growth_res) {
                             .growth => std.debug.print("TOWN HAS GROWN! \n", .{}),
@@ -168,30 +166,38 @@ pub fn main() !void {
                         }
                     }
 
-                    world.unit_map.refreshUnits(&rules);
+                    world.units.refresh();
                 }
+
                 // SELECTION
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    const clicked_tile = control.getMouseTile(&camera, world.grid, texture_set);
+                    const mouse_idx = control.getMouseTile(&camera, world.grid, texture_set);
 
-                    if (selected_tile == clicked_tile) {
-                        if (selected_unit != null) {
-                            selected_unit = world.unit_map.nextOccupiedKey(selected_unit.?);
-                        }
-                    } else if (selected_tile == null) {
-                        selected_tile = clicked_tile;
-                        selected_unit = world.unit_map.firstOccupiedKey(selected_tile.?);
-                    } else {
-                        if (raylib.IsKeyDown(raylib.KEY_Q)) {
-                            Unit.tryBattle(selected_tile.?, clicked_tile, &world);
-                        } else {
-                            if (selected_unit != null) {
-                                _ = move.tryMoveUnit(selected_unit.?, clicked_tile, &world);
+                    if (maybe_selected_idx) |selected_idx| {
+                        if (selected_idx != mouse_idx) blk: {
+                            if (maybe_unit_reference == null) {
+                                maybe_unit_reference = world.units.firstReference(selected_idx);
+                                if (maybe_unit_reference == null) {
+                                    maybe_selected_idx = mouse_idx;
+                                    maybe_unit_reference = world.units.firstReference(mouse_idx);
+                                    break :blk;
+                                }
                             }
-                            // _ = move.moveUnit(selected_tile.?, clicked_tile, 0, &world);
-                        }
 
-                        selected_tile = null;
+                            if (raylib.IsKeyDown(raylib.KEY_Q)) {
+                                // Unit.tryBattle(selected_idx.?, clicked_idx, &world);
+                            } else {
+                                _ = try world.move(maybe_unit_reference.?, mouse_idx);
+                            }
+                            maybe_selected_idx = null;
+                        } else if (maybe_unit_reference) |ref| {
+                            maybe_unit_reference = world.units.nextReference(ref);
+                        } else {
+                            maybe_unit_reference = world.units.firstReference(selected_idx);
+                        }
+                    } else {
+                        maybe_selected_idx = mouse_idx;
+                        maybe_unit_reference = world.units.firstReference(mouse_idx);
                     }
                 }
 
@@ -263,15 +269,15 @@ pub fn main() !void {
                 );
         } else {
             graphics.renderWorld(&world, &camera_bound_box, &world.players[0].view, texture_set);
-            if (selected_tile != null) {
+            if (maybe_selected_idx) |selected_idx| {
                 if (raylib.IsKeyDown(raylib.KEY_M)) {
                     while (camera_bound_box.iterNext()) |i| {
-                        render.renderFormatHexAuto(i, world.grid, "{}", .{world.grid.distance(selected_tile.?, i)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
+                        render.renderFormatHexAuto(i, world.grid, "{}", .{world.grid.distance(selected_idx, i)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
                     }
                 }
 
                 render.renderTextureHex(
-                    selected_tile.?,
+                    selected_idx,
                     world.grid,
                     texture_set.base_textures[6],
                     .{ .tint = .{ .r = 200, .g = 200, .b = 100, .a = 100 } },
@@ -279,9 +285,6 @@ pub fn main() !void {
                 );
                 camera_bound_box.restart();
             }
-
-            //graphics.renderCities(&world, texture_set);
-            //graphics.renderAllUnits(&world, texture_set);
         }
 
         raylib.EndMode2D();

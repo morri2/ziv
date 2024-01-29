@@ -219,10 +219,10 @@ pub fn renderYield(yield: Yield, grid: Grid, idx: Idx, ts: TextureSet) void {
 }
 
 pub fn renderAllUnits(world: *const World, cbb: *Grid.BoundBox, ts: TextureSet) void {
-    for (world.unit_map.units.keys()) |key| {
-        if (!(cbb.contains(key.idx))) continue;
-        const unit = world.unit_map.units.get(key) orelse unreachable;
-        renderUnit(unit, key.idx, world.grid, ts);
+    var iter = world.units.iterator();
+    while (iter.next()) |unit| {
+        if (!cbb.contains(unit.idx)) continue;
+        renderUnit(unit.unit, unit.idx, world.grid, ts);
     }
 }
 

@@ -9,7 +9,6 @@ const Building = Rules.Building;
 const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
 const City = @import("City.zig");
-const UnitMap = @import("UnitMap.zig");
 const HexSet = @import("HexSet.zig");
 const PlayerView = @import("PlayerView.zig");
 const Player = @import("Player.zig");
@@ -17,7 +16,9 @@ const Player = @import("Player.zig");
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
 const Idx = Grid.Idx;
-const HexDir = Grid.Dir;
+const Dir = Grid.Dir;
+
+const Units = @import("Units.zig");
 
 const Unit = @import("Unit.zig");
 
@@ -62,9 +63,9 @@ work_in_progress: std.AutoArrayHashMapUnmanaged(Idx, WorkInProgress),
 // Tile edge data
 rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
 
-cities: std.AutoArrayHashMapUnmanaged(Idx, City),
+units: Units,
 
-unit_map: UnitMap,
+cities: std.AutoArrayHashMapUnmanaged(Idx, City),
 
 pub fn claimed(self: *const Self, idx: Idx) bool {
     for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
@@ -130,7 +131,7 @@ pub fn init(
         .turn_counter = 1,
         .cities = .{},
         .rules = rules,
-        .unit_map = UnitMap.init(allocator),
+        .units = Units.init(rules, allocator),
     };
 }
 
@@ -139,7 +140,7 @@ pub fn deinit(self: *Self) void {
     self.work_in_progress.deinit(self.allocator);
     self.resources.deinit(self.allocator);
 
-    self.unit_map.deinit();
+    self.units.deinit(self.allocator);
 
     self.allocator.free(self.improvements);
     self.allocator.free(self.terrain);
@@ -149,6 +150,50 @@ pub fn deinit(self: *Self) void {
 
     self.allocator.free(self.players);
     self.cities.deinit(self.allocator);
+}
+
+pub fn moveCost(
+    self: *const Self,
+    reference: Units.Reference,
+    to: Idx,
+) Unit.MoveCost {
+    if (!self.grid.adjacentTo(reference.idx, to)) return .disallowed;
+
+    if (self.units.get(to, reference.slot) != null) return .disallowed;
+
+    const unit = self.units.deref(reference) orelse return .disallowed;
+
+    const terrain = self.terrain[to];
+    const improvements = self.improvements[to];
+
+    return unit.moveCost(.{
+        .target_terrain = terrain,
+        .river_crossing = if (self.grid.edgeBetween(reference.idx, to)) |edge| self.rivers.contains(edge) else false,
+        .transport = if (improvements.pillaged_transport) .none else improvements.transport,
+        .embarked = reference.slot == .embarked,
+    }, self.rules);
+}
+
+pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
+    const cost = self.moveCost(reference, to);
+
+    if (cost == .disallowed) return false;
+
+    var unit = self.units.deref(reference) orelse unreachable;
+
+    self.units.removeReference(reference);
+
+    unit.performMove(cost);
+
+    switch (cost) {
+        .disallowed => unreachable,
+        .allowed,
+        .allowed_final,
+        => try self.units.putNoStack(to, unit, reference.slot),
+        .embarkation => try self.units.putNoStack(to, unit, .embarked),
+        .disembarkation => try self.units.putNoStackAutoSlot(to, unit),
+    }
+    return true;
 }
 
 pub fn saveToFile(self: *Self, path: []const u8) !void {
@@ -174,13 +219,13 @@ pub fn fullUpdateViews(self: *Self) void {
     for (self.players, 0..) |player, i| {
         self.players[i].view.unsetAllVisable(self);
 
-        for (self.unit_map.units.keys(), self.unit_map.units.values()) |key, unit| {
-            const idx = key.idx;
-            if (unit.faction.player != player.id) continue;
+        var iter = self.units.iterator();
+        while (iter.next()) |unit| {
+            if (unit.unit.faction.player != player.id) continue;
 
             var flow = HexSet.init(self.allocator);
             defer flow.deinit();
-            flow.add(idx);
+            flow.add(unit.idx);
             flow.addAdjacent(&self.grid);
             flow.addAdjacent(&self.grid);
 

@@ -34,7 +34,7 @@
 			]
 		}
 	],
-	"land": [
+	"military": [
 		{
 			"name": "warrior",
 			"production_cost": 40,
@@ -90,9 +90,7 @@
 				"RoughTerrainPenalty",
 				"NoTerrainDefense"
 			]
-		}
-	],
-	"naval": [
+		},
 		{
 			"name": "trireme",
 			"production_cost": 45,

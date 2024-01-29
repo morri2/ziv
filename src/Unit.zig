@@ -1,28 +1,60 @@
-const Self = @This();
 const std = @import("std");
-const Rules = @import("Rules.zig");
-const World = @import("World.zig");
 const Idx = @import("Grid.zig").Idx;
-const move = @import("move.zig");
-const UnitMap = @import("UnitMap.zig");
-const UnitSlot = UnitMap.UnitSlot;
-const UnitKey = UnitMap.UnitKey;
-const Player = @import("Player.zig");
+const Rules = @import("Rules.zig");
 
 const Terrain = Rules.Terrain;
-const Improvements = Rules.Improvements;
+const Transport = Rules.Transport;
 const Promotion = Rules.Promotion;
 const UnitType = Rules.UnitType;
 const UnitEffect = Rules.UnitEffect;
+const Player = @import("Player.zig");
 
-faction: Player.Faction,
+const Self = @This();
+
+pub const CombatContext = struct {
+    is_ranged: bool,
+    is_attacker: bool,
+    target_terrain: Terrain,
+    river_crossing: bool,
+};
+
+pub const StrengthSummary = struct {
+    total: f32,
+    base: u32,
+    combat_bonus: u32,
+    attacker_bonus: u32,
+    rough_terrain_bonus: u32,
+    open_terrain_bonus: u32,
+};
+
+pub const MoveContext = struct {
+    target_terrain: Terrain,
+    river_crossing: bool,
+    transport: Transport,
+    embarked: bool,
+};
+
+pub const MoveCost = union(enum) {
+    disallowed: void,
+    allowed: f32,
+    allowed_final: void, // ends move after
+    embarkation: void,
+    disembarkation: void,
+
+    pub fn allowsAttack(self: MoveCost) bool {
+        return switch (self) {
+            .allowed, .allowed_final, .disembarkation => true,
+            else => false,
+        };
+    }
+};
 
 type: UnitType,
 hit_points: u8 = 100, // All units have 100 HP
 prepared: bool = false,
-embarked: bool = false,
 fortified: bool = false,
 promotions: Promotion.Set = Promotion.Set.initEmpty(),
+faction: Player.Faction,
 movement: f32 = 0,
 
 pub fn new(unit_type: UnitType, player_id: Player.PlayerID, rules: *const Rules) Self {
@@ -37,157 +69,173 @@ pub fn maxMovement(self: Self, rules: *const Rules) f32 {
     return @as(f32, @floatFromInt(move_mod)) + @as(f32, @floatFromInt(self.type.stats(rules).moves));
 }
 
-/// Slot type when not embarked
-pub fn defaultSlot(self: Self, rules: *const Rules) UnitSlot {
-    // PLACEHOLDER CIVILIAN UNITS ARE NOT A THING YET, will need reworking when the rapture comes
-    const domain = self.type.stats(rules).domain;
-    if (domain == .sea) {
-        // TODO: Fix
-        // if (self.type == .work_boat) return .civilian;
-        return .naval;
-    }
-    if (domain == .land) {
-        // TODO: Fix
-        // if (self.type == .worker or self.type == .settler) return .civilian;
-
-        return .military;
-    }
-    unreachable;
-}
-
-pub fn slotAfterMove(self: *Self, cost: move.MoveCost, rules: *const Rules) UnitSlot {
-    if (cost == .disembarkation) return self.defaultSlot(rules);
-    if (cost == .embarkation or self.embarked) return .embarked;
-    return self.defaultSlot(rules);
-}
-
-// restore movement
 pub fn refresh(self: *Self, rules: *const Rules) void {
     self.movement = self.maxMovement(rules);
 }
 
-const CombatContext = struct {
-    target_terrain: Terrain = @enumFromInt(0),
-
-    river_crossing: bool = false,
-};
-
-pub fn tryBattle(from: Idx, target: Idx, world: *World) void {
-    const a_key = world.unit_map.firstOccupiedKey(from) orelse return;
-    const d_key = world.unit_map.firstOccupiedKey(target) orelse return;
-    const attacker = world.unit_map.getUnitPtr(a_key) orelse return;
-    const defender = world.unit_map.getUnitPtr(d_key) orelse return;
-
-    const mc = move.moveCost(target, from, attacker, world);
-
-    if (!mc.allowsAttack()) return;
-
-    const context: CombatContext = .{
-        .target_terrain = world.terrain[target],
-    };
-    battle(attacker, defender, false, context, world.rules, true);
-
-    const attacker_alive = !(attacker.hit_points <= 0);
-    const defender_alive = !(defender.hit_points <= 0);
-
-    if (!attacker_alive) _ = world.unit_map.fetchRemoveUnit(a_key);
-    if (!defender_alive) _ = world.unit_map.fetchRemoveUnit(d_key);
-    if (!defender_alive and attacker_alive) _ = move.tryMoveUnit(a_key, target, world);
-
-    if (attacker_alive) attacker.movement = 0;
-}
-
-/// battle sim
-pub fn battle(attacker: *Self, defender: *Self, range: bool, context: CombatContext, rules: *const Rules, log: bool) void {
-    std.debug.print("\n### BATTLE BATTLE BATTLE ###\n", .{});
-
-    std.debug.print("\n# ATTACKER #\n", .{});
-    const attacker_str = calculateStr(attacker, true, range, context, log, rules);
-    std.debug.print("\n# DEFENDER #\n", .{});
-    const defend_str = calculateStr(defender, false, range, context, log, rules);
-
-    const ratio = attacker_str / defend_str;
-    const attacker_dmg: u8 = if (!range) @intFromFloat(1 / ratio * 35) else 0;
-    const defender_dmg: u8 = @intFromFloat(ratio * 35);
-
-    std.debug.print("\nCOMBAT RATIO: {d:.2}\n", .{ratio});
-    std.debug.print("DEFENDER TAKES {d:.0} damage\n", .{defender_dmg});
-    if (!range) std.debug.print("ATTACKER TAKES {d:.0} damage\n", .{attacker_dmg});
-
-    const attacker_higher_hp = attacker.hit_points > defender.hit_points;
-    attacker.hit_points -|= attacker_dmg;
-    defender.hit_points -|= defender_dmg;
-
-    if (attacker.hit_points == 0 and defender.hit_points == 0) {
-        if (attacker_higher_hp)
-            attacker.hit_points = 1
-        else
-            defender.hit_points = 1;
-    }
-}
-
-pub fn calculateStr(
+pub fn strength(
     unit: *Self,
-    is_attacker: bool,
-    is_range: bool,
     context: CombatContext,
-    log: bool,
     rules: *const Rules,
-) f32 {
-    var str: f32 = @floatFromInt(unit.type.stats(rules).melee);
-    if (log) std.debug.print("  Base strength: {d:.0}\n", .{str});
+) StrengthSummary {
+    const base = unit.type.stats(rules).melee;
 
-    var unit_mod: u32 = 100;
+    const combat_bonus = Promotion.Effect.combat_bonus.promotionsSum(unit.promotions, rules);
 
-    {
-        const mod = Promotion.Effect.combat_bonus.promotionsSum(unit.promotions, rules);
-
-        if (log and mod > 0) std.debug.print("    Combat bonus: +{}%\n", .{mod});
-        unit_mod += mod;
-    }
-
-    if (is_attacker) {
-        const mod = Promotion.Effect.combat_bonus_attacking.promotionsSum(unit.promotions, rules);
-        if (log and mod > 0) std.debug.print("    Attacking bonus: +{}%\n", .{mod});
-        unit_mod += mod;
-    }
+    const attacker_bonus = if (context.is_attacker) Promotion.Effect.combat_bonus_attacking.promotionsSum(
+        unit.promotions,
+        rules,
+    ) else 0;
 
     const target_attributes = context.target_terrain.attributes(rules);
     const is_rough = target_attributes.is_rough;
 
-    if (is_rough) {
-        {
-            const mod = Promotion.Effect.rough_terrain_bonus.promotionsSum(unit.promotions, rules);
-            if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
-            unit_mod += mod;
-        }
+    var rough_bonus = if (is_rough) Promotion.Effect.rough_terrain_bonus.promotionsSum(
+        unit.promotions,
+        rules,
+    ) else 0;
 
-        if (is_range) {
-            const mod = Promotion.Effect.rough_terrain_bonus_range.promotionsSum(unit.promotions, rules);
-            if (log and mod > 0) std.debug.print("    Rough terrain bonus: +{}%\n", .{mod});
-            unit_mod += mod;
-        }
-    } else {
-        {
-            const mod = Promotion.Effect.open_terrain_bonus.promotionsSum(unit.promotions, rules);
-            if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
-            unit_mod += mod;
-        }
+    rough_bonus += if (is_rough and context.is_ranged) Promotion.Effect.rough_terrain_bonus_range.promotionsSum(
+        unit.promotions,
+        rules,
+    ) else 0;
 
-        if (is_range) {
-            const mod = Promotion.Effect.open_terrain_bonus_range.promotionsSum(unit.promotions, rules);
-            if (log and mod > 0) std.debug.print("    Open terrain bonus: +{}%\n", .{mod});
-            unit_mod += mod;
-        }
-    }
+    var open_bonus = if (!is_rough) Promotion.Effect.open_terrain_bonus.promotionsSum(
+        unit.promotions,
+        rules,
+    ) else 0;
 
-    if (log and unit_mod > 0) std.debug.print("    STR MOD: {}%\n", .{unit_mod});
+    open_bonus += if (!is_rough and context.is_ranged) Promotion.Effect.open_terrain_bonus_range.promotionsSum(
+        unit.promotions,
+        rules,
+    ) else 0;
 
-    // add bonus from terrain :))
-    // if terrain and !is_attacker -> terrain mod
+    const mod: f32 = @floatFromInt(base + combat_bonus + attacker_bonus + rough_bonus + open_bonus + 100);
 
-    str *= @as(f32, @floatFromInt(unit_mod)) / 100.0;
-    if (log) std.debug.print("  TOTAL STRENGTH: {d:.0}", .{str});
-
-    return str;
+    return .{
+        .total = mod * 0.01,
+        .base = base,
+        .combat_bonus = combat_bonus,
+        .attacker_bonus = attacker_bonus,
+        .rough_terrain_bonus = rough_bonus,
+        .open_terrain_bonus = open_bonus,
+    };
 }
+
+pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost {
+    const stats = self.type.stats(rules);
+    const terrain_attributes = context.target_terrain.attributes(rules);
+
+    // Sea units should not be embarked
+    std.debug.assert(!(context.embarked and stats.domain == .sea));
+
+    if (terrain_attributes.is_impassable) return .disallowed;
+
+    if (terrain_attributes.is_deep_water and !Promotion.Effect.can_cross_ocean.in(
+        self.promotions,
+        rules,
+    )) return .disallowed;
+
+    if (context.river_crossing) return .allowed_final;
+
+    const cost: MoveCost = switch (stats.domain) {
+        .sea => if (!terrain_attributes.is_water) .disallowed else .{ .allowed = 1 },
+        .land => blk: {
+            var cost_amt: f32 = 1;
+            if (terrain_attributes.is_rough and !Promotion.Effect.ignore_terrain_move.in(
+                self.promotions,
+                rules,
+            )) cost_amt += 1;
+
+            // Check if trying to embark and if unit can embark
+            if (terrain_attributes.is_water and !context.embarked) return if (Promotion.Effect.can_embark.in(
+                self.promotions,
+                rules,
+            )) .embarkation else .disallowed;
+
+            if (!terrain_attributes.is_water and context.embarked) return .disembarkation;
+
+            cost_amt = switch (context.transport) {
+                .none => cost_amt,
+                .road => @min(cost_amt, 0.5), // changed with machinery to 1/3.
+                .rail => @min(cost_amt, self.maxMovement(rules) / 10.0), // risk of float_rounding error :/
+            };
+
+            break :blk .{ .allowed = cost_amt };
+        },
+    };
+
+    return switch (cost) {
+        .disallowed => cost,
+        .allowed => |c| if (c <= self.movement) cost else .disallowed,
+        .allowed_final,
+        .embarkation,
+        .disembarkation,
+        => if (self.movement != 0.0) cost else .disallowed,
+    };
+}
+
+pub fn performMove(self: *Self, cost: MoveCost) void {
+    switch (cost) {
+        .allowed => |c| self.movement = @max(0.0, self.movement - c),
+        .allowed_final,
+        .embarkation,
+        .disembarkation,
+        => self.movement = 0.0,
+        else => unreachable,
+    }
+}
+
+// pub fn tryBattle(from: Idx, target: Idx, world: *World) void {
+//     const a_key = world.unit_map.firstOccupiedKey(from) orelse return;
+//     const d_key = world.unit_map.firstOccupiedKey(target) orelse return;
+//     const attacker = world.unit_map.getUnitPtr(a_key) orelse return;
+//     const defender = world.unit_map.getUnitPtr(d_key) orelse return;
+
+//     const mc = move.moveCost(target, from, attacker, world);
+
+//     if (!mc.allowsAttack()) return;
+
+//     const context: CombatContext = .{
+//         .target_terrain = world.terrain[target],
+//     };
+//     battle(attacker, defender, false, context, world.rules, true);
+
+//     const attacker_alive = !(attacker.hit_points <= 0);
+//     const defender_alive = !(defender.hit_points <= 0);
+
+//     if (!attacker_alive) _ = world.unit_map.fetchRemoveUnit(a_key);
+//     if (!defender_alive) _ = world.unit_map.fetchRemoveUnit(d_key);
+//     if (!defender_alive and attacker_alive) _ = move.tryMoveUnit(a_key, target, world);
+
+//     if (attacker_alive) attacker.movement = 0;
+// }
+
+// /// battle sim
+// pub fn battle(attacker: *Self, defender: *Self, range: bool, context: CombatContext, rules: *const Rules, log: bool) void {
+//     std.debug.print("\n### BATTLE BATTLE BATTLE ###\n", .{});
+
+//     std.debug.print("\n# ATTACKER #\n", .{});
+//     const attacker_str = calculateStr(attacker, true, range, context, log, rules);
+//     std.debug.print("\n# DEFENDER #\n", .{});
+//     const defend_str = calculateStr(defender, false, range, context, log, rules);
+
+//     const ratio = attacker_str / defend_str;
+//     const attacker_dmg: u8 = if (!range) @intFromFloat(1 / ratio * 35) else 0;
+//     const defender_dmg: u8 = @intFromFloat(ratio * 35);
+
+//     std.debug.print("\nCOMBAT RATIO: {d:.2}\n", .{ratio});
+//     std.debug.print("DEFENDER TAKES {d:.0} damage\n", .{defender_dmg});
+//     if (!range) std.debug.print("ATTACKER TAKES {d:.0} damage\n", .{attacker_dmg});
+
+//     const attacker_higher_hp = attacker.hit_points > defender.hit_points;
+//     attacker.hit_points -|= attacker_dmg;
+//     defender.hit_points -|= defender_dmg;
+
+//     if (attacker.hit_points == 0 and defender.hit_points == 0) {
+//         if (attacker_higher_hp)
+//             attacker.hit_points = 1
+//         else
+//             defender.hit_points = 1;
+//     }
+// }
