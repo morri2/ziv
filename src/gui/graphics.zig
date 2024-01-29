@@ -164,6 +164,37 @@ pub fn renderCities(world: *const World, cbb: *Grid.BoundBox, ts: TextureSet) vo
             .{ .font_size = 8, .anchor = .right },
             ts,
         );
+
+        if (city.current_production_project) |project| {
+            const production_percentage = project.progress / project.production_needed;
+
+            //TODO fix Perpetual icons and Building
+            const icon = switch (project.project) {
+                .UnitType => ts.unit_icons[@intFromEnum(project.project.UnitType)],
+                .Perpetual => unreachable,
+                .Building => unreachable,
+            };
+
+            render.renderChargeCircleInHex(
+                idx,
+                world.grid,
+                production_percentage,
+                0.5,
+                -0.6,
+                .{ .radius = 0.15 },
+                ts,
+            );
+
+            render.renderTextureInHex(
+                idx,
+                world.grid,
+                icon,
+                0.5,
+                -0.6,
+                .{ .scale = 0.15 },
+                ts,
+            );
+        }
     }
 }
 

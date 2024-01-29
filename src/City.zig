@@ -5,6 +5,9 @@ const Idx = @import("Grid.zig").Idx;
 const yield = @import("yield.zig");
 const YieldAccumumlator = yield.YieldAccumulator;
 const HexSet = @import("HexSet.zig");
+const Rules = @import("Rules.zig");
+const Unit = @import("Unit.zig");
+const UnitMap = @import("UnitMap.zig");
 const Player = @import("Player.zig");
 //buildings: // bitfield for all buildings in the game?
 
@@ -137,15 +140,14 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAc
 
     // Continual production - should this be modified by production or gold modifier?
     if (self.current_production_project != null) {
-        switch (self.current_production_project.?.project.result) {
-            .perpetual => |perp_proj| switch (perp_proj) {
+        switch (self.current_production_project.?.project) {
+            .Perpetual => |perp_proj| switch (perp_proj) {
                 .money_making => gold += production / 2.0,
                 .research => science += production / 2.0,
             },
             else => {},
         }
     }
-
     // food consumption
     food -= self.foodConsumption();
     // Building Maintnence
@@ -326,19 +328,36 @@ pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
 }
 
 /// check if production project is done
-pub fn checkProduction(self: *Self) ProductionResult {
+pub fn checkProduction(self: *Self, world: *World, rules: *Rules) ProductionResult {
     if (self.current_production_project == null) return .none_selected;
-    if (self.current_production_project.?.project.result == .perpetual) return .perpetual;
+    const work = self.current_production_project.?;
+    if (work.project == .Perpetual) return .perpetual;
 
-    if (self.current_production_project.?.progress >= self.current_production_project.?.project.production_needed) {
+    if (work.progress >= work.production_needed) {
+        // If its a new unit, can we place it?
+        if (work.project == .UnitType) {
+            if (!self.create_unit(world, work.project.UnitType, rules)) {
+                return .not_done;
+            }
+        }
+
         // save overproduction :)
-        self.unspent_production = self.current_production_project.?.progress - self.current_production_project.?.project.production_needed;
-        const compleated_project = self.current_production_project.?.project;
+        self.unspent_production = self.current_production_project.?.progress - self.current_production_project.?.production_needed;
+        const completed_project = self.current_production_project.?.project;
         self.current_production_project = null;
 
-        return .{ .done = compleated_project };
+        return .{ .done = completed_project };
     }
     return .not_done;
+}
+
+pub fn create_unit(self: *Self, world: *World, unit_type: Rules.UnitType, rules: *Rules) bool {
+    // TODO Add occupancy check, seemed very annoying
+    const new_unit = Unit.new(unit_type, self.faction.player, rules);
+    world.unit_map.putUnitDefaultSlot(self.position, new_unit, rules);
+    std.debug.print("UNIT CREATED \n", .{});
+    world.unit_map.refreshUnits(rules);
+    return true;
 }
 
 /// check if border expansion
@@ -353,6 +372,43 @@ pub fn checkExpansion(self: *Self) bool {
     return false;
 }
 
+// TODO
+// Add build queue with saved progress
+
+pub const ProductionTarget = union(enum) {
+    Building: Rules.Building,
+    UnitType: Rules.UnitType,
+    Perpetual: union(enum) {
+        money_making,
+        research,
+    },
+};
+
+// TODO
+// Add pass through from player/civ to check resources
+pub fn startConstruction(self: *Self, construction_target: ProductionTarget, rules: *Rules) bool {
+    if (self.current_production_project) |project| {
+        if (@intFromEnum(project.project) == @intFromEnum(construction_target)) return true;
+    }
+    var production_needed: u16 = 0;
+    if (construction_target == .UnitType) {
+        const stats = construction_target.UnitType.stats(rules);
+        // Check Resource requirement
+        //for (stats.resource_cost) |resource| {
+        //
+        //}
+        production_needed = stats.production;
+    } else if (construction_target == .Building) {}
+
+    // Add or overwrite current project
+    self.current_production_project = WorkInProgressProductionProject{
+        .progress = self.unspent_production,
+        .production_needed = @floatFromInt(production_needed),
+        .project = construction_target,
+    };
+    return false;
+}
+
 /// Result of checking if a city is growing
 const GrowthResult = enum {
     no_change,
@@ -361,7 +417,7 @@ const GrowthResult = enum {
 };
 
 const ProductionResult = union(enum) {
-    done: ProductionProject,
+    done: ProductionTarget,
     not_done: void,
     perpetual: void,
     none_selected: void,
@@ -370,17 +426,6 @@ const ProductionResult = union(enum) {
 
 const WorkInProgressProductionProject = struct {
     progress: f32,
-    project: ProductionProject,
-};
-
-const ProductionProject = struct {
     production_needed: f32,
-    result: union(enum) {
-        unit: u32, // placeholder type
-        building: u32, // placeholder type
-        perpetual: union(enum) {
-            money_making,
-            research,
-        },
-    },
+    project: ProductionTarget,
 };

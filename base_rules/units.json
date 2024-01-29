@@ -60,6 +60,18 @@
 			]
 		},
 		{
+			"name": "scout",
+			"production_cost": 25,
+			"resource_cost": [],
+			"moves": 2,
+			"combat_strength": 5,
+			"domain": "land",
+			"starting_promotions": [
+				"IgnoreTerrain",
+				"Fortify"
+			]
+		},
+		{
 			"name": "chariot_archer",
 			"production_cost": 56,
 			"resource_cost": [
@@ -77,18 +89,6 @@
 				"CannotMelee",
 				"RoughTerrainPenalty",
 				"NoTerrainDefense"
-			]
-		},
-		{
-			"name": "scout",
-			"production_cost": 25,
-			"resource_cost": [],
-			"moves": 2,
-			"combat_strength": 5,
-			"domain": "land",
-			"starting_promotions": [
-				"IgnoreTerrain",
-				"Fortify"
 			]
 		}
 	],

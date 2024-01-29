@@ -105,7 +105,7 @@ pub fn updateCamera(camera: *raylib.Camera2D, speed: f32) bool {
 
         const zoom_inc = 0.3;
         camera.zoom += (wheel * zoom_inc);
-        camera.zoom = std.math.clamp(camera.zoom, 0.3, 2.0);
+        camera.zoom = std.math.clamp(camera.zoom, 0.3, 3.0);
     }
 
     // Arrow key controls

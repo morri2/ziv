@@ -54,7 +54,7 @@ pub fn main() !void {
     a1.promotions.set(7); // Shock III
     a1.promotions.set(13); // CanEmbark
 
-    const b1 = Unit.new(@enumFromInt(6), 0, &rules); // Trireme
+    const b1 = Unit.new(@enumFromInt(7), 0, &rules); // Trireme
 
     var s1 = Unit.new(@enumFromInt(5), 0, &rules);
     s1.promotions.set(8); // Drill I
@@ -160,7 +160,7 @@ pub fn main() !void {
                         _ = city.processYields(&ya);
                         const growth_res = city.checkGrowth(&world);
                         _ = city.checkExpansion();
-                        _ = city.checkProduction();
+                        _ = city.checkProduction(&world, &rules);
 
                         switch (growth_res) {
                             .growth => std.debug.print("TOWN HAS GROWN! \n", .{}),
@@ -202,6 +202,23 @@ pub fn main() !void {
                         var city = world.cities.getPtr(city_key) orelse continue;
 
                         if (city_key == clicked_tile) {
+                            if (raylib.IsKeyDown(raylib.KEY_Y)) {
+                                // Warrior
+                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(3) }, &rules);
+                            } else if (raylib.IsKeyDown(raylib.KEY_U)) {
+                                // Settler
+                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(1) }, &rules);
+                            } else if (raylib.IsKeyDown(raylib.KEY_I)) {
+                                // Archer
+                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(4) }, &rules);
+                            } else if (raylib.IsKeyDown(raylib.KEY_O)) {
+                                // Work Boat
+                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(2) }, &rules);
+                            } else if (raylib.IsKeyDown(raylib.KEY_P)) {
+                                // Chariot Archer
+                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(6) }, &rules);
+                            }
+
                             std.debug.print("EXPANDING CITY!\n", .{});
                             _ = city.expandBorder(&world);
                         }
