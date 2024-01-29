@@ -99,7 +99,7 @@ pub fn parse(rules_dir: std.fs.Dir, allocator: std.mem.Allocator) !Rules {
     var units_file = try rules_dir.openFile("units.json", .{});
     defer units_file.close();
 
-    try parseUnits(units_file, &rules, &promotion_map, allocator);
+    try parseUnits(units_file, &rules, &promotion_map, &resource_map, allocator);
 
     return rules;
 }
@@ -830,11 +830,18 @@ fn parseUnits(
     file: std.fs.File,
     rules: *Rules,
     promotion_map: *const flag_index_map.FlagIndexMap(256),
+    resource_map: *std.StringArrayHashMap(Resource),
     allocator: std.mem.Allocator,
 ) !void {
+    const JsonResourceCost = struct {
+        resource: []const u8 = &.{},
+        amount: u8,
+    };
+
     const JsonUnitType = struct {
         name: []const u8,
         production_cost: u16, // Max cost, Nuclear Missile 1000
+        resource_cost: []const JsonResourceCost = &.{},
         moves: u8, // Max movement, Nuclear Sub etc. 6
         combat_strength: u8 = 0, // Max combat strength, Giant Death Robot 150
         ranged_strength: u8 = 0,
@@ -892,8 +899,14 @@ fn parseUnits(
                     promotion.name,
                 );
 
+                const resource_cost = try arena_allocator.alloc(Rules.UnitType.ResourceCost, promotion.resource_cost.len);
+                for (promotion.resource_cost, 0..) |cost, i| {
+                    resource_cost[i] = .{ .resource = resource_map.get(cost.resource).?, .amount = cost.amount };
+                }
+
                 unit_stats[unit_index] = .{
                     .production = promotion.production_cost,
+                    .resource_cost = resource_cost,
                     .moves = promotion.moves,
                     .melee = promotion.combat_strength,
                     .ranged = promotion.ranged_strength,
