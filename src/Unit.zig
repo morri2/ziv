@@ -7,12 +7,15 @@ const move = @import("move.zig");
 const UnitMap = @import("UnitMap.zig");
 const UnitSlot = UnitMap.UnitSlot;
 const UnitKey = UnitMap.UnitKey;
+const Player = @import("Player.zig");
 
 const Terrain = Rules.Terrain;
 const Improvements = Rules.Improvements;
 const Promotion = Rules.Promotion;
 const UnitType = Rules.UnitType;
 const UnitEffect = Rules.UnitEffect;
+
+faction: Player.Faction,
 
 type: UnitType,
 hit_points: u8 = 100, // All units have 100 HP
@@ -22,8 +25,8 @@ fortified: bool = false,
 promotions: Promotion.Set = Promotion.Set.initEmpty(),
 movement: f32 = 0,
 
-pub fn new(unit_type: UnitType, rules: *const Rules) Self {
-    var unit = Self{ .type = unit_type };
+pub fn new(unit_type: UnitType, player_id: Player.PlayerID, rules: *const Rules) Self {
+    var unit = Self{ .faction = .{ .player = player_id }, .type = unit_type };
     unit.promotions = unit_type.stats(rules).promotions;
     unit.movement = unit.maxMovement(rules);
     return unit;

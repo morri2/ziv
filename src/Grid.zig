@@ -13,7 +13,6 @@ pub const BoundBox = struct {
 
     iter: ?Idx = null,
 
-    /// Start with Null, outputs null when done
     pub fn iterNext(self: *BoundBox) ?Idx {
         if (self.iter == null) {
             self.iter = self.grid.idxFromCoords(self.xmin, self.ymin);
@@ -29,6 +28,12 @@ pub const BoundBox = struct {
 
     pub fn restart(self: *BoundBox) void {
         self.iter = null;
+    }
+
+    pub fn contains(self: *const BoundBox, idx: Idx) bool {
+        const x = self.grid.xFromIdx(idx);
+        const y = self.grid.yFromIdx(idx);
+        return x < self.xmax and y < self.ymax and x >= self.xmin and y >= self.ymin;
     }
 };
 

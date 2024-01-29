@@ -5,8 +5,10 @@ const Idx = @import("Grid.zig").Idx;
 const yield = @import("yield.zig");
 const YieldAccumumlator = yield.YieldAccumulator;
 const HexSet = @import("HexSet.zig");
-
+const Player = @import("Player.zig");
 //buildings: // bitfield for all buildings in the game?
+
+faction: Player.Faction,
 
 name: []const u8 = "shithole",
 city_id: usize,
@@ -40,7 +42,7 @@ halted_production_projects: []WorkInProgressProductionProject = &.{},
 
 allocator: std.mem.Allocator,
 
-pub fn new(position: Idx, world: *const World) Self {
+pub fn new(position: Idx, player_id: Player.PlayerID, world: *const World) Self {
     var claimed = HexSet.init(world.allocator);
     claimed.add(position);
     claimed.addAdjacent(&world.grid);
@@ -59,6 +61,7 @@ pub fn new(position: Idx, world: *const World) Self {
     claimed.remove(position);
 
     const out: Self = .{
+        .faction = .{ .player = player_id },
         .city_id = (world.turn_counter << 16) & (position & 0xffff), // id will be unique, use for loging etc
         .name = "Goteborg",
         .position = position,

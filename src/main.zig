@@ -11,6 +11,7 @@ const Idx = Grid.Idx;
 const move = @import("move.zig");
 const UnitMap = @import("UnitMap.zig");
 const City = @import("City.zig");
+const PlayerView = @import("PlayerView.zig");
 const graphics = @import("gui/graphics.zig");
 
 const raylib = @cImport({
@@ -36,25 +37,26 @@ pub fn main() !void {
         WIDTH,
         HEIGHT,
         false,
+        1,
         &rules,
     );
     defer world.deinit();
 
     try world.loadFromFile("maps/last_saved.map");
 
-    var w1 = Unit.new(@enumFromInt(3), &rules); // Warrior
+    var w1 = Unit.new(@enumFromInt(3), 0, &rules); // Warrior
     w1.promotions.set(11); // Mobility
 
-    var a1 = Unit.new(@enumFromInt(4), &rules);
+    var a1 = Unit.new(@enumFromInt(4), 0, &rules);
     a1.promotions.set(11); // Mobility
     a1.promotions.set(5); // Shock I
     a1.promotions.set(6); // Shock II
     a1.promotions.set(7); // Shock III
     a1.promotions.set(13); // CanEmbark
 
-    const b1 = Unit.new(@enumFromInt(6), &rules); // Trireme
+    const b1 = Unit.new(@enumFromInt(6), 0, &rules); // Trireme
 
-    var s1 = Unit.new(@enumFromInt(5), &rules);
+    var s1 = Unit.new(@enumFromInt(5), 0, &rules);
     s1.promotions.set(8); // Drill I
     s1.promotions.set(9); // Drill II
     s1.promotions.set(10); // Drill III
@@ -103,6 +105,7 @@ pub fn main() !void {
     terrain_brush = terrain_brush; // autofix
 
     while (!raylib.WindowShouldClose()) {
+        world.fullUpdateViews();
         {
             if (raylib.IsKeyPressed(raylib.KEY_Y)) in_edit_mode = !in_edit_mode;
 

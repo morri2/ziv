@@ -11,6 +11,8 @@ const Improvements = Rules.Improvements;
 const City = @import("City.zig");
 const UnitMap = @import("UnitMap.zig");
 const HexSet = @import("HexSet.zig");
+const PlayerView = @import("PlayerView.zig");
+const Player = @import("Player.zig");
 
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
@@ -44,6 +46,9 @@ rules: *const Rules,
 
 grid: Grid,
 
+players: []Player,
+player_count: u8,
+
 turn_counter: usize,
 
 // Per tile data
@@ -67,7 +72,7 @@ pub fn claimed(self: *const Self, idx: Idx) bool {
 }
 
 pub fn addCity(self: *Self, idx: Idx) !void {
-    const city = City.new(idx, self);
+    const city = City.new(idx, 0, self);
     try self.cities.put(self.allocator, idx, city);
 }
 
@@ -95,6 +100,7 @@ pub fn init(
     width: usize,
     height: usize,
     wrap_around: bool,
+    player_count: u8,
     rules: *const Rules,
 ) !Self {
     const grid = Grid.init(width, height, wrap_around);
@@ -104,10 +110,16 @@ pub fn init(
     @memset(terrain, std.mem.zeroes(Terrain));
 
     const improvements = try allocator.alloc(Improvements, grid.len);
-    errdefer allocator.free(terrain);
+    errdefer allocator.free(improvements);
     @memset(improvements, std.mem.zeroes(Improvements));
 
+    const players = try allocator.alloc(Player, player_count);
+    errdefer allocator.free(players);
+    for (0..players.len) |i| players[i] = try Player.init(allocator, @as(u8, @intCast(i)), &grid);
+
     return Self{
+        .player_count = player_count,
+        .players = players,
         .allocator = allocator,
         .grid = grid,
         .terrain = terrain,
@@ -133,6 +145,9 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.terrain);
 
     for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
+    for (0..self.players.len) |i| self.players[i].deinit();
+
+    self.allocator.free(self.players);
     self.cities.deinit(self.allocator);
 }
 
@@ -153,6 +168,36 @@ pub fn saveToFile(self: *Self, path: []const u8) !void {
     }
 
     file.close();
+}
+
+pub fn fullUpdateViews(self: *Self) void {
+    for (self.players, 0..) |player, i| {
+        self.players[i].view.unsetAllVisable(self);
+
+        for (self.unit_map.units.keys(), self.unit_map.units.values()) |key, unit| {
+            const idx = key.idx;
+            if (unit.faction.player != player.id) continue;
+
+            var flow = HexSet.init(self.allocator);
+            defer flow.deinit();
+            flow.add(idx);
+            flow.addAdjacent(&self.grid);
+            flow.addAdjacent(&self.grid);
+
+            for (flow.slice()) |idx_adj| self.players[i].view.setVisable(idx_adj, self);
+        }
+
+        for (self.cities.values()) |city| {
+            if (city.faction.player != player.id) continue;
+            self.players[i].view.setVisable(city.position, self);
+
+            for (city.claimed.slice()) |idx_c|
+                self.players[i].view.setVisable(idx_c, self);
+
+            for (city.adjacent.slice()) |idx_adj|
+                self.players[i].view.setVisable(idx_adj, self);
+        }
+    }
 }
 
 pub fn loadFromFile(self: *Self, path: []const u8) !void {
