@@ -171,6 +171,7 @@ pub fn moveCost(
         .river_crossing = if (self.grid.edgeBetween(reference.idx, to)) |edge| self.rivers.contains(edge) else false,
         .transport = if (improvements.pillaged_transport) .none else improvements.transport,
         .embarked = reference.slot == .embarked,
+        .city = self.cities.contains(to),
     }, self.rules);
 }
 

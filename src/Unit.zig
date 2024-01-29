@@ -32,6 +32,7 @@ pub const MoveContext = struct {
     river_crossing: bool,
     transport: Transport,
     embarked: bool,
+    city: bool,
 };
 
 pub const MoveCost = union(enum) {
@@ -126,6 +127,8 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
     const stats = self.type.stats(rules);
     const terrain_attributes = context.target_terrain.attributes(rules);
 
+    if (self.movement <= 0) return .disallowed;
+
     // Sea units should not be embarked
     std.debug.assert(!(context.embarked and stats.domain == .sea));
 
@@ -138,8 +141,14 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
 
     if (context.river_crossing) return .allowed_final;
 
+    if (context.city) return .{ .allowed = 1 }; // obs! should be after river crossing check
+
     const cost: MoveCost = switch (stats.domain) {
-        .sea => if (!terrain_attributes.is_water) .disallowed else .{ .allowed = 1 },
+        .sea => blk: {
+            if (!terrain_attributes.is_water) break :blk .disallowed;
+
+            break :blk .{ .allowed = 1 };
+        },
         .land => blk: {
             var cost_amt: f32 = 1;
             if (terrain_attributes.is_rough and !Promotion.Effect.ignore_terrain_move.in(
@@ -165,14 +174,7 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
         },
     };
 
-    return switch (cost) {
-        .disallowed => cost,
-        .allowed => |c| if (c <= self.movement) cost else .disallowed,
-        .allowed_final,
-        .embarkation,
-        .disembarkation,
-        => if (self.movement != 0.0) cost else .disallowed,
-    };
+    return cost;
 }
 
 pub fn performMove(self: *Self, cost: MoveCost) void {
