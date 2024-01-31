@@ -1,10 +1,11 @@
-/// A set of hexes
+/// A set of hexes with counts associated. increment and decrement, 0 --> remove
 const Self = @This();
 const std = @import("std");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
+const HexSet = @import("HexSet.zig");
 
-hexes: std.AutoArrayHashMapUnmanaged(Idx, void),
+hexes: std.AutoArrayHashMapUnmanaged(Idx, u8),
 allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator) Self {
@@ -33,12 +34,47 @@ pub fn checkRemove(self: *Self, idx: Idx) bool {
     return self.hexes.swapRemove(idx);
 }
 
-pub fn add(self: *Self, idx: Idx) void {
-    self.hexes.put(self.allocator, idx, {}) catch unreachable;
+pub fn set(self: *Self, idx: Idx, val: u8) void {
+    if (val == 0) {
+        self.remove(idx);
+        return;
+    }
+    self.hexes.put(self.allocator, idx, val) catch unreachable;
 }
 
-pub fn addSlice(self: *Self, idxs: []Idx) void {
-    for (idxs) |idx| self.add(idx);
+pub fn setSlice(self: *Self, idxs: []Idx, val: u8) void {
+    for (idxs) |idx| self.set(idx, val);
+}
+
+pub fn inc(self: *Self, idx: Idx) void {
+    const c = self.hexes.get(idx) orelse {
+        self.hexes.put(self.allocator, idx, 1) catch unreachable;
+        return;
+    };
+    self.hexes.put(self.allocator, idx, c + 1) catch unreachable;
+}
+
+pub fn incSlice(self: *Self, idxs: []Idx, val: u8) void {
+    for (idxs) |idx| self.inc(idx, val);
+}
+
+pub fn decSlice(self: *Self, idxs: []Idx, val: u8) void {
+    for (idxs) |idx| self.dec(idx, val);
+}
+
+pub fn checkDec(self: *Self, idx: Idx) bool {
+    if (!self.hexes.contains(idx)) return false;
+
+    self.dec(self, idx);
+    return true;
+}
+
+pub fn dec(self: *Self, idx: Idx) void {
+    var c = self.hexes.getPtr(idx) orelse {
+        return;
+    };
+    c -= 1;
+    if (c == 0) self.hexes.swapRemove(idx);
 }
 
 pub fn removeSlice(self: *Self, idxs: []Idx) void {
@@ -78,16 +114,40 @@ pub fn shaveToIntersect(self: *Self, super: *const Self) void {
     for (to_remove.items) |idx| self.remove(idx);
 }
 
-pub fn addOther(self: *Self, other: *const Self) void {
-    self.addSlice(other.hexes.keys());
+pub fn incOtherUncounted(self: *Self, other: *const HexSet) void {
+    for (other.slice()) |idx| self.inc(idx);
+}
+
+pub fn decOtherUncounted(self: *Self, other: *const HexSet) void {
+    for (other.slice()) |idx| self.dec(idx);
+}
+
+/// returns false if at least one is already empty ...
+pub fn decOtherUncountedChecked(self: *Self, other: *const HexSet) bool {
+    for (other.slice()) |idx| if (!self.checkDec(idx)) return false;
+    return true;
+}
+
+pub fn sumOther(self: *Self, other: *const Self) void {
+    for (other.slice(), other.values()) |idx, v1| {
+        const v2 = self.hexes.get(idx) orelse 0;
+        self.set(idx, v1 + v2);
+    }
 }
 
 pub fn subtractOther(self: *Self, other: *const Self) void {
-    self.removeSlice(other.hexes.keys());
+    for (other.slice(), other.values()) |idx, v1| {
+        const v2 = self.hexes.get(idx) orelse 0;
+        self.set(idx, v1 -| v2);
+    }
 }
 
 pub fn slice(self: *const Self) []Idx {
     return self.hexes.keys();
+}
+
+pub fn values(self: *const Self) []u8 {
+    return self.hexes.values();
 }
 
 pub fn initExternalAdjacent(self: *const Self, grid: *const Grid) Self {
@@ -106,25 +166,4 @@ pub fn addAdjacent(self: *Self, grid: *const Grid) void {
     var adj = initExternalAdjacent(self, grid);
     defer adj.deinit();
     self.addOther(&adj);
-}
-
-pub fn initCircle(center: Idx, radius: u8, grid: Grid, allocator: std.mem.Allocator) Self {
-    var set = Self.init(allocator);
-    set.addCircle(center, radius, grid);
-    return set;
-}
-
-pub fn addCircle(self: *Self, center: Idx, radius: u8, grid: Grid) void {
-    const qrs_c = Grid.CoordQRS.fromIdx(center, grid);
-    var q: Grid.iCoord = -@as(Grid.iCoord, @intCast(radius + 1));
-    while (q < radius) {
-        q += 1;
-        var r: Grid.iCoord = -@as(Grid.iCoord, @intCast(radius + 1));
-        while (r < radius) {
-            r += 1;
-            const coord = qrs_c.addQR(@intCast(q), @intCast(r));
-            if (@abs(coord.s() - qrs_c.s()) > radius) continue;
-            self.add(coord.toIdx(grid) orelse continue);
-        }
-    }
 }

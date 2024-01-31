@@ -10,7 +10,7 @@ const Unit = @import("Unit.zig");
 const Player = @import("Player.zig");
 //buildings: // bitfield for all buildings in the game?
 
-faction: Player.Faction,
+faction_id: Player.FactionID,
 
 name: []const u8 = "shithole",
 city_id: usize,
@@ -44,7 +44,7 @@ halted_production_projects: []WorkInProgressProductionProject = &.{},
 
 allocator: std.mem.Allocator,
 
-pub fn new(position: Idx, player_id: Player.PlayerID, world: *const World) Self {
+pub fn new(position: Idx, player_id: Player.FactionID, world: *const World) Self {
     var claimed = HexSet.init(world.allocator);
     claimed.add(position);
     claimed.addAdjacent(&world.grid);
@@ -63,7 +63,7 @@ pub fn new(position: Idx, player_id: Player.PlayerID, world: *const World) Self 
     claimed.remove(position);
 
     const out: Self = .{
-        .faction = .{ .player = player_id },
+        .faction_id = player_id,
         .city_id = (world.turn_counter << 16) & (position & 0xffff), // id will be unique, use for loging etc
         .name = "Goteborg",
         .position = position,
@@ -351,7 +351,7 @@ pub fn checkProduction(self: *Self, world: *World) !ProductionResult {
 }
 
 pub fn createUnit(self: *Self, world: *World, unit_type: Rules.UnitType) !void {
-    const new_unit = Unit.new(unit_type, self.faction.player, world.rules);
+    const new_unit = Unit.new(unit_type, self.faction_id, world.rules);
     try world.units.putOrStackAutoSlot(self.position, new_unit);
     std.debug.print("UNIT CREATED \n", .{});
     world.units.refresh();

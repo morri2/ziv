@@ -36,7 +36,7 @@ pub fn main() !void {
         gpa.allocator(),
         WIDTH,
         HEIGHT,
-        false,
+        true,
         1,
         &rules,
     );
@@ -285,6 +285,83 @@ pub fn main() !void {
                 );
                 camera_bound_box.restart();
             }
+
+            //const GridNEW = @import("GridNEW.zig");
+
+            camera_bound_box.restart();
+            if (raylib.IsKeyDown(raylib.KEY_Z)) {
+                while (camera_bound_box.iterNext()) |index| {
+                    const xy = Grid.CoordXY.fromIdx(index, world.grid);
+                    const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
+
+                    render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
+                    render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
+                    render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
+                    if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
+                }
+                if (maybe_selected_idx != null) {
+                    const ns = world.grid.neighbours(maybe_selected_idx.?);
+
+                    var xxx: f32 = 0.1;
+                    for (ns) |n| {
+                        xxx += 0.1;
+                        if (n == null) continue;
+                        render.renderTextInHex(n.?, world.grid, "N", 0, 0.7, .{}, texture_set);
+                        render.renderFormatHexAuto(maybe_selected_idx.?, world.grid, "{}", .{n.?}, 0.7, -0.4 + xxx, .{ .font_size = 6 }, texture_set);
+                    }
+                }
+            }
+
+            // blk: {
+            //     const idx1 = maybe_selected_idx orelse break :blk;
+            //     const idx2 = 12;
+
+            //     const dist = world.grid.distance(idx1, idx2);
+
+            //     for (0..(dist + 1)) |n| {
+            //         const fxy = world.grid.nthLerp(dist, @intCast(n), idx1, idx2);
+            //         raylib.DrawCircleV(
+            //             fxy.raylibVector2(texture_set.hex_radius),
+            //             10,
+            //             raylib.RED,
+            //         );
+            //         const theidx = fxy.roundToIdx(world.grid) orelse continue;
+            //         render.renderTextureInHex(
+            //             theidx,
+            //             world.grid,
+            //             texture_set.red_pop,
+            //             0,
+            //             0,
+            //             .{ .scale = 0.1 },
+            //             texture_set,
+            //         );
+            //     }
+            //     render.renderTextureInHex(
+            //         idx1,
+            //         world.grid,
+            //         texture_set.green_pop,
+            //         0,
+            //         0,
+            //         .{ .scale = 0.1 },
+            //         texture_set,
+            //     );
+            //     render.renderTextureInHex(
+            //         idx2,
+            //         world.grid,
+            //         texture_set.green_pop,
+            //         0,
+            //         0,
+            //         .{ .scale = 0.1 },
+            //         texture_set,
+            //     );
+
+            //     raylib.DrawLineEx(
+            //         render.posInHex(idx1, world.grid, 0, 0, texture_set),
+            //         render.posInHex(idx2, world.grid, 0, 0, texture_set),
+            //         2,
+            //         raylib.WHITE,
+            //     );
+            // }
         }
 
         raylib.EndMode2D();

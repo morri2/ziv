@@ -11,13 +11,13 @@ const render = @import("render.zig");
 const control = @import("control.zig");
 const PlayerView = @import("../PlayerView.zig");
 const Yield = @import("../yield.zig").Yield;
-
+const BoundBox = @import("control.zig").BoundBox;
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
 });
 
-pub fn renderWorld(world: *const World, cbb: *Grid.BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderWorld(world: *const World, cbb: *BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
     renderTerrainLayer(world, cbb, view, ts);
 
     renderCities(world, cbb, ts);
@@ -28,7 +28,7 @@ pub fn renderWorld(world: *const World, cbb: *Grid.BoundBox, view: ?*const Playe
     renderTerraIncognita(world.grid, cbb, view, ts);
 }
 
-pub fn renderTerraIncognita(grid: Grid, cbb: *Grid.BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderTerraIncognita(grid: Grid, cbb: *BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
     if (view == null) return;
     cbb.restart();
 
@@ -44,7 +44,7 @@ pub fn renderTerraIncognita(grid: Grid, cbb: *Grid.BoundBox, view: ?*const Playe
 
 const OUTLINE_COLOR = .{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
-pub fn renderTerrainLayer(world: *const World, cbb: *Grid.BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderTerrainLayer(world: *const World, cbb: *BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
     cbb.restart();
     while (cbb.iterNext()) |idx| {
         var terrain = world.terrain[idx];
@@ -55,7 +55,7 @@ pub fn renderTerrainLayer(world: *const World, cbb: *Grid.BoundBox, view: ?*cons
                 // RENDER DENSE FOG
                 continue;
             }
-            if (view.?.fog_of_war.contains(idx)) {
+            if (view.?.in_view.contains(idx)) {
                 terrain = view.?.last_seen_terrain[idx];
                 improvement = view.?.last_seen_improvements[idx];
             }
@@ -76,7 +76,7 @@ pub fn renderTerrainLayer(world: *const World, cbb: *Grid.BoundBox, view: ?*cons
     }
 }
 
-pub fn renderCities(world: *const World, cbb: *Grid.BoundBox, ts: TextureSet) void {
+pub fn renderCities(world: *const World, cbb: *BoundBox, ts: TextureSet) void {
     for (world.cities.keys()) |idx| {
         if (!(cbb.contains(idx))) continue;
 
@@ -198,7 +198,7 @@ pub fn renderCities(world: *const World, cbb: *Grid.BoundBox, ts: TextureSet) vo
     }
 }
 
-pub fn renderAllYields(world: *const World, cbb: *Grid.BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderAllYields(world: *const World, cbb: *BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
     cbb.restart();
     while (cbb.iterNext()) |idx| {
         var yield = world.tileYield(idx);
@@ -218,7 +218,7 @@ pub fn renderYield(yield: Yield, grid: Grid, idx: Idx, ts: TextureSet) void {
     render.renderFormatHexAuto(idx, grid, "{}P  {}F  {}G", fmt_args, 0.0, 0.5, .{ .font_size = 6 }, ts);
 }
 
-pub fn renderAllUnits(world: *const World, cbb: *Grid.BoundBox, ts: TextureSet) void {
+pub fn renderAllUnits(world: *const World, cbb: *BoundBox, ts: TextureSet) void {
     var iter = world.units.iterator();
     while (iter.next()) |unit| {
         if (!cbb.contains(unit.idx)) continue;
@@ -263,7 +263,7 @@ pub fn renderUnit(unit: Unit, idx: Idx, grid: Grid, ts: TextureSet) void {
     );
 }
 
-pub fn renderAllResources(world: *const World, cbb: *Grid.BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderAllResources(world: *const World, cbb: *BoundBox, view: ?*const PlayerView, ts: TextureSet) void {
     for (world.resources.keys(), world.resources.values()) |idx, res| {
         if (!(cbb.contains(idx))) continue;
         if (view == null or view.?.visability(idx) == .hidden) continue;

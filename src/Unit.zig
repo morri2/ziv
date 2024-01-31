@@ -55,11 +55,11 @@ hit_points: u8 = 100, // All units have 100 HP
 prepared: bool = false,
 fortified: bool = false,
 promotions: Promotion.Set = Promotion.Set.initEmpty(),
-faction: Player.Faction,
+faction_id: Player.FactionID,
 movement: f32 = 0,
 
-pub fn new(unit_type: UnitType, player_id: Player.PlayerID, rules: *const Rules) Self {
-    var unit = Self{ .faction = .{ .player = player_id }, .type = unit_type };
+pub fn new(unit_type: UnitType, player_id: Player.FactionID, rules: *const Rules) Self {
+    var unit = Self{ .faction_id = player_id, .type = unit_type };
     unit.promotions = unit_type.stats(rules).promotions;
     unit.movement = unit.maxMovement(rules);
     return unit;

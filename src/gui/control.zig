@@ -14,7 +14,7 @@ const raylib = @cImport({
     @cInclude("raymath.h");
 });
 
-pub fn cameraRenderBoundBox(camera: raylib.Camera2D, grid: *Grid, screen_width: usize, screen_height: usize, ts: TextureSet) Grid.BoundBox {
+pub fn cameraRenderBoundBox(camera: raylib.Camera2D, grid: *Grid, screen_width: usize, screen_height: usize, ts: TextureSet) BoundBox {
     const min_x, const min_y, const max_x, const max_y = blk: {
         const top_left = raylib.GetScreenToWorld2D(raylib.Vector2{}, camera);
         const bottom_right = raylib.GetScreenToWorld2D(raylib.Vector2{
@@ -49,7 +49,7 @@ pub fn cameraRenderBoundBox(camera: raylib.Camera2D, grid: *Grid, screen_width: 
 
         break :blk .{ min_x, min_y, max_x, max_y };
     };
-    return Grid.BoundBox{
+    return BoundBox{
         .xmax = max_x,
         .xmin = min_x,
         .ymax = max_y,
@@ -75,6 +75,30 @@ pub fn getMouseTile(
             const real_x = hex.tilingX(x, y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) * 0.5;
             const real_y = hex.tilingY(y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) * 0.5;
             const dist = std.math.pow(f32, real_x - click_x, 2) + std.math.pow(f32, real_y - click_y, 2);
+            if (dist < min_dist) {
+                click_idx = grid.idxFromCoords(x, y);
+                min_dist = dist;
+            }
+        }
+    }
+    return click_idx;
+}
+
+pub fn getPointIdx(
+    xf: f32,
+    yf: f32,
+    grid: Grid,
+    ts: TextureSet,
+) usize {
+    var click_idx: Grid.Idx = 0;
+
+    var min_dist: f32 = std.math.floatMax(f32);
+    for (0..grid.width) |x| {
+        for (0..grid.height) |y| {
+            const real_x = hex.tilingX(x, y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) * 0.5;
+            const real_y = hex.tilingY(y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) * 0.5;
+            const dist = std.math.pow(f32, real_x -
+                xf, 2) + std.math.pow(f32, real_y - yf, 2);
             if (dist < min_dist) {
                 click_idx = grid.idxFromCoords(x, y);
                 min_dist = dist;
@@ -116,3 +140,36 @@ pub fn updateCamera(camera: *raylib.Camera2D, speed: f32) bool {
 
     return camera.zoom != last_zoom or raylib.Vector2Equals(camera.target, last_target) != 0;
 }
+
+pub const BoundBox = struct {
+    xmin: usize,
+    xmax: usize,
+    ymin: usize,
+    ymax: usize,
+    grid: *const Grid,
+
+    iter: ?Idx = null,
+
+    pub fn iterNext(self: *BoundBox) ?Idx {
+        if (self.iter == null) {
+            self.iter = self.grid.idxFromCoords(self.xmin, self.ymin);
+        } else {
+            self.iter = self.iter.? + 1;
+            const x = self.grid.xFromIdx(self.iter.?);
+            const y = self.grid.yFromIdx(self.iter.?);
+            if (x >= self.xmax) self.iter = self.grid.idxFromCoords(self.xmin, y + 1);
+        }
+        if (!self.grid.contains(self.iter.?)) self.iter = null;
+        return self.iter;
+    }
+
+    pub fn restart(self: *BoundBox) void {
+        self.iter = null;
+    }
+
+    pub fn contains(self: *const BoundBox, idx: Idx) bool {
+        const x = self.grid.xFromIdx(idx);
+        const y = self.grid.yFromIdx(idx);
+        return x < self.xmax and y < self.ymax and x >= self.xmin and y >= self.ymin;
+    }
+};

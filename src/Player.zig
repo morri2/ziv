@@ -3,7 +3,7 @@ const std = @import("std");
 const PlayerView = @import("PlayerView.zig");
 const Grid = @import("Grid.zig");
 
-pub const PlayerID = u8;
+pub const FactionID = u8;
 
 id: u8,
 view: PlayerView,
@@ -20,9 +20,3 @@ pub fn init(allocator: std.mem.Allocator, id: u8, grid: *const Grid) !Self {
 pub fn deinit(self: *Self) void {
     self.view.deinit();
 }
-
-pub const Faction = union(enum) {
-    barbarian: void,
-    player: PlayerID,
-    //city_state: void,
-};

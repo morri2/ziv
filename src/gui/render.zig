@@ -144,7 +144,7 @@ pub fn renderTextureInHex(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, 
 }
 
 /// returns the point relative to the center of a point
-fn posInHex(idx: Idx, grid: Grid, off_x: f32, off_y: f32, ts: TextureSet) raylib.Vector2 {
+pub fn posInHex(idx: Idx, grid: Grid, off_x: f32, off_y: f32, ts: TextureSet) raylib.Vector2 {
     const x = grid.xFromIdx(idx);
     const y = grid.yFromIdx(idx);
     const center_x = hex.tilingX(x, y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) / 2.0;

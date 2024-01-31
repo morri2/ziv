@@ -1,6 +1,7 @@
 const Self = @This();
 const std = @import("std");
 const HexSet = @import("HexSet.zig");
+const CountedHexSet = @import("CountedHexSet.zig");
 const Yield = @import("yield.zig").Yield;
 const Terrain = @import("Rules.zig").Terrain;
 const Improvements = @import("Rules.zig").Improvements;
@@ -9,7 +10,7 @@ const World = @import("World.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
 
-fog_of_war: HexSet,
+in_view: CountedHexSet, // tracks number of units which can see,
 explored: HexSet,
 
 last_seen_yields: []Yield,
@@ -17,9 +18,45 @@ last_seen_terrain: []Terrain,
 last_seen_improvements: []Improvements,
 allocator: std.mem.Allocator,
 
+pub fn addVision(self: *Self, idx: Idx) void {
+    self.in_view.inc(idx);
+    self.explored.add(idx);
+}
+
+pub fn removeVision(self: *Self, idx: Idx, world: *const World) void {
+    self.update(idx, world);
+    self.in_view.dec(idx);
+}
+
+pub fn addVisionSet(self: *Self, vision: HexSet) void {
+    for (vision.slice()) |idx| self.addVision(idx);
+}
+
+pub fn removeVisionSet(self: *Self, vision: HexSet, world: *const World) void {
+    for (vision.slice()) |idx| self.removeVision(idx, world);
+}
+
+pub fn viewYield(self: *const Self, idx: Idx, world: *const World) ?Yield {
+    if (!self.explored.contains(idx)) return null;
+    if (!self.in_view.contains(idx)) return self.last_seen_yields[idx];
+    return world.tileYield(idx);
+}
+
+pub fn viewTerrain(self: *const Self, idx: Idx, world: *const World) ?Terrain {
+    if (!self.explored.contains(idx)) return null;
+    if (!self.in_view.contains(idx)) return self.last_seen_yields[idx];
+    return world.terrain[idx];
+}
+
+pub fn viewImprovements(self: *const Self, idx: Idx, world: *const World) ?Improvements {
+    if (!self.explored.contains(idx)) return null;
+    if (!self.in_view.contains(idx)) return self.last_seen_improvements[idx];
+    return world.improvements[idx];
+}
+
 pub fn init(allocator: std.mem.Allocator, grid: *const Grid) !Self {
     return .{
-        .fog_of_war = HexSet.init(allocator),
+        .in_view = CountedHexSet.init(allocator),
         .explored = HexSet.init(allocator),
         .last_seen_yields = try allocator.alloc(Yield, grid.len),
         .last_seen_terrain = try allocator.alloc(Terrain, grid.len),
@@ -33,7 +70,7 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.last_seen_terrain);
     self.allocator.free(self.last_seen_yields);
 
-    self.fog_of_war.deinit();
+    self.in_view.deinit();
     self.explored.deinit();
 }
 
@@ -43,29 +80,16 @@ pub fn update(self: *Self, idx: Idx, world: *const World) void {
     self.last_seen_yields[idx] = world.tileYield(idx);
 }
 
-pub fn discover(self: *Self, idx: Idx, world: *const World) void {
-    self.update(idx, world);
-    self.explored.add(idx);
-    self.fog_of_war.add(idx);
-}
-
-pub fn setVisable(self: *Self, idx: Idx, world: *const World) void {
-    self.discover(idx, world);
-    self.fog_of_war.remove(idx);
-}
-
-pub fn unsetVisable(self: *Self, idx: Idx, world: *const World) void {
-    self.update(idx, world);
-    self.fog_of_war.add(idx);
-}
-
 pub fn unsetAllVisable(self: *Self, world: *const World) void {
-    for (0..world.grid.len) |i| self.unsetVisable(i, world);
+    for (0..world.grid.len) |idx| {
+        self.update(idx, world);
+        self.in_view.remove(idx);
+    }
 }
 
 pub fn visability(self: *const Self, idx: Idx) enum { visable, hidden, fov } {
     if (!self.explored.contains(idx)) return .hidden;
-    if (self.fog_of_war.contains(idx)) return .fov;
+    if (!self.in_view.contains(idx)) return .fov;
     return .visable;
 }
 

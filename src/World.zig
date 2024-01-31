@@ -157,7 +157,7 @@ pub fn moveCost(
     reference: Units.Reference,
     to: Idx,
 ) Unit.MoveCost {
-    if (!self.grid.adjacentTo(reference.idx, to)) return .disallowed;
+    if (!self.grid.isNeighbour(reference.idx, to)) return .disallowed;
 
     if (self.units.get(to, reference.slot) != null) return .disallowed;
 
@@ -216,34 +216,70 @@ pub fn saveToFile(self: *Self, path: []const u8) !void {
     file.close();
 }
 
+pub fn unitVision(self: *const Self, idx: Idx) void {
+    _ = self; // autofix
+    _ = idx; // autofix
+
+    const vision_set = 0;
+    _ = vision_set; // autofix
+
+}
+
 pub fn fullUpdateViews(self: *Self) void {
-    for (self.players, 0..) |player, i| {
+    var iter //
+        = self.units.iterator();
+
+    for (self.players, 0..) |_, i| {
         self.players[i].view.unsetAllVisable(self);
-
-        var iter = self.units.iterator();
-        while (iter.next()) |unit| {
-            if (unit.unit.faction.player != player.id) continue;
-
-            var flow = HexSet.init(self.allocator);
-            defer flow.deinit();
-            flow.add(unit.idx);
-            flow.addAdjacent(&self.grid);
-            flow.addAdjacent(&self.grid);
-
-            for (flow.slice()) |idx_adj| self.players[i].view.setVisable(idx_adj, self);
-        }
-
-        for (self.cities.values()) |city| {
-            if (city.faction.player != player.id) continue;
-            self.players[i].view.setVisable(city.position, self);
-
-            for (city.claimed.slice()) |idx_c|
-                self.players[i].view.setVisable(idx_c, self);
-
-            for (city.adjacent.slice()) |idx_adj|
-                self.players[i].view.setVisable(idx_adj, self);
-        }
     }
+
+    while (iter.next()) |item| {
+        var vision = HexSet.initCircle(item.idx, 2, self.grid, self.allocator);
+        defer vision.deinit();
+
+        const player_id = item.unit.faction_id;
+
+        self.players[player_id].view.addVisionSet(vision);
+    }
+
+    for (self.cities.values()) |city| {
+        var vision = HexSet.init(self.allocator);
+        defer vision.deinit();
+        vision.add(city.position);
+        vision.addOther(&city.claimed);
+        vision.addOther(&city.adjacent);
+
+        const player_id = city.faction_id;
+        self.players[player_id].view.addVisionSet(vision);
+    }
+
+    // for (self.players, 0..) |player, i| {
+    //     self.players[i].view.unsetAllVisable(self);
+
+    //     var iter = self.units.iterator();
+    //     while (iter.next()) |unit| {
+    //         if (unit.unit.faction.player != player.id) continue;
+
+    //         var flow = HexSet.init(self.allocator);
+    //         defer flow.deinit();
+    //         flow.add(unit.idx);
+    //         flow.addAdjacent(&self.grid);
+    //         flow.addAdjacent(&self.grid);
+
+    //         for (flow.slice()) |idx_adj| self.players[i].view.setVisable(idx_adj, self);
+    //     }
+
+    //     for (self.cities.values()) |city| {
+    //         if (city.faction.player != player.id) continue;
+    //         self.players[i].view.setVisable(city.position, self);
+
+    //         for (city.claimed.slice()) |idx_c|
+    //             self.players[i].view.setVisable(idx_c, self);
+
+    //         for (city.adjacent.slice()) |idx_adj|
+    //             self.players[i].view.setVisable(idx_adj, self);
+    //     }
+    // }
 }
 
 pub fn loadFromFile(self: *Self, path: []const u8) !void {

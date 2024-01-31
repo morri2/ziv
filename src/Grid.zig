@@ -1,39 +1,102 @@
 const std = @import("std");
-
 const Self = @This();
-
+/// THE NEW GRID MIND(MELT)SET
+/// The Idx is king! A hex has an index, each index MIGHT be representated
+/// as multiple diffrent coordinates in the other representation (still
+/// there is a cannonical version for each coordinate type).
+/// The GAME STATE should only ever hold Idx:es.
 pub const Idx = usize;
+pub const uCoord = u16;
+pub const iCoord = i16;
 
-pub const BoundBox = struct {
-    xmin: usize,
-    xmax: usize,
-    ymin: usize,
-    ymax: usize,
-    grid: *const Self,
+pub const CoordXY = struct {
+    x: iCoord,
+    y: iCoord,
 
-    iter: ?Idx = null,
+    //   |x,y|1,0|2,0|3,0|4,0|
+    //    \ / \ / \ / \ / \ / \
+    //     |0,1|1,1|2,1|3,1|4,1|
+    //    / \ / \ / \ / \ / \ /
+    //   |0,2|1,2|2,2|3,2|4,2|
 
-    pub fn iterNext(self: *BoundBox) ?Idx {
-        if (self.iter == null) {
-            self.iter = self.grid.idxFromCoords(self.xmin, self.ymin);
-        } else {
-            self.iter = self.iter.? + 1;
-            const x = self.grid.xFromIdx(self.iter.?);
-            const y = self.grid.yFromIdx(self.iter.?);
-            if (x >= self.xmax) self.iter = self.grid.idxFromCoords(self.xmin, y + 1);
+    pub fn canonize(self: CoordXY, grid: Self) ?CoordXY {
+        const wrap_x: iCoord =
+            if (grid.wrap_around) @mod(self.x, @as(iCoord, @intCast(grid.width))) else self.x;
+        return .{
+            .x = if (wrap_x >= 0 and wrap_x < grid.width) wrap_x else return null,
+            .y = if (self.y >= 0 and self.y < grid.height) self.y else return null,
+        };
+    }
+
+    pub fn toIdx(self: CoordXY, grid: Self) ?Idx {
+        const canon = self.canonize(grid) orelse return null;
+        const idx: Idx = @intCast(canon.x + canon.y * @as(iCoord, @intCast(grid.width)));
+        std.debug.assert(idx < grid.len);
+        return idx;
+    }
+
+    pub fn fromIdx(idx: Idx, grid: Self) CoordXY {
+        return .{
+            .x = @intCast(idx % grid.width),
+            .y = @intCast(idx / grid.width),
+        };
+    }
+};
+
+pub const CoordQRS = struct {
+    q: iCoord,
+    r: iCoord,
+    /// s is implicit (s=-q-r)
+    pub fn s(self: CoordQRS) iCoord {
+        return -self.q - self.r;
+    }
+
+    //   |q,r|1,0|2,0|3,0|4,0|
+    //    \ / \ / \ / \ / \ / \
+    //     |0,1|1,1|2,1|3,1|4,1|
+    //    / \ / \ / \ / \ / \ / \
+    //   -1,2|0,2|1,2|2,2|3,2|4,2|
+
+    pub fn canonize(self: CoordQRS, grid: Self) ?CoordQRS {
+        var wrap_q: iCoord = self.q;
+        if (grid.wrap_around) {
+            wrap_q += @divFloor(self.r, 2);
+            wrap_q = @mod(wrap_q, @as(iCoord, @intCast(grid.width)));
+            wrap_q -= @divFloor(self.r, 2);
         }
-        if (!self.grid.contains(self.iter.?)) self.iter = null;
-        return self.iter;
+
+        wrap_q += @divFloor(self.r, 2);
+        return .{
+            .q = if (wrap_q >= 0 and wrap_q < grid.width) wrap_q else return null,
+            .r = if (self.r >= 0 and self.r < grid.height) self.r else return null,
+        };
     }
 
-    pub fn restart(self: *BoundBox) void {
-        self.iter = null;
+    pub fn toIdx(self: CoordQRS, grid: Self) ?Idx {
+        const canon = self.canonize(grid) orelse return null;
+        const idx = canon.q + canon.r * @as(iCoord, @intCast(grid.width));
+        std.debug.assert(idx < grid.len);
+        return @intCast(idx);
     }
 
-    pub fn contains(self: *const BoundBox, idx: Idx) bool {
-        const x = self.grid.xFromIdx(idx);
-        const y = self.grid.yFromIdx(idx);
-        return x < self.xmax and y < self.ymax and x >= self.xmin and y >= self.ymin;
+    pub fn fromIdx(idx: Idx, grid: Self) CoordQRS {
+        const r: iCoord = @intCast(idx / grid.width);
+        return .{
+            .q = @as(iCoord, @intCast(idx % grid.width)) - @divFloor(r, 2),
+            .r = @intCast(r),
+        };
+    }
+
+    pub fn add(self: CoordQRS, other: CoordQRS) CoordQRS {
+        return self.addQR(other.q, other.r);
+    }
+
+    pub fn sub(self: CoordQRS, other: CoordQRS) CoordQRS {
+        return self.addQR(-other.q, -other.r);
+    }
+
+    pub fn addQR(self: CoordQRS, qd: iCoord, rd: iCoord) CoordQRS {
+        return .{ .q = self.q + qd, .r = self.r + rd };
     }
 };
 
@@ -52,29 +115,12 @@ pub const Edge = struct {
     }
 };
 
-pub const Dir = enum(u3) {
-    NE = 0,
-    E = 1,
-    SE = 2,
-    SW = 3,
-    W = 4,
-    NW = 5,
-
-    pub inline fn int(self: @This()) usize {
-        return @intFromEnum(self);
-    }
-};
-
 width: usize,
 height: usize,
 wrap_around: bool,
 len: usize,
 
-pub fn init(
-    width: usize,
-    height: usize,
-    wrap_around: bool,
-) Self {
+pub fn init(width: usize, height: usize, wrap_around: bool) Self {
     return Self{
         .width = width,
         .height = height,
@@ -82,13 +128,6 @@ pub fn init(
         .wrap_around = wrap_around,
     };
 }
-
-//   ----HOW TO COORDS----
-//   |0,0|1,0|2,0|3,0|4,0|
-//    \ / \ / \ / \ / \ / \
-//     |0,1|1,1|2,1|3,1|4,1|
-//    / \ / \ / \ / \ / \ /
-//   |0,2|1,2|2,2|3,2|4,2|
 
 pub fn idxFromCoords(self: Self, x: usize, y: usize) Idx {
     return y * self.width + x;
@@ -106,103 +145,95 @@ pub fn contains(self: Self, idx: Idx) bool {
     return idx < self.len;
 }
 
-pub fn distance(self: *const Self, a: Idx, b: Idx) usize {
-    const ax = @as(i16, @intCast(self.xFromIdx(a)));
-    const ay = @as(i16, @intCast(self.yFromIdx(a)));
-    const bx = @as(i16, @intCast(self.xFromIdx(b)));
-    const by = @as(i16, @intCast(self.yFromIdx(b)));
+pub fn distance(self: Self, a: Idx, b: Idx) u8 {
+    var qrs_a = CoordQRS.fromIdx(a, self);
+    var qrs_b = CoordQRS.fromIdx(b, self);
+    var max = @max(@abs(qrs_a.r - qrs_b.r), @max(@abs(qrs_a.q - qrs_b.q), @abs(qrs_a.s() - qrs_b.s())));
 
-    const dx: i16 = (ax - bx);
-    const dy: i16 = (ay - by);
-
-    var x: i16 = @max(dx, -dx);
-    const y: i16 = @max(dy, -dy);
-
-    if ((dx < 0 or (@mod(ay, 2) == 0)) and !(dx < 0 and (@mod(ay, 2) == 0))) {
-        x = @max(0, x - @divFloor(y + 1, 2));
-    } else {
-        x = @max(0, x - @divFloor(y, 2));
+    if (self.wrap_around) {
+        const shift: iCoord = @intCast(self.width / 2);
+        qrs_a = qrs_a.addQR(shift, 0).canonize(self) orelse unreachable;
+        qrs_b = qrs_b.addQR(shift, 0).canonize(self) orelse unreachable;
+        const wrap_max = @max(@abs(qrs_a.r - qrs_b.r), @max(@abs(qrs_a.q - qrs_b.q), @abs(qrs_a.s() - qrs_b.s())));
+        max = @min(max, wrap_max);
     }
-    return @as(usize, @intCast(x)) + @as(usize, @intCast(y));
+    return @intCast(max);
 }
 
-/// Returns edge "dir" of given hexs
-pub fn dirEdge(self: Self, src: Idx, dir: Dir) ?Edge {
-    const n: Idx = self.getNeighbour(src, dir) orelse return null;
-    return Edge{
-        .low = @min(n, src),
-        .high = @max(n, src),
+pub fn isNeighbour(self: Self, src: Idx, dest: Idx) bool {
+    return distance(self, src, dest) == 1;
+}
+
+pub fn neighbours(self: Self, src: Idx) [6]?Idx {
+    const rqs = CoordQRS.fromIdx(src, self);
+    return .{
+        rqs.addQR(1, 0).toIdx(self),  rqs.addQR(0, 1).toIdx(self),  rqs.addQR(-1, 0).toIdx(self), //
+        rqs.addQR(0, -1).toIdx(self), rqs.addQR(1, -1).toIdx(self), rqs.addQR(-1, 1).toIdx(self),
     };
 }
 
-pub fn adjacentTo(self: Self, src: Idx, dest: Idx) bool {
-    return self.edgeBetween(src, dest) != null;
-}
-
-/// Returns edge between a and b
 pub fn edgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
-    const src_neighbours = self.neighbours(a);
-    var are_neighbours = false;
-    for (0..6) |i| are_neighbours = are_neighbours or src_neighbours[i] == b;
-    if (!are_neighbours) return null;
+    if (!self.isNeighbour(a, b)) return null;
     return Edge.between(a, b);
 }
 
-/// Returns an array of Idx:s adjacent to the current tile, will be null if no tile exists in that direction.
-/// Index is the direction: 0=NE, 1=E, 2=SE, 3=SW, 4=W, 5=NW
-pub fn neighbours(self: Self, src: Idx) [6]?Idx {
-    const x = self.xFromIdx(src);
-    const y = self.yFromIdx(src);
+const raylib = @cImport({
+    @cInclude("raylib.h");
+    @cInclude("raymath.h");
+});
+pub const FloatXY = struct {
+    x: f32,
+    y: f32,
 
-    const west, const east = if (self.wrap_around) .{
-        if (x == 0) self.width - 1 else x - 1,
-        if (x == self.width - 1) 0 else x + 1,
-    } else .{
-        x -| 1,
-        x +| 1,
-    };
+    pub fn roundToIdx(self: FloatXY, grid: Self, radius: f32) ?Idx {
+        _ = self; // autofix
+        _ = grid; // autofix
+        _ = radius; // autofix
 
-    const north = y -| 1;
-    const south = y +| 1;
-
-    var ns: [6]Idx = undefined;
-    // we assume wrap around, then yeet them if not
-    ns[Dir.E.int()] = self.idxFromCoords(east, y);
-    ns[Dir.W.int()] = self.idxFromCoords(west, y);
-
-    if (@mod(y, 2) == 0) {
-        ns[Dir.NE.int()] = self.idxFromCoords(x, north);
-        ns[Dir.SE.int()] = self.idxFromCoords(x, south);
-
-        ns[Dir.NW.int()] = self.idxFromCoords(west, north);
-        ns[Dir.SW.int()] = self.idxFromCoords(west, south);
-    } else {
-        ns[Dir.NW.int()] = self.idxFromCoords(x, north);
-        ns[Dir.SW.int()] = self.idxFromCoords(x, south);
-
-        ns[Dir.NE.int()] = self.idxFromCoords(east, north);
-        ns[Dir.SE.int()] = self.idxFromCoords(east, south);
+        //
     }
+    pub fn fromIdx(idx: Idx, grid: Self, radius: f32) FloatXY {
+        const hex = @import("gui/hex_util.zig");
+        const xy = CoordXY.fromIdx(idx, grid);
 
-    var out_ns: [6]?Idx = undefined;
-    for (ns, 0..) |n, i| {
-        out_ns[i] = if (n == src) null else n;
+        return .{
+            .x = hex.tilingX(@intCast(xy.x), @intCast(xy.y), radius),
+            .y = hex.tilingY(@intCast(xy.y), radius),
+        };
     }
+    pub fn roundToIdxShakey(self: FloatXY, grid: Self) [2]?Idx {
+        const v1: FloatXY = .{ .x = self.x + 0.000001, .y = self.y + 0.000001 };
+        const v2: FloatXY = .{ .x = self.x - 0.000001, .y = self.y - 0.000001 };
+        return .{ v1.roundToIdx(grid), v2.roundToIdx(grid) };
+    }
+    pub fn raylibVector2(self: FloatXY, radius: f32) raylib.Vector2 {
+        return .{
+            .x = @sqrt(3.0) * radius * (0.5 + self.x),
+            .y = (0.5 + self.y) * radius * 1.5,
+        };
+    }
+    pub fn add(self: FloatXY, other: FloatXY) FloatXY {
+        return .{ .x = self.x + other.x, .y = self.y + other.y };
+    }
+    pub fn sub(self: FloatXY, other: FloatXY) FloatXY {
+        return .{ .x = self.x - other.x, .y = self.y - other.y };
+    }
+    pub fn scale(self: FloatXY, s: f32) FloatXY {
+        return .{ .x = self.x * s, .y = self.y * s };
+    }
+    pub fn lerp(p1: FloatXY, p2: FloatXY, t: f32) FloatXY {
+        return p1.add((p2.sub(p1)).scale(t));
+    }
+};
 
-    return out_ns;
-}
-
-test "neighbours with wrap around" {
-    const grid = Self.init(100, 50, true);
-
-    const idx = grid.idxFromCoords(0, 4);
-
-    try std.testing.expectEqual([_]?Idx{
-        grid.idxFromCoords(0, 3), // NE
-        grid.idxFromCoords(1, 4), // E
-        grid.idxFromCoords(0, 5), // SE
-        grid.idxFromCoords(99, 5), // SW
-        grid.idxFromCoords(99, 4), // W
-        grid.idxFromCoords(99, 3), // NW
-    }, grid.neighbours(idx));
+/// LERP
+pub fn nthLerp(self: Self, dist: u8, n: u8, idx1: Idx, idx2: Idx) FloatXY {
+    var t: f32 = @floatFromInt(n);
+    t /= @floatFromInt(dist);
+    const lerp_float_xy = FloatXY.lerp(
+        FloatXY.fromIdx(idx1, self, 1),
+        FloatXY.fromIdx(idx2, self, 1),
+        t,
+    );
+    return lerp_float_xy;
 }
