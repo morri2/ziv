@@ -257,7 +257,8 @@
         "production": 2
       },
       "attributes": {
-        "is_rough": true
+        "is_rough": true,
+        "is_elevated": true
       },
       "combat_bonus": 25
     },
@@ -313,7 +314,8 @@
         "production": 1
       },
       "attributes": {
-        "is_rough": true
+        "is_rough": true,
+        "is_obscuring": true
       },
       "combat_bonus": 25
     },
@@ -329,7 +331,8 @@
         "food": 2
       },
       "attributes": {
-        "is_rough": true
+        "is_rough": true,
+        "is_obscuring": true
       },
       "combat_bonus": 25
     },

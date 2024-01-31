@@ -100,7 +100,7 @@ pub const Terrain = enum(u8) {
         }
     };
 
-    pub const Attributes = packed struct(u8) {
+    pub const Attributes = packed struct(u10) {
         pub const Integer = @typeInfo(Attributes).Struct.backing_integer.?;
 
         is_water: bool = false,
@@ -111,6 +111,8 @@ pub const Terrain = enum(u8) {
         is_wonder: bool = false,
         has_river: bool = false,
         has_freshwater: bool = false,
+        is_elevated: bool = false,
+        is_obscuring: bool = false,
 
         pub fn eql(self: Attributes, other: Attributes) bool {
             const self_int: Integer = @bitCast(self);
