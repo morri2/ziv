@@ -262,7 +262,7 @@ pub fn foodConsumption(self: *const Self) f32 {
 }
 /// equals number of labourers :)
 pub fn unassignedPopulation(self: *const Self) u8 {
-    return self.population - @as(u8, @intCast(self.worked.count()));
+    return self.population -| @as(u8, @intCast(self.worked.count())); // should not underflow, but seems to when pop starves, TODO: investigate
 }
 
 pub fn populationGrowth(self: *Self, amt: u8, world: *const World) void {
