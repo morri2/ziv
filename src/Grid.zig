@@ -86,6 +86,18 @@ pub const CoordQRS = struct {
             .r = @intCast(r),
         };
     }
+    /// diffrence in coordinates considering wraparound, null if no index corresponds
+    pub fn diffTo(self: CoordQRS, dest: CoordQRS, grid: Self) ?CoordQRS {
+        var qd = dest.q - self.q;
+        if (grid.wrap_around) {
+            const width = @as(iCoord, @intCast(grid.width));
+
+            if (qd > width - qd) qd = width - qd;
+            if (-qd > width + qd) qd = width + qd;
+        }
+        const rd = dest.r - self.r;
+        return .{ .q = qd, .r = rd };
+    }
 
     pub fn add(self: CoordQRS, other: CoordQRS) CoordQRS {
         return self.addQR(other.q, other.r);
@@ -97,6 +109,17 @@ pub const CoordQRS = struct {
 
     pub fn addQR(self: CoordQRS, qd: iCoord, rd: iCoord) CoordQRS {
         return .{ .q = self.q + qd, .r = self.r + rd };
+    }
+    /// For comparisons where the index might be invalid, obs! Not canonized, so same idx wont nesseserily be equal.
+    pub fn eq(self: CoordQRS, other: CoordQRS) bool {
+        return self.q == other.q and self.r == other.r;
+    }
+
+    pub fn maxAbs(self: CoordQRS) uCoord {
+        return @max(@abs(self.q), @max(@abs(self.r), @abs(self.s())));
+    }
+    pub fn minAbs(self: CoordQRS) uCoord {
+        return @min(@abs(self.q), @min(@abs(self.r), @abs(self.s())));
     }
 };
 
@@ -144,32 +167,77 @@ pub fn yFromIdx(self: Self, idx: Idx) usize {
 pub fn contains(self: Self, idx: Idx) bool {
     return idx < self.len;
 }
+/// true if a and b share an axis (are on a straight line)
+pub fn areAxial(self: Self, a: Idx, b: Idx) bool {
+    self.distanceOffAxial(a, b) == 0;
+}
 
-pub fn distance(self: Self, a: Idx, b: Idx) u8 {
+pub fn areDiagonal(self: Self, a: Idx, b: Idx) bool {
+    2 * self.distanceOffAxial(a, b) == self.distance(a, b);
+}
+
+pub fn distanceOffAxial(self: Self, a: Idx, b: Idx) u8 {
     var qrs_a = CoordQRS.fromIdx(a, self);
     var qrs_b = CoordQRS.fromIdx(b, self);
-    var max = @max(@abs(qrs_a.r - qrs_b.r), @max(@abs(qrs_a.q - qrs_b.q), @abs(qrs_a.s() - qrs_b.s())));
+    var min = @min(@abs(qrs_a.r - qrs_b.r), @min(@abs(qrs_a.q - qrs_b.q), @abs(qrs_a.s() - qrs_b.s())));
 
     if (self.wrap_around) {
         const shift: iCoord = @intCast(self.width / 2);
         qrs_a = qrs_a.addQR(shift, 0).canonize(self) orelse unreachable;
         qrs_b = qrs_b.addQR(shift, 0).canonize(self) orelse unreachable;
-        const wrap_max = @max(@abs(qrs_a.r - qrs_b.r), @max(@abs(qrs_a.q - qrs_b.q), @abs(qrs_a.s() - qrs_b.s())));
-        max = @min(max, wrap_max);
+        const wrap_min = @min(@abs(qrs_a.r - qrs_b.r), @min(@abs(qrs_a.q - qrs_b.q), @abs(qrs_a.s() - qrs_b.s())));
+        min = @min(min, wrap_min);
     }
-    return @intCast(max);
+    return @intCast(min);
+}
+
+pub fn distance(self: Self, a: Idx, b: Idx) u8 {
+    const qrs_a = CoordQRS.fromIdx(a, self);
+    const qrs_b = CoordQRS.fromIdx(b, self);
+    const diff = qrs_a.diffTo(qrs_b, self) orelse std.debug.panic("Non valid distance {} to {}", .{ a, b });
+    return @intCast(diff.maxAbs());
 }
 
 pub fn isNeighbour(self: Self, src: Idx, dest: Idx) bool {
     return distance(self, src, dest) == 1;
 }
 
+pub const Direction = enum {
+    const directions = [_]@This(){ .East, .NorthEast, .NorthWest, .West, .SouthWest, .SouthEast };
+
+    East,
+    NorthEast,
+    NorthWest,
+    West,
+    SouthWest,
+    SouthEast,
+
+    pub fn rotateCC(self: @This(), n: u8) @This() {
+        var next: u8 = @intFromEnum(self) + n;
+        next %= 6;
+        return @enumFromInt(next);
+    }
+    pub fn offsetQRS(self: @This()) CoordQRS {
+        return self.nOffsetQRS(1);
+    }
+    pub fn nOffsetQRS(self: @This(), n: iCoord) CoordQRS {
+        return switch (self) {
+            .East => .{ .q = n, .r = 0 },
+            .NorthEast => .{ .q = n, .r = -n },
+            .NorthWest => .{ .q = 0, .r = -n },
+            .West => .{ .q = -n, .r = 0 },
+            .SouthWest => .{ .q = -n, .r = n },
+            .SouthEast => .{ .q = 0, .r = n },
+        };
+    }
+};
+
 pub fn neighbours(self: Self, src: Idx) [6]?Idx {
     const rqs = CoordQRS.fromIdx(src, self);
-    return .{
-        rqs.addQR(1, 0).toIdx(self),  rqs.addQR(0, 1).toIdx(self),  rqs.addQR(-1, 0).toIdx(self), //
-        rqs.addQR(0, -1).toIdx(self), rqs.addQR(1, -1).toIdx(self), rqs.addQR(-1, 1).toIdx(self),
-    };
+    var ns: [6]?Idx = undefined;
+    for (Direction.directions, 0..) |dir, i| ns[i] = rqs.add(dir.offsetQRS()).toIdx(self);
+
+    return ns;
 }
 
 pub fn edgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
@@ -177,63 +245,75 @@ pub fn edgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
     return Edge.between(a, b);
 }
 
-const raylib = @cImport({
-    @cInclude("raylib.h");
-    @cInclude("raymath.h");
-});
-pub const FloatXY = struct {
-    x: f32,
-    y: f32,
+pub const SpiralIterator = struct {
+    radius: u8,
+    center: Idx,
+    current_ring: u8,
+    ring_iter: RingIterator,
 
-    pub fn roundToIdx(self: FloatXY, grid: Self, radius: f32) ?Idx {
-        _ = self; // autofix
-        _ = grid; // autofix
-        _ = radius; // autofix
+    pub fn new(center: Idx, radius: u8, grid: Self) @This() {
+        return newFrom(center, 1, radius, grid);
+    }
 
-        //
+    pub fn newFrom(center: Idx, start: u8, radius: u8, grid: Self) @This() {
+        std.debug.assert(radius > 0);
+        const ring_iter: RingIterator = RingIterator.new(center, start, grid);
+        return .{ .radius = radius, .current_ring = start, .ring_iter = ring_iter, .center = center };
     }
-    pub fn fromIdx(idx: Idx, grid: Self, radius: f32) FloatXY {
-        const hex = @import("gui/hex_util.zig");
-        const xy = CoordXY.fromIdx(idx, grid);
 
-        return .{
-            .x = hex.tilingX(@intCast(xy.x), @intCast(xy.y), radius),
-            .y = hex.tilingY(@intCast(xy.y), radius),
-        };
-    }
-    pub fn roundToIdxShakey(self: FloatXY, grid: Self) [2]?Idx {
-        const v1: FloatXY = .{ .x = self.x + 0.000001, .y = self.y + 0.000001 };
-        const v2: FloatXY = .{ .x = self.x - 0.000001, .y = self.y - 0.000001 };
-        return .{ v1.roundToIdx(grid), v2.roundToIdx(grid) };
-    }
-    pub fn raylibVector2(self: FloatXY, radius: f32) raylib.Vector2 {
-        return .{
-            .x = @sqrt(3.0) * radius * (0.5 + self.x),
-            .y = (0.5 + self.y) * radius * 1.5,
-        };
-    }
-    pub fn add(self: FloatXY, other: FloatXY) FloatXY {
-        return .{ .x = self.x + other.x, .y = self.y + other.y };
-    }
-    pub fn sub(self: FloatXY, other: FloatXY) FloatXY {
-        return .{ .x = self.x - other.x, .y = self.y - other.y };
-    }
-    pub fn scale(self: FloatXY, s: f32) FloatXY {
-        return .{ .x = self.x * s, .y = self.y * s };
-    }
-    pub fn lerp(p1: FloatXY, p2: FloatXY, t: f32) FloatXY {
-        return p1.add((p2.sub(p1)).scale(t));
+    pub fn next(self: *@This(), grid: Self) ?Idx {
+        const maybe_idx = self.ring_iter.next(grid);
+        if (maybe_idx == null) {
+            self.current_ring += 1;
+            if (self.current_ring > self.radius) return null;
+            self.ring_iter = RingIterator.new(self.center, self.current_ring, grid);
+
+            return self.next(grid);
+        }
+        return maybe_idx.?;
     }
 };
 
-/// LERP
-pub fn nthLerp(self: Self, dist: u8, n: u8, idx1: Idx, idx2: Idx) FloatXY {
-    var t: f32 = @floatFromInt(n);
-    t /= @floatFromInt(dist);
-    const lerp_float_xy = FloatXY.lerp(
-        FloatXY.fromIdx(idx1, self, 1),
-        FloatXY.fromIdx(idx2, self, 1),
-        t,
-    );
-    return lerp_float_xy;
-}
+pub const RingIterator = struct {
+    const start_dir = Direction.East.rotateCC(2);
+    const inital_offset_dir = Direction.East;
+    at: CoordQRS,
+    center: Idx,
+    radius: u8,
+    dir: Direction,
+
+    steps: u8 = 0,
+
+    pub fn new(center: Idx, radius: u8, grid: Self) @This() {
+        std.debug.assert(radius > 0);
+        const center_qrs = CoordQRS.fromIdx(center, grid);
+        const at = center_qrs.add(inital_offset_dir.nOffsetQRS(radius));
+        const dir = start_dir;
+        return .{
+            .at = at,
+            .center = center,
+            .dir = dir,
+            .radius = radius,
+            .steps = 0,
+        };
+    }
+
+    pub fn next(self: *@This(), grid: Self) ?Idx {
+        var idx: ?Idx = null;
+
+        while (idx == null) {
+            if (self.steps == self.radius) {
+                self.steps = 0;
+                self.dir = self.dir.rotateCC(1);
+                if (self.dir == start_dir) return null;
+            }
+
+            idx = self.at.toIdx(grid);
+
+            self.at = self.at.add(self.dir.offsetQRS());
+            self.steps += 1;
+        }
+
+        return idx;
+    }
+};

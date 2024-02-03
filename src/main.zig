@@ -285,31 +285,63 @@ pub fn main() !void {
                 );
                 camera_bound_box.restart();
             }
-
             camera_bound_box.restart();
-            if (raylib.IsKeyDown(raylib.KEY_Z)) {
-                while (camera_bound_box.iterNext()) |index| {
-                    const xy = Grid.CoordXY.fromIdx(index, world.grid);
-                    const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
+            if (maybe_selected_idx != null) {
+                if (raylib.IsKeyDown(raylib.KEY_X)) {
+                    var vision_set = world.fov(3, maybe_selected_idx.?);
+                    defer vision_set.deinit();
 
-                    render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
-                    render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
-                    render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
-                    if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
+                    for (vision_set.slice()) |index| {
+                        render.renderTextureHex(
+                            index,
+                            world.grid,
+                            texture_set.base_textures[6],
+                            .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } },
+                            texture_set,
+                        );
 
-                    render.renderFormatHexAuto(index, world.grid, "view: {}", .{
-                        world.players[0].view.in_view.hexes.get(index) orelse 0,
-                    }, 0, 0.8, .{}, texture_set);
+                        if (world.terrain[index].attributes(world.rules).is_obscuring) {
+                            render.renderTextureHex(
+                                index,
+                                world.grid,
+                                texture_set.base_textures[6],
+                                .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } },
+                                texture_set,
+                            );
+                        }
+                    }
                 }
-                if (maybe_selected_idx != null) {
-                    const ns = world.grid.neighbours(maybe_selected_idx.?);
+                camera_bound_box.restart();
+                if (raylib.IsKeyDown(raylib.KEY_Z)) {
+                    while (camera_bound_box.iterNext()) |index| {
+                        const xy = Grid.CoordXY.fromIdx(index, world.grid);
+                        const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
 
-                    var xxx: f32 = 0.1;
-                    for (ns) |n| {
-                        xxx += 0.1;
-                        if (n == null) continue;
-                        render.renderTextInHex(n.?, world.grid, "N", 0, 0.7, .{}, texture_set);
-                        render.renderFormatHexAuto(maybe_selected_idx.?, world.grid, "{}", .{n.?}, 0.7, -0.4 + xxx, .{ .font_size = 6 }, texture_set);
+                        render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
+                        render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
+                        render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
+                        if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
+
+                        render.renderFormatHexAuto(index, world.grid, "view: {}", .{
+                            world.players[0].view.in_view.hexes.get(index) orelse 0,
+                        }, 0, 0.8, .{}, texture_set);
+                    }
+
+                    var spiral_iter = Grid.SpiralIterator.new(maybe_selected_idx.?, 12, world.grid);
+                    //var ring_iter = Grid.RingIterator.new(maybe_selected_idx.?, 2, world.grid);
+                    var j: u32 = 0;
+                    while (spiral_iter.next(world.grid)) |idx| {
+                        render.renderFormatHexAuto(
+                            idx,
+                            world.grid,
+                            "spiral={}",
+                            .{j},
+                            -0.4,
+                            -0.6,
+                            .{ .font_size = 6 },
+                            texture_set,
+                        );
+                        j += 1;
                     }
                 }
             }

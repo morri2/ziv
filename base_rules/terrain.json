@@ -258,7 +258,8 @@
       },
       "attributes": {
         "is_rough": true,
-        "is_elevated": true
+        "is_elevated": true,
+        "is_obscuring": true
       },
       "combat_bonus": 25
     },

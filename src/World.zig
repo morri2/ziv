@@ -216,13 +216,45 @@ pub fn saveToFile(self: *Self, path: []const u8) !void {
     file.close();
 }
 
-pub fn unitVision(self: *const Self, idx: Idx) void {
-    _ = self; // autofix
-    _ = idx; // autofix
+pub fn unitFOV(self: *const Self, unit: *const Unit, src: Idx) HexSet {
+    const vision_range = Rules.Promotion.Effect.promotionsSum(.modify_sight_range, unit.promotions, self.rules);
+    return self.fov(@intCast(vision_range + 2), src);
+}
 
-    const vision_set = 0;
-    _ = vision_set; // autofix
+/// Gets FOV from a tile as HexSet, caller must DEINIT! TODO double check behaviour with civ proper. Diagonals might be impact
+/// fov too much and axials might have too small an impact. works great as vision range 2, ok at 3, poor at 4+,
+/// TODO check if land is obscuring for embarked/naval units...
+pub fn fov(self: *const Self, vision_range: u8, src: Idx) HexSet {
+    const elevated = self.terrain[src].attributes(self.rules).is_elevated;
 
+    var spiral_iter =
+        Grid.SpiralIterator.newFrom(src, 2, vision_range, self.grid);
+    var fov_set = HexSet.init(self.allocator);
+    fov_set.add(src);
+    fov_set.addAdjacent(&self.grid);
+
+    while (spiral_iter.next(self.grid)) |idx| {
+        var max_off_axial: u8 = 0;
+        var visable = false;
+
+        for (self.grid.neighbours(idx)) |maybe_n_idx| {
+            const n_idx = maybe_n_idx orelse continue;
+            if (self.grid.distance(n_idx, src) >= self.grid.distance(idx, src)) continue;
+
+            const off_axial = self.grid.distanceOffAxial(n_idx, src);
+            if (off_axial < max_off_axial) continue;
+
+            if (off_axial > max_off_axial) visable = false; // previous should be ignored (equals -> both are viable)
+            max_off_axial = off_axial;
+
+            if (!fov_set.contains(n_idx)) continue;
+            if (self.terrain[n_idx].attributes(self.rules).is_obscuring and !elevated) continue;
+            if (self.terrain[n_idx].attributes(self.rules).is_impassable) continue; // impassible ~= mountain
+            visable = true;
+        }
+        if (visable) fov_set.add(idx);
+    }
+    return fov_set;
 }
 
 pub fn fullUpdateViews(self: *Self) void {
@@ -234,9 +266,8 @@ pub fn fullUpdateViews(self: *Self) void {
     }
 
     while (iter.next()) |item| {
-        var vision = HexSet.initCircle(item.idx, 2, self.grid, self.allocator);
+        var vision = self.unitFOV(&item.unit, item.idx);
         defer vision.deinit();
-
         const player_id = item.unit.faction_id;
 
         self.players[player_id].view.addVisionSet(vision);
@@ -252,34 +283,6 @@ pub fn fullUpdateViews(self: *Self) void {
         const player_id = city.faction_id;
         self.players[player_id].view.addVisionSet(vision);
     }
-
-    // for (self.players, 0..) |player, i| {
-    //     self.players[i].view.unsetAllVisable(self);
-
-    //     var iter = self.units.iterator();
-    //     while (iter.next()) |unit| {
-    //         if (unit.unit.faction.player != player.id) continue;
-
-    //         var flow = HexSet.init(self.allocator);
-    //         defer flow.deinit();
-    //         flow.add(unit.idx);
-    //         flow.addAdjacent(&self.grid);
-    //         flow.addAdjacent(&self.grid);
-
-    //         for (flow.slice()) |idx_adj| self.players[i].view.setVisable(idx_adj, self);
-    //     }
-
-    //     for (self.cities.values()) |city| {
-    //         if (city.faction.player != player.id) continue;
-    //         self.players[i].view.setVisable(city.position, self);
-
-    //         for (city.claimed.slice()) |idx_c|
-    //             self.players[i].view.setVisable(idx_c, self);
-
-    //         for (city.adjacent.slice()) |idx_adj|
-    //             self.players[i].view.setVisable(idx_adj, self);
-    //     }
-    // }
 }
 
 pub fn loadFromFile(self: *Self, path: []const u8) !void {
