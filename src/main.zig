@@ -102,7 +102,7 @@ pub fn main() !void {
     raylib.PlayMusicStream(music);
     var volume: f32 = 1.0;
 
-    const move_sound = raylib.LoadSound("audio/unit_movehmm.wav");
+    const move_sound = raylib.LoadSound("audio/unit_move.ogg");
 
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
