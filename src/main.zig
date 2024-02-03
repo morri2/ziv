@@ -94,8 +94,18 @@ pub fn main() !void {
     var in_pallet = false;
     var terrain_brush: ?Rules.Terrain = null;
 
+    // Audio init
+    raylib.InitAudioDevice();
+    var music = raylib.LoadMusicStream("audio/theme.wav");
+    music.looping = true;
+    raylib.PlayMusicStream(music);
+    var volume: f32 = 1.0;
+
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
+
+        // Update audio
+        raylib.UpdateMusicStream(music);
 
         const bounding_box = camera.boundingBox(
             world.grid.width,
@@ -152,6 +162,18 @@ pub fn main() !void {
             }
 
             if (!in_edit_mode) {
+                if (raylib.IsKeyPressed(raylib.KEY_PAGE_DOWN)) {
+                    // Lower volume
+                    volume -= 0.1;
+                    volume = std.math.clamp(volume, 0.0, 1.0);
+                    raylib.SetMusicVolume(music, volume);
+                }
+                if (raylib.IsKeyPressed(raylib.KEY_PAGE_UP)) {
+                    // Raise volume
+                    volume += 0.1;
+                    volume = std.math.clamp(volume, 0.0, 1.0);
+                    raylib.SetMusicVolume(music, volume);
+                }
                 if (raylib.IsKeyPressed(raylib.KEY_B)) {}
 
                 if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
