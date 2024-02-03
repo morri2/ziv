@@ -1,18 +1,19 @@
 const std = @import("std");
 const Rules = @import("Rules.zig");
 
-const TextureSet = @import("gui/TextureSet.zig");
-const World = @import("World.zig");
-const Unit = @import("Unit.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
+
+const World = @import("World.zig");
+const Unit = @import("Unit.zig");
 const Units = @import("Units.zig");
 const City = @import("City.zig");
 const PlayerView = @import("PlayerView.zig");
 
-const control = @import("gui/control.zig");
-const render = @import("gui/render.zig");
-const graphics = @import("gui/graphics.zig");
+const Camera = @import("rendering/Camera.zig");
+const TextureSet = @import("rendering/TextureSet.zig");
+const render = @import("rendering/render_util.zig");
+const graphics = @import("rendering/graphics.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -80,22 +81,13 @@ pub fn main() !void {
 
     raylib.SetTargetFPS(60);
 
-    var camera = raylib.Camera2D{
-        .target = raylib.Vector2{ .x = 0.0, .y = 0.0 },
-        .offset = raylib.Vector2{
-            .x = @floatFromInt(screen_width / 2),
-            .y = @floatFromInt(screen_height / 2),
-        },
-        .zoom = 0.5,
-    };
+    var camera = Camera.init(screen_width, screen_height);
 
     var texture_set = try TextureSet.init(&rules, gpa.allocator());
     defer texture_set.deinit();
 
     var maybe_selected_idx: ?Idx = null;
     var maybe_unit_reference: ?Units.Reference = null;
-
-    var camera_bound_box = control.cameraRenderBoundBox(camera, &world.grid, screen_width, screen_height, texture_set);
 
     // MAP EDIT MODE
     var in_edit_mode = false;
@@ -104,13 +96,25 @@ pub fn main() !void {
 
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
+
+        const bounding_box = camera.boundingBox(
+            world.grid.width,
+            world.grid.height,
+            screen_width,
+            screen_height,
+            texture_set.hex_radius,
+        );
         {
             if (raylib.IsKeyPressed(raylib.KEY_Y)) in_edit_mode = !in_edit_mode;
 
             // EDIT MODE CONTROLLS
             if (in_edit_mode) {
                 if (raylib.IsKeyPressed(raylib.KEY_E)) in_pallet = !in_pallet;
-                const mouse_tile = control.getMouseTile(&camera, world.grid, texture_set);
+                const mouse_tile = camera.getMouseTile(
+                    world.grid,
+                    bounding_box,
+                    texture_set.hex_radius,
+                );
                 if (raylib.IsKeyPressed(raylib.KEY_R)) {
                     const res = world.resources.getPtr(mouse_tile);
 
@@ -171,7 +175,11 @@ pub fn main() !void {
 
                 // SELECTION
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    const mouse_idx = control.getMouseTile(&camera, world.grid, texture_set);
+                    const mouse_idx = camera.getMouseTile(
+                        world.grid,
+                        bounding_box,
+                        texture_set.hex_radius,
+                    );
 
                     if (maybe_selected_idx) |selected_idx| {
                         if (selected_idx != mouse_idx) blk: {
@@ -202,7 +210,11 @@ pub fn main() !void {
                 }
 
                 if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
-                    const clicked_tile = control.getMouseTile(&camera, world.grid, texture_set);
+                    const clicked_tile = camera.getMouseTile(
+                        world.grid,
+                        bounding_box,
+                        texture_set.hex_radius,
+                    );
 
                     for (world.cities.keys()) |city_key| {
                         var city = world.cities.getPtr(city_key) orelse continue;
@@ -237,42 +249,35 @@ pub fn main() !void {
             }
         }
 
-        _ = control.updateCamera(&camera, 16.0);
-
-        camera_bound_box = control.cameraRenderBoundBox(
-            camera,
-            &world.grid,
-            screen_width,
-            screen_height,
-            texture_set,
-        );
-
-        camera_bound_box.ymax = @min(camera_bound_box.ymax, world.grid.height);
-        camera_bound_box.xmax = @min(camera_bound_box.xmax, world.grid.width - 1);
-
         // ///////// //
         // RENDERING //
         // ///////// //
         raylib.BeginDrawing();
         raylib.ClearBackground(raylib.BLACK);
 
-        raylib.BeginMode2D(camera);
+        raylib.BeginMode2D(camera.camera);
         if (in_pallet) {
-            camera_bound_box.restart();
-            while (camera_bound_box.iterNext()) |index|
-                graphics.renderTerrain(
-                    @enumFromInt(index % rules.terrain_count),
-                    index,
-                    world.grid,
-                    texture_set,
-                    &rules,
-                );
+            for (bounding_box.x_min..bounding_box.x_max) |x| {
+                for (bounding_box.y_min..bounding_box.y_max) |y| {
+                    const idx = world.grid.idxFromCoords(x, y);
+                    graphics.renderTerrain(
+                        @enumFromInt(idx % rules.terrain_count),
+                        idx,
+                        world.grid,
+                        texture_set,
+                        &rules,
+                    );
+                }
+            }
         } else {
-            graphics.renderWorld(&world, &camera_bound_box, &world.players[0].view, texture_set);
+            graphics.renderWorld(&world, bounding_box, &world.players[0].view, texture_set);
             if (maybe_selected_idx) |selected_idx| {
                 if (raylib.IsKeyDown(raylib.KEY_M)) {
-                    while (camera_bound_box.iterNext()) |i| {
-                        render.renderFormatHexAuto(i, world.grid, "{}", .{world.grid.distance(selected_idx, i)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
+                    for (bounding_box.x_min..bounding_box.x_max) |x| {
+                        for (bounding_box.y_min..bounding_box.y_max) |y| {
+                            const idx = world.grid.idxFromCoords(x, y);
+                            render.renderFormatHexAuto(idx, world.grid, "{}", .{world.grid.distance(selected_idx, idx)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
+                        }
                     }
                 }
 
@@ -283,12 +288,10 @@ pub fn main() !void {
                     .{ .tint = .{ .r = 200, .g = 200, .b = 100, .a = 100 } },
                     texture_set,
                 );
-                camera_bound_box.restart();
             }
-            camera_bound_box.restart();
-            if (maybe_selected_idx != null) {
+            if (maybe_selected_idx) |selected_idx| {
                 if (raylib.IsKeyDown(raylib.KEY_X)) {
-                    var vision_set = world.fov(3, maybe_selected_idx.?);
+                    var vision_set = world.fov(3, selected_idx);
                     defer vision_set.deinit();
 
                     for (vision_set.slice()) |index| {
@@ -311,23 +314,25 @@ pub fn main() !void {
                         }
                     }
                 }
-                camera_bound_box.restart();
                 if (raylib.IsKeyDown(raylib.KEY_Z)) {
-                    while (camera_bound_box.iterNext()) |index| {
-                        const xy = Grid.CoordXY.fromIdx(index, world.grid);
-                        const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
+                    for (bounding_box.x_min..bounding_box.x_max) |x| {
+                        for (bounding_box.y_min..bounding_box.y_max) |y| {
+                            const index = world.grid.idxFromCoords(x, y);
+                            const xy = Grid.CoordXY.fromIdx(index, world.grid);
+                            const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
 
-                        render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
-                        render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
-                        render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
-                        if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
+                            render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
+                            render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
+                            render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
+                            if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
 
-                        render.renderFormatHexAuto(index, world.grid, "view: {}", .{
-                            world.players[0].view.in_view.hexes.get(index) orelse 0,
-                        }, 0, 0.8, .{}, texture_set);
+                            render.renderFormatHexAuto(index, world.grid, "view: {}", .{
+                                world.players[0].view.in_view.hexes.get(index) orelse 0,
+                            }, 0, 0.8, .{}, texture_set);
+                        }
                     }
 
-                    var spiral_iter = Grid.SpiralIterator.new(maybe_selected_idx.?, 12, world.grid);
+                    var spiral_iter = Grid.SpiralIterator.new(selected_idx, 12, world.grid);
                     //var ring_iter = Grid.RingIterator.new(maybe_selected_idx.?, 2, world.grid);
                     var j: u32 = 0;
                     while (spiral_iter.next(world.grid)) |idx| {
@@ -349,5 +354,7 @@ pub fn main() !void {
 
         raylib.EndMode2D();
         raylib.EndDrawing();
+
+        _ = camera.update(16.0);
     }
 }

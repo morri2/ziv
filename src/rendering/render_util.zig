@@ -1,12 +1,10 @@
-const Rules = @import("../Rules.zig");
-const Terrain = Rules.Terrain;
-const Grid = @import("../Grid.zig");
-const hex = @import("hex_util.zig");
-const Idx = @import("../Grid.zig").Idx;
-const World = @import("../World.zig");
-const Unit = @import("../Unit.zig");
-const TextureSet = @import("TextureSet.zig");
 const std = @import("std");
+const hex = @import("hex_util.zig");
+
+const Grid = @import("../Grid.zig");
+const Idx = Grid.Idx;
+
+const TextureSet = @import("TextureSet.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");

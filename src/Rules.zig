@@ -1,6 +1,5 @@
 const std = @import("std");
 const flag_index_map = @import("flag_index_map.zig");
-const Yield = @import("yield.zig").Yield;
 
 const Rules = @This();
 
@@ -64,6 +63,26 @@ pub const parse = @import("RuleGen.zig").parse;
 pub fn deinit(self: *Rules) void {
     self.arena.deinit();
 }
+
+pub const Yield = packed struct {
+    food: u5 = 0,
+    production: u5 = 0,
+    gold: u5 = 0,
+    culture: u5 = 0,
+    faith: u5 = 0,
+    science: u5 = 0,
+
+    pub fn add(self: Yield, other: Yield) Yield {
+        return .{
+            .food = self.food + other.food,
+            .gold = self.gold + other.gold,
+            .production = self.production + other.production,
+            .culture = self.culture + other.culture,
+            .faith = self.faith + other.faith,
+            .science = self.science + other.science,
+        };
+    }
+};
 
 pub const Terrain = enum(u8) {
     _,

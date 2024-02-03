@@ -1,14 +1,16 @@
-const Self = @This();
 const std = @import("std");
+const Self = @This();
 const HexSet = @import("HexSet.zig");
 const CountedHexSet = @import("CountedHexSet.zig");
-const Yield = @import("yield.zig").Yield;
-const Terrain = @import("Rules.zig").Terrain;
-const Improvements = @import("Rules.zig").Improvements;
-const Resource = @import("Rules.zig").Resource;
 const World = @import("World.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
+
+const Rules = @import("Rules.zig");
+const Yield = Rules.Yield;
+const Terrain = Rules.Terrain;
+const Improvements = Rules.Improvements;
+const Resource = Rules.Resource;
 
 in_view: CountedHexSet, // tracks number of units which can see,
 explored: HexSet,

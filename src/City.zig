@@ -1,13 +1,33 @@
-const Self = @This();
 const std = @import("std");
 const World = @import("World.zig");
 const Idx = @import("Grid.zig").Idx;
-const yield = @import("yield.zig");
-const YieldAccumumlator = yield.YieldAccumulator;
 const HexSet = @import("HexSet.zig");
-const Rules = @import("Rules.zig");
 const Unit = @import("Unit.zig");
 const Player = @import("Player.zig");
+
+const Rules = @import("Rules.zig");
+const Yield = Rules.Yield;
+
+const Self = @This();
+
+pub const YieldAccumulator = struct {
+    production: u32 = 0,
+    food: u32 = 0,
+    gold: u32 = 0,
+    culture: u32 = 0,
+    faith: u32 = 0,
+    science: u32 = 0,
+
+    pub fn add(self: *@This(), yield: Yield) void {
+        self.production += @intCast(yield.production);
+        self.food += @intCast(yield.food);
+        self.gold += @intCast(yield.gold);
+        self.culture += @intCast(yield.culture);
+        self.faith += @intCast(yield.faith);
+        self.science += @intCast(yield.science);
+    }
+};
+
 //buildings: // bitfield for all buildings in the game?
 
 faction_id: Player.FactionID,
@@ -107,8 +127,8 @@ pub fn unsetWorked(self: *Self, idx: Idx) bool {
     return self.worked.checkRemove(idx);
 }
 
-pub fn getWorkedTileYields(self: *const Self, world: *const World) YieldAccumumlator {
-    var ya: YieldAccumumlator = .{};
+pub fn getWorkedTileYields(self: *const Self, world: *const World) YieldAccumulator {
+    var ya: YieldAccumulator = .{};
     for (self.worked.slice()) |worked_idx| {
         ya.add(world.tileYield(worked_idx));
     }
@@ -117,7 +137,7 @@ pub fn getWorkedTileYields(self: *const Self, world: *const World) YieldAccumuml
     return ya;
 }
 
-pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAccumumlator {
+pub fn processYields(self: *Self, tile_yields: *const YieldAccumulator) YieldAccumulator {
     // yields from tiles
     var food: f32 = @as(f32, @floatFromInt(tile_yields.food));
     var production: f32 = @as(f32, @floatFromInt(tile_yields.production));
@@ -168,7 +188,7 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumumlator) YieldAc
     self.unused_city_culture += culture;
 
     // Global yields (real global ones)
-    return YieldAccumumlator{
+    return YieldAccumulator{
         // production and food are discarded
         .science = @intFromFloat(science),
         .culture = @intFromFloat(culture),

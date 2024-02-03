@@ -2,9 +2,8 @@ const std = @import("std");
 
 const flag_index_map = @import("flag_index_map.zig");
 
-const Yield = @import("yield.zig").Yield;
-
 const Rules = @import("Rules.zig");
+const Yield = Rules.Yield;
 const Terrain = Rules.Terrain;
 const Resource = Rules.Resource;
 const Building = Rules.Building;

@@ -2,12 +2,13 @@ const Self = @This();
 const std = @import("std");
 
 const Rules = @import("Rules.zig");
-const Yield = @import("yield.zig").Yield;
+const Yield = Rules.Yield;
 const Terrain = Rules.Terrain;
 const Resource = Rules.Resource;
 const Building = Rules.Building;
 const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
+
 const City = @import("City.zig");
 const HexSet = @import("HexSet.zig");
 const PlayerView = @import("PlayerView.zig");
