@@ -97,9 +97,12 @@ pub fn main() !void {
     // Audio init
     raylib.InitAudioDevice();
     var music = raylib.LoadMusicStream("audio/theme.wav");
+    var pause_music = false;
     music.looping = true;
     raylib.PlayMusicStream(music);
     var volume: f32 = 1.0;
+
+    const move_sound = raylib.LoadSound("audio/unit_movehmm.wav");
 
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
@@ -174,6 +177,16 @@ pub fn main() !void {
                     volume = std.math.clamp(volume, 0.0, 1.0);
                     raylib.SetMusicVolume(music, volume);
                 }
+                if (raylib.IsKeyPressed(raylib.KEY_END)) {
+                    // Pause/play music
+                    if (pause_music) {
+                        raylib.ResumeMusicStream(music);
+                        pause_music = !pause_music;
+                    } else {
+                        raylib.PauseMusicStream(music);
+                        pause_music = !pause_music;
+                    }
+                }
                 if (raylib.IsKeyPressed(raylib.KEY_B)) {}
 
                 if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
@@ -217,7 +230,10 @@ pub fn main() !void {
                             if (raylib.IsKeyDown(raylib.KEY_Q)) {
                                 // Unit.tryBattle(selected_idx.?, clicked_idx, &world);
                             } else {
-                                _ = try world.move(maybe_unit_reference.?, mouse_idx);
+                                const move = try world.move(maybe_unit_reference.?, mouse_idx);
+                                if (move) {
+                                    raylib.PlaySound(move_sound);
+                                }
                             }
                             maybe_selected_idx = null;
                         } else if (maybe_unit_reference) |ref| {
