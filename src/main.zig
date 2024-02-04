@@ -232,6 +232,17 @@ pub fn main() !void {
                             } else {
                                 const move = try world.move(maybe_unit_reference.?, mouse_idx);
                                 if (move) {
+                                    const unit_pos = render.posInHex(selected_idx, world.grid, 0.0, 0.0, texture_set);
+                                    const camera_pos = camera.camera.target;
+                                    const diff = raylib.Vector2Subtract(unit_pos, camera_pos);
+
+                                    const dist = raylib.Vector2Length(diff);
+
+                                    const vol: f32 = 1.0 - std.math.sqrt(dist / (50 * WIDTH));
+                                    const pan = 0.5 - std.math.sign(diff.x) * (2.0 * dist / (50 * WIDTH));
+
+                                    raylib.SetSoundPan(move_sound, pan); // 0.0 is Right, 1.0 is left
+                                    raylib.SetSoundVolume(move_sound, vol);
                                     raylib.PlaySound(move_sound);
                                 }
                             }
