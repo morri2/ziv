@@ -105,6 +105,7 @@ pub fn init(
     player_count: u8,
     rules: *const Rules,
 ) !Self {
+    std.debug.assert(player_count >= 1);
     const grid = Grid.init(width, height, wrap_around);
 
     const terrain = try allocator.alloc(Terrain, grid.len);
