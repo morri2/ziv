@@ -284,8 +284,8 @@ pub fn main() !void {
                 render.renderTextureHex(
                     selected_idx,
                     world.grid,
-                    texture_set.base_textures[6],
-                    .{ .tint = .{ .r = 200, .g = 200, .b = 100, .a = 100 } },
+                    texture_set.edge_textures[0],
+                    .{ .tint = .{ .r = 0, .g = 250, .b = 150, .a = 100 } },
                     texture_set,
                 );
             }
