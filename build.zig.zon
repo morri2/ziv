@@ -7,6 +7,10 @@
             .url = "https://github.com/raysan5/raylib/archive/0932cd3059a181f637cd80c09534d609f1ea3ed1.tar.gz",
             .hash = "122015503635b39fc821120bd771faf93953f089fc2597bc8a9356d4d913de5d006d",
         },
+        .raygui = .{
+            .url = "https://github.com/raysan5/raygui/archive/7fe39be75af7d166c50afb6e6b9013398d66a7e1.tar.gz",
+            .hash = "12205b5293d62a48e0c111011f5832f72d4dad0594097eeae10a3a9edcda5bf17612",
+        },
     },
 
     .paths = .{
