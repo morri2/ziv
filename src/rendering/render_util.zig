@@ -1,5 +1,4 @@
 const std = @import("std");
-const hex = @import("hex_util.zig");
 
 const Grid = @import("../Grid.zig");
 const Idx = Grid.Idx;
@@ -74,7 +73,7 @@ pub fn renderChargeCircleInHex(tile_idx: Idx, grid: Grid, fill_up: f32, off_x: f
     renderChargeCircle(posInHex(tile_idx, grid, off_x, off_y, ts), fill_up, args, ts);
 }
 pub fn renderChargeCircle(pos: raylib.Vector2, fill_up: f32, args: CircleBarArgs, ts: TextureSet) void {
-    const radius = args.radius * ts.hex_radius;
+    const radius = args.radius * ts.unit;
     const pos_anchor = raylib.Vector2Add(pos, args.anchor.getOffsetRelative(
         radius * 2,
         radius * 2,
@@ -86,7 +85,7 @@ pub fn renderChargeCircle(pos: raylib.Vector2, fill_up: f32, args: CircleBarArgs
 }
 
 pub fn renderTextureInHexSeries(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, repeats: u8, off_x_start: f32, off_y: f32, spaceing: f32, args: RenderTextureArgs, ts: TextureSet) f32 {
-    const step_off = (@as(f32, @floatFromInt(texture.width)) * args.scale / ts.hex_radius + spaceing);
+    const step_off = (@as(f32, @floatFromInt(texture.width)) * args.scale / ts.unit + spaceing);
     for (0..repeats) |i| {
         const tot_off_x = off_x_start + @as(f32, @floatFromInt(i)) * step_off;
         renderTextureInHex(tile_idx, grid, texture, tot_off_x, off_y, args, ts);
@@ -126,7 +125,7 @@ pub fn renderFormatHex(comptime buflen: comptime_int, tile_idx: Idx, grid: Grid,
 /// Render text in hex. Render text with a relative position form tile center (offset messured in hex radius)
 pub fn renderTextInHex(tile_idx: Idx, grid: Grid, text: []const u8, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
     const pos = posInHex(tile_idx, grid, off_x, off_y, ts);
-    renderText(text, args.font orelse ts.font, pos, args);
+    renderText(text, args.font orelse ts.font, pos, args, ts);
 }
 
 /// Render texture
@@ -141,20 +140,21 @@ pub fn renderTextureInHex(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, 
     renderTexture(texture, pos, args);
 }
 
-/// returns the point relative to the center of a point
+/// returns the point relative to the center of a hex
 pub fn posInHex(idx: Idx, grid: Grid, off_x: f32, off_y: f32, ts: TextureSet) raylib.Vector2 {
     const x = grid.xFromIdx(idx);
     const y = grid.yFromIdx(idx);
-    const center_x = hex.tilingX(x, y, ts.hex_radius) + hex.widthFromRadius(ts.hex_radius) / 2.0;
-    const center_y = hex.tilingY(y, ts.hex_radius) + hex.heightFromRadius(ts.hex_radius) / 2.0;
+    const center_x = ts.tilingX(x, y) + ts.hex_width / 2.0;
+    const center_y = ts.tilingY(y) + ts.hex_height / 2.0;
 
-    return .{ .x = center_x + off_x * ts.hex_radius, .y = center_y + off_y * ts.hex_radius };
+    return .{ .x = center_x + off_x * ts.hex_width / 2, .y = center_y + off_y * ts.hex_height / 2 };
 }
 
 /// Render text in hex. Render text with a relative position form tile center (offset messured in hex radius)
-fn renderText(text: []const u8, font: raylib.Font, pos: raylib.Vector2, args: RenderTextArgs) void {
+fn renderText(text: []const u8, font: raylib.Font, pos: raylib.Vector2, args: RenderTextArgs, ts: TextureSet) void {
+    const font_size = args.font_size * ts.unit / 50;
     const text_messurements =
-        raylib.MeasureTextEx(font, text.ptr, args.font_size, args.spaceing);
+        raylib.MeasureTextEx(font, text.ptr, font_size, args.spaceing);
 
     const pos_anchor = raylib.Vector2Add(pos, args.anchor.getOffsetRelative(
         text_messurements.x,
@@ -162,7 +162,7 @@ fn renderText(text: []const u8, font: raylib.Font, pos: raylib.Vector2, args: Re
         .bottom_right, // .center, //.top_left,
     ));
 
-    raylib.DrawTextEx(font, text.ptr, pos_anchor, args.font_size, args.spaceing, args.tint);
+    raylib.DrawTextEx(font, text.ptr, pos_anchor, font_size, args.spaceing, args.tint);
 }
 
 fn renderTexture(texture: raylib.Texture2D, pos: raylib.Vector2, args: RenderTextureArgs) void {

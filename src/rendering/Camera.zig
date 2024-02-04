@@ -1,5 +1,6 @@
 const std = @import("std");
-const hex = @import("hex_util.zig");
+
+const TextureSet = @import("TextureSet.zig");
 
 const Grid = @import("../Grid.zig");
 const Idx = Grid.Idx;
@@ -76,8 +77,9 @@ pub fn boundingBox(
     tile_height: usize,
     screen_width: usize,
     screen_height: usize,
-    hex_radius: f32,
+    ts: TextureSet,
 ) BoundingBox {
+    // TODO FIX this, Y bounds seem off
     const top_left = raylib.GetScreenToWorld2D(raylib.Vector2{}, self.camera);
     const bottom_right = raylib.GetScreenToWorld2D(raylib.Vector2{
         .x = @floatFromInt(screen_width),
@@ -86,21 +88,19 @@ pub fn boundingBox(
 
     const min_x: usize = @intFromFloat(@max(
         0.0,
-        @round(top_left.x / hex.widthFromRadius(hex_radius)) - 2.0,
+        @round(top_left.x / ts.hex_width) - 2.0,
     ));
     const max_x: usize = @intFromFloat(@max(
         0.0,
-        @round(bottom_right.x / hex.widthFromRadius(hex_radius)) + 2.0,
+        @round(bottom_right.x / ts.hex_width) + 2.0,
     ));
 
-    const min_y: usize = @intFromFloat(@max(
-        0.0,
-        @round(top_left.y / (hex_radius * 1.5)) - 2.0,
-    ));
-    const max_y: usize = @intFromFloat(@max(
-        0.0,
-        @round(bottom_right.y / (hex_radius * 1.5)) + 2.0,
-    ));
+    const min_y: usize = @intFromFloat(@max(0.0, @round(
+        top_left.y / (ts.hex_height),
+    ) - 2));
+    const max_y: usize = @intFromFloat(@max(0.0, @round(
+        bottom_right.y / (ts.hex_height) * 1.5,
+    ) + 2));
 
     return .{
         .x_max = @min(tile_width, max_x),
@@ -114,7 +114,7 @@ pub fn getMouseTile(
     self: *const Self,
     grid: Grid,
     bounding_box: BoundingBox,
-    hex_radius: f32,
+    ts: TextureSet,
 ) Idx {
     const click_point = raylib.GetScreenToWorld2D(raylib.GetMousePosition(), self.camera);
 
@@ -123,7 +123,7 @@ pub fn getMouseTile(
         click_point.y,
         grid,
         bounding_box,
-        hex_radius,
+        ts,
     );
 }
 
@@ -134,15 +134,15 @@ pub fn getPointIdx(
     yf: f32,
     grid: Grid,
     bounding_box: BoundingBox,
-    hex_radius: f32,
+    ts: TextureSet,
 ) Idx {
     var idx: Grid.Idx = 0;
 
     var min_dist: f32 = std.math.floatMax(f32);
     for (bounding_box.x_min..bounding_box.x_max) |x| {
         for (bounding_box.y_min..bounding_box.y_max) |y| {
-            const real_x = hex.tilingX(x, y, hex_radius) + hex.heightFromRadius(hex_radius) * 0.5;
-            const real_y = hex.tilingY(y, hex_radius) + hex.widthFromRadius(hex_radius) * 0.5;
+            const real_x = ts.tilingX(x, y) + ts.hex_height * 0.5;
+            const real_y = ts.tilingY(y) + ts.hex_width * 0.5;
             const dist = std.math.pow(f32, real_x -
                 xf, 2) + std.math.pow(f32, real_y - yf, 2);
             if (dist < min_dist) {

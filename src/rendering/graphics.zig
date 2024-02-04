@@ -12,7 +12,7 @@ const Unit = @import("../Unit.zig");
 const PlayerView = @import("../PlayerView.zig");
 
 const TextureSet = @import("TextureSet.zig");
-const hex = @import("hex_util.zig");
+
 const render = @import("render_util.zig");
 
 const Camera = @import("Camera.zig");
@@ -111,15 +111,9 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
             .scale = 0.95,
         }, ts);
 
-        render.renderTextureInHex(
-            idx,
-            world.grid,
-            ts.city_texture,
-            0,
-            0,
-            .{},
-            ts,
-        );
+        const city_texture = ts.city_textures[@min(ts.city_textures.len - 1, city.population / 2)];
+
+        render.renderTextureInHex(idx, world.grid, city_texture, 0, 0, .{}, ts);
         const off = render.renderTextureInHexSeries(
             idx,
             world.grid,
@@ -282,7 +276,7 @@ pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*con
         } else continue;
 
         const icon = ts.resource_icons[@intFromEnum(res.type)];
-        render.renderTextureInHex(idx, world.grid, icon, -0.4, -0.4, .{ .scale = 0.4 }, ts);
+        render.renderTextureInHex(idx, world.grid, icon, -0.5, -0.4, .{ .scale = 0.6 }, ts);
 
         if (res.amount > 1) render.renderFormatHexAuto(
             idx,
@@ -298,22 +292,27 @@ pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*con
 }
 
 pub fn renderTerrain(terrain: Terrain, idx: Idx, grid: Grid, ts: TextureSet, rules: *const Rules) void {
-    const base = terrain.base(rules);
+    _ = rules;
+    const terrain_texture = ts.terrain_textures[@intFromEnum(terrain)];
+    render.renderTextureHex(idx, grid, terrain_texture, .{}, ts);
 
-    const base_texture = ts.base_textures[@intFromEnum(base)];
-    render.renderTextureHex(idx, grid, base_texture, .{}, ts);
+    // OLD LAYER RENDERING
+    //const base = terrain.base(rules);
 
-    const feature = terrain.feature(rules);
-    if (feature != .none) {
-        const feature_texture = ts.feature_textures[@intFromEnum(feature)];
-        render.renderTextureHex(idx, grid, feature_texture, .{}, ts);
-    }
+    // const base_texture = ts.base_textures[@intFromEnum(base)];
+    // render.renderTextureHex(idx, grid, base_texture, .{}, ts);
 
-    const vegetation = terrain.vegetation(rules);
-    if (vegetation != .none) {
-        const vegetation_texture = ts.vegetation_textures[@intFromEnum(vegetation)];
-        render.renderTextureHex(idx, grid, vegetation_texture, .{}, ts);
-    }
+    // const feature = terrain.feature(rules);
+    // if (feature != .none) {
+    //     const feature_texture = ts.feature_textures[@intFromEnum(feature)];
+    //     render.renderTextureHex(idx, grid, feature_texture, .{}, ts);
+    // }
+
+    // const vegetation = terrain.vegetation(rules);
+    // if (vegetation != .none) {
+    //     const vegetation_texture = ts.vegetation_textures[@intFromEnum(vegetation)];
+    //     render.renderTextureHex(idx, grid, vegetation_texture, .{}, ts);
+    // }
 }
 
 pub fn renderImprovements(improvement: Rules.Improvements, tile_idx: Idx, grid: Grid, ts: TextureSet) void {

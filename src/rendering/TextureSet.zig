@@ -2,7 +2,6 @@ const Rules = @import("../Rules.zig");
 const Self = @This();
 const Terrain = Rules.Terrain;
 
-const hex = @import("hex_util.zig");
 const Idx = @import("../Grid.zig").Idx;
 
 const std = @import("std");
@@ -24,25 +23,43 @@ improvement_textures: []const raylib.Texture2D,
 edge_textures: []const raylib.Texture2D,
 red_pop: raylib.Texture2D,
 green_pop: raylib.Texture2D,
-city_texture: raylib.Texture2D,
+city_textures: []const raylib.Texture2D,
 city_border_texture: raylib.Texture2D,
 smoke_texture: raylib.Texture2D,
-hex_radius: f32,
+//hex_radius: f32,
+
+unit: f32, // the unit for rendering non hex elements, should be set as a function of hex size
+
+// width and height (allows for asymetric hexes :))))
+hex_width: f32,
+hex_height: f32,
+
+terrain_textures: []const raylib.Texture2D,
 
 pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
     const font = raylib.LoadFont("textures/custom_alagard.png");
-    const universal_fallback = loadTexture("textures/placeholder.png", null);
+    //const universal_fallback = loadTexture("textures/placeholder.png", null);
+    const universal_fallback = loadTexture("textures/rastor/1x/h_blank.png", null);
 
-    const hex_radius = @as(f32, @floatFromInt(universal_fallback.height)) * 0.5;
+    //const hex_radius = @as(f32, @floatFromInt(universal_fallback.height)) * 0.5;
+
+    // const hex_width = std.math.sqrt(3) * hex_radius * 2; //@as(f32, @floatFromInt(universal_fallback.height));
+    // const hex_height = 2 * hex_radius;
+
+    const hex_width = @as(f32, @floatFromInt(universal_fallback.width)) - 0.02;
+    const hex_height = @as(f32, @floatFromInt(universal_fallback.height));
+    const unit = hex_height / 2;
     return .{
         .allocator = allocator,
         .font = font,
-        .hex_radius = hex_radius,
+        //.hex_radius = hex_radius,
         .edge_textures = try loadTexturesList(&[_][]const u8{
-            "textures/edge1.png",
-            "textures/edge2.png",
-            "textures/edge3.png",
+            "textures/rastor/1x/edge.png",
+            "textures/rastor/1x/edge.png",
+            "textures/rastor/1x/edge.png",
         }, universal_fallback, 3, allocator),
+
+        .city_textures = try loadNumberedTextures("textures/rastor/1x/city_{}.png", universal_fallback, 6, allocator),
 
         .base_textures = try loadTextures(
             "textures/{s}.png",
@@ -99,11 +116,16 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.unit_type_count,
             allocator,
         ),
-        .smoke_texture = loadTexture("textures/smoke.png", null),
-        .city_texture = loadTexture("textures/city.png", null),
+        .smoke_texture = loadTexture("textures/rastor/1x/h_fog.png", null),
         .red_pop = loadTexture("textures/redpop.png", null),
         .green_pop = loadTexture("textures/pop.png", null),
-        .city_border_texture = loadTexture("textures/city_border.png", null),
+        .city_border_texture = loadTexture("textures/rastor/1x/h_outline_dashed.png", null),
+
+        //.hex_radius = hex_radius,
+        .unit = unit,
+        .hex_height = hex_height,
+        .hex_width = hex_width,
+        .terrain_textures = try loadTerrainTextures("textures/rastor/1x/t_{s}.png", universal_fallback, rules, allocator),
     };
 }
 
@@ -116,6 +138,8 @@ pub fn deinit(self: *Self) void {
     for (self.feature_textures) |texture| raylib.UnloadTexture(texture);
     for (self.base_textures) |texture| raylib.UnloadTexture(texture);
     for (self.edge_textures) |texture| raylib.UnloadTexture(texture);
+    for (self.terrain_textures) |texture| raylib.UnloadTexture(texture);
+    for (self.city_textures) |texture| raylib.UnloadTexture(texture);
 
     self.allocator.free(self.unit_icons);
     self.allocator.free(self.transport_textures);
@@ -125,6 +149,48 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.feature_textures);
     self.allocator.free(self.base_textures);
     self.allocator.free(self.edge_textures);
+    self.allocator.free(self.city_textures);
+    self.allocator.free(self.terrain_textures);
+}
+
+/// For loading textures for full terrain, eg not components
+pub fn loadTerrainTextures(
+    comptime path_fmt: []const u8,
+    universal_fallback: ?raylib.Texture2D,
+    rules: *const Rules,
+    allocator: std.mem.Allocator,
+) ![]const raylib.Texture2D {
+    const len = rules.terrain_count;
+    const textures = try allocator.alloc(raylib.Texture2D, len);
+    errdefer allocator.free(textures);
+
+    var fallback_path_buf: [256]u8 = undefined;
+    const fallback_path = std.fmt.bufPrintZ(&fallback_path_buf, path_fmt, .{"placeholder"}) catch unreachable;
+
+    const fallback_texture = loadTexture(fallback_path, universal_fallback);
+
+    for (0..len) |i| {
+        const e: Rules.Terrain = @enumFromInt(i);
+        var name_buf: [256]u8 = undefined;
+        var j: usize = 0;
+        var name: []u8 = &name_buf;
+        name = std.fmt.bufPrintZ(name_buf[j..], "{s}", .{e.base(rules).name(rules)}) catch unreachable;
+        j += name.len;
+        if (e.feature(rules) != .none) {
+            name = std.fmt.bufPrintZ(name_buf[j..], "_{s}", .{e.feature(rules).name(rules)}) catch unreachable;
+            j += name.len;
+        }
+
+        if (e.vegetation(rules) != .none) {
+            name = std.fmt.bufPrintZ(name_buf[j..], "_{s}", .{e.vegetation(rules).name(rules)}) catch unreachable;
+            j += name.len;
+        }
+
+        var path_buf: [256]u8 = undefined;
+        const path = std.fmt.bufPrintZ(&path_buf, path_fmt, .{name_buf[0..j]}) catch unreachable;
+        textures[i] = loadTexture(path, fallback_texture);
+    }
+    return textures;
 }
 
 pub fn loadTexturesList(
@@ -170,6 +236,31 @@ pub fn loadTextures(
     return textures;
 }
 
+/// loads textures differentiated by a number eg "city0" "city1" "city2" and so on
+pub fn loadNumberedTextures(
+    comptime path_fmt: []const u8,
+    universal_fallback: ?raylib.Texture2D,
+    n: usize,
+    allocator: std.mem.Allocator,
+) ![]const raylib.Texture2D {
+    const textures = try allocator.alloc(raylib.Texture2D, n);
+    errdefer allocator.free(textures);
+
+    var fallback_path_buf: [256]u8 = undefined;
+    // 4711 is official placeholder for numerated types
+    const fallback_path = std.fmt.bufPrintZ(&fallback_path_buf, path_fmt, .{4711}) catch unreachable;
+
+    const fallback_texture = loadTexture(fallback_path, universal_fallback);
+
+    for (0..n) |i| {
+        var path_buf: [256]u8 = undefined;
+        const path = std.fmt.bufPrintZ(&path_buf, path_fmt, .{i}) catch unreachable;
+        textures[i] = loadTexture(path, fallback_texture);
+    }
+    return textures;
+}
+
+/// probably outdated
 pub fn loadEnumTextures(
     comptime path_fmt: []const u8,
     universal_fallback: ?raylib.Texture2D,
@@ -206,4 +297,27 @@ pub fn loadTexture(path: []const u8, fallback: ?raylib.Texture2D) raylib.Texture
     const img = raylib.LoadImage(path.ptr);
     defer raylib.UnloadImage(img);
     return raylib.LoadTextureFromImage(img);
+}
+
+/// functions from hex util
+pub fn tilingX(self: *const Self, x: usize, y: usize) f32 {
+    const fx: f32 = @floatFromInt(x);
+    const y_odd: f32 = @floatFromInt(y & 1);
+
+    return self.hex_width * fx + self.hex_width * 0.5 * y_odd;
+}
+
+pub fn tilingY(self: *const Self, y: usize) f32 {
+    const fy: f32 = @floatFromInt(y);
+    return fy * (self.hex_height / 2) * 1.5;
+}
+
+pub fn tilingWidth(self: *const Self, map_width: usize) f32 {
+    const fwidth: f32 = @floatFromInt(map_width);
+    return self.hex_width * (fwidth + 0.5); // TODO is this why one column is not renderd?
+}
+
+pub fn tilingHeight(self: *const Self, map_height: usize) f32 {
+    const fheight: f32 = @floatFromInt(map_height);
+    return 0.5 * (self.hex_height / 1.5) * (fheight - 1.0) + self.hex_height; // messy :)
 }

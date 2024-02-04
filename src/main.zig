@@ -102,7 +102,7 @@ pub fn main() !void {
             world.grid.height,
             screen_width,
             screen_height,
-            texture_set.hex_radius,
+            texture_set,
         );
         {
             if (raylib.IsKeyPressed(raylib.KEY_Y)) in_edit_mode = !in_edit_mode;
@@ -113,7 +113,7 @@ pub fn main() !void {
                 const mouse_tile = camera.getMouseTile(
                     world.grid,
                     bounding_box,
-                    texture_set.hex_radius,
+                    texture_set,
                 );
                 if (raylib.IsKeyPressed(raylib.KEY_R)) {
                     const res = world.resources.getPtr(mouse_tile);
@@ -178,7 +178,7 @@ pub fn main() !void {
                     const mouse_idx = camera.getMouseTile(
                         world.grid,
                         bounding_box,
-                        texture_set.hex_radius,
+                        texture_set,
                     );
 
                     if (maybe_selected_idx) |selected_idx| {
@@ -213,7 +213,7 @@ pub fn main() !void {
                     const clicked_tile = camera.getMouseTile(
                         world.grid,
                         bounding_box,
-                        texture_set.hex_radius,
+                        texture_set,
                     );
 
                     for (world.cities.keys()) |city_key| {
