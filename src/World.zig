@@ -164,6 +164,11 @@ pub fn moveCost(
 
     const unit = self.units.deref(reference) orelse return .disallowed;
 
+    if (self.units.firstReference(to)) |to_ref| {
+        const to_unit = self.units.deref(to_ref) orelse unreachable;
+        if (to_unit.faction_id != unit.faction_id) return .disallowed;
+    }
+
     const terrain = self.terrain[to];
     const improvements = self.improvements[to];
 
