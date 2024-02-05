@@ -416,7 +416,7 @@ fn parseTerrain(
     rules.terrain_no_vegetation = terrain_no_vegetation.ptr;
     rules.terrain_names = terrain_names.ptr;
     rules.terrain_unpacked_map = terrain_unpacked_map;
-    rules.terrain_strings = try terrain_strings.toOwnedSlice(arena_allocator);
+    rules.terrain_strings = try arena_allocator.dupe(u8, terrain_strings.items);
 
     return .{
         .tiles = try tiles.toOwnedSlice(allocator),
