@@ -77,11 +77,14 @@ pub const Slot = enum(u3) {
 
 pub const Storage = struct {
     unit: Unit,
-    stacked: ?Stacked.Key = null,
+    stacked: Stacked.Key = .none,
 };
 
 pub const Stacked = struct {
-    pub const Key = u32;
+    pub const Key = enum(u32) {
+        none = 0,
+        _,
+    };
 
     idx: Idx,
     slot: Slot,
@@ -91,13 +94,13 @@ pub const Stacked = struct {
 pub const Reference = struct {
     idx: Idx,
     slot: Slot,
-    stacked: ?Stacked.Key = null,
+    stacked: Stacked.Key = .none,
 };
 
 allocator: std.mem.Allocator,
 rules: *const Rules,
 
-stacked_key: Stacked.Key = 0,
+stacked_key: Stacked.Key = @enumFromInt(1),
 maps: [Slot.len()]std.AutoArrayHashMapUnmanaged(Idx, Storage) = [_]std.AutoArrayHashMapUnmanaged(Idx, Storage){.{}} ** Slot.len(),
 stacked: std.AutoHashMapUnmanaged(Stacked.Key, Stacked) = .{},
 
@@ -148,8 +151,7 @@ pub fn putOrStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !void {
         return;
     }
 
-    const stacked_key = self.stacked_key;
-    self.stacked_key += 1;
+    const stacked_key = self.nextStackedKey();
     try self.stacked.put(self.allocator, stacked_key, .{
         .idx = idx,
         .slot = slot,
@@ -157,8 +159,8 @@ pub fn putOrStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !void {
     });
 
     var unit_storage = gop.value_ptr;
-    while (unit_storage.stacked) |key| {
-        unit_storage = &(self.stacked.getPtr(key) orelse unreachable).storage;
+    while (unit_storage.stacked != .none) {
+        unit_storage = &(self.stacked.getPtr(unit_storage.stacked) orelse unreachable).storage;
     }
     unit_storage.stacked = stacked_key;
 }
@@ -173,19 +175,20 @@ pub fn putOrStackAutoSlot(self: *Self, idx: Idx, unit: Unit) !void {
 
 pub fn remove(self: *Self, idx: Idx, slot: Slot) void {
     const ptr = self.maps[@intFromEnum(slot)].getPtr(idx) orelse unreachable;
-    if (ptr.stacked) |stacked_key| {
-        ptr.* = (self.stacked.fetchRemove(stacked_key) orelse unreachable).value.storage;
+    if (ptr.stacked != .none) {
+        ptr.* = (self.stacked.fetchRemove(ptr.stacked) orelse unreachable).value.storage;
     } else {
         _ = self.maps[@intFromEnum(slot)].swapRemove(idx);
     }
 }
 
 pub fn removeStacked(self: *Self, idx: Idx, stacked: Stacked.Key) void {
-    var ptr = &(self.stacked.getPtr(idx) orelse unreachable).storage;
+    var ptr = &(self.stacked.getPtr(stacked) orelse unreachable).storage;
     while (ptr.stacked != stacked) {
-        ptr = &(self.stacked.getPtr(ptr.stacked orelse unreachable) orelse unreachable).storage;
+        ptr = &(self.stacked.getPtr(ptr.stacked) orelse unreachable).storage;
     }
     const removed_stacked = self.stacked.fetchRemove(stacked) orelse unreachable;
+    std.debug.assert(removed_stacked.value.idx == idx);
     ptr.stacked = removed_stacked.value.storage.stacked;
 }
 
@@ -203,21 +206,21 @@ pub fn firstReference(self: *const Self, idx: Idx) ?Reference {
 
 pub fn nextReference(self: *const Self, reference: Reference) ?Reference {
     blk: {
-        if (reference.stacked) |key| {
-            const stacked = self.stacked.get(key) orelse break :blk;
+        if (reference.stacked != .none) {
+            const stacked = self.stacked.get(reference.stacked) orelse break :blk;
             if (stacked.idx != reference.idx) break :blk;
             if (stacked.slot != reference.slot) break :blk;
 
-            if (stacked.storage.stacked) |child_key| return .{
+            if (stacked.storage.stacked != .none) return .{
                 .idx = reference.idx,
                 .slot = reference.slot,
-                .stacked = child_key,
+                .stacked = stacked.storage.stacked,
             };
         } else if (self.maps[@intFromEnum(reference.slot)].get(reference.idx)) |storage| {
-            if (storage.stacked) |key| return .{
+            if (storage.stacked != .none) return .{
                 .idx = reference.idx,
                 .slot = reference.slot,
-                .stacked = key,
+                .stacked = storage.stacked,
             };
         }
     }
@@ -236,8 +239,8 @@ pub fn nextReference(self: *const Self, reference: Reference) ?Reference {
 }
 
 pub fn deref(self: *const Self, reference: Reference) ?Unit {
-    if (reference.stacked) |key| {
-        const stacked = self.stacked.get(key) orelse return null;
+    if (reference.stacked != .none) {
+        const stacked = self.stacked.get(reference.stacked) orelse return null;
         if (stacked.idx != reference.idx) return null;
         if (stacked.slot != reference.slot) return null;
         return stacked.storage.unit;
@@ -248,8 +251,8 @@ pub fn deref(self: *const Self, reference: Reference) ?Unit {
 }
 
 pub fn derefToPtr(self: *Self, reference: Reference) ?*Unit {
-    if (reference.stacked) |key| {
-        const stacked = self.stacked.getPtr(key) orelse return null;
+    if (reference.stacked != .none) {
+        const stacked = self.stacked.getPtr(reference.stacked) orelse return null;
         if (stacked.idx != reference.idx) return null;
         if (stacked.slot != reference.slot) return null;
         return &stacked.storage.unit;
@@ -260,11 +263,11 @@ pub fn derefToPtr(self: *Self, reference: Reference) ?*Unit {
 }
 
 pub fn removeReference(self: *Self, reference: Reference) void {
-    if (reference.stacked) |key| {
-        const stacked = self.stacked.get(key) orelse return;
+    if (reference.stacked != .none) {
+        const stacked = self.stacked.get(reference.stacked) orelse return;
         if (stacked.idx != reference.idx) return;
         if (stacked.slot != reference.slot) return;
-        self.removeStacked(reference.idx, key);
+        self.removeStacked(reference.idx, reference.stacked);
         return;
     }
 
@@ -311,6 +314,12 @@ pub fn iterator(self: *const Self) struct {
     }
 } {
     return .{ .units = self };
+}
+
+fn nextStackedKey(self: *Self) Stacked.Key {
+    const key = self.stacked_key;
+    self.stacked_key = @enumFromInt(@intFromEnum(self.stacked_key) + 1);
+    return key;
 }
 
 fn slotFromUnitType(unit_type: UnitType, rules: *const Rules) Slot {
