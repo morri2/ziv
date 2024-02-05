@@ -41,11 +41,14 @@ const TerrainMaps = struct {
     feature: FlagIndexMap,
     vegetation: FlagIndexMap,
 
+    arena: std.heap.ArenaAllocator,
+
     pub fn init(allocator: std.mem.Allocator) TerrainMaps {
         return .{
             .base = FlagIndexMap.init(allocator),
             .feature = FlagIndexMap.init(allocator),
             .vegetation = FlagIndexMap.init(allocator),
+            .arena = std.heap.ArenaAllocator.init(allocator),
         };
     }
 
@@ -53,6 +56,7 @@ const TerrainMaps = struct {
         self.vegetation.deinit();
         self.feature.deinit();
         self.base.deinit();
+        self.arena.deinit();
     }
 };
 
@@ -144,14 +148,14 @@ fn parseTerrain(
     const JsonOverride = struct {
         name: ?[]const u8 = null,
         yield: ?Yield = null,
-        happiness: u8 = 0,
+        happiness: ?u8 = null,
 
         base: []const u8,
         feature: ?[]const u8 = null,
         vegetation: ?[]const u8 = null,
 
         attributes: Terrain.Attributes = .{},
-        combat_bonus: i8 = 0,
+        combat_bonus: ?i8 = null,
     };
 
     const json_text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
@@ -173,55 +177,34 @@ fn parseTerrain(
     rules.feature_count = terrain.features.len + 1; // +1 = none
     rules.vegetation_count = terrain.vegetation.len + 1; // +1 = none
 
-    const strings_len = blk: {
-        var strings_len: usize = 0;
-        for (terrain.bases) |base| {
-            strings_len += base.name.len;
-        }
+    var terrain_strings = std.ArrayListUnmanaged(u8){};
+    defer terrain_strings.deinit(allocator);
 
-        for (terrain.features) |feature| {
-            strings_len += feature.name.len;
-        }
-
-        for (terrain.vegetation) |vegetation| {
-            strings_len += vegetation.name.len;
-        }
-        break :blk strings_len;
-    };
-
-    std.debug.assert(strings_len <= std.math.maxInt(u16));
-
-    const terrain_strings = try arena_allocator.alloc(u8, strings_len);
     const base_names = try arena_allocator.alloc(u16, rules.base_count + 1);
     const feature_names = try arena_allocator.alloc(u16, rules.feature_count + 1);
     const vegetation_names = try arena_allocator.alloc(u16, rules.vegetation_count + 1);
     {
-        var i: usize = 0;
         for (terrain.bases, 0..) |base, base_index| {
-            std.mem.copyForwards(u8, terrain_strings[i..(i + base.name.len)], base.name);
-            base_names[base_index] = @truncate(i);
-            i += base.name.len;
+            base_names[base_index] = @truncate(terrain_strings.items.len);
+            try terrain_strings.appendSlice(allocator, base.name);
         }
-        base_names[base_names.len - 1] = @truncate(i);
+        base_names[base_names.len - 1] = @truncate(terrain_strings.items.len);
 
-        feature_names[0] = @truncate(i);
+        feature_names[0] = @truncate(terrain_strings.items.len);
         for (terrain.features, 1..) |feature, feature_index| {
-            std.mem.copyForwards(u8, terrain_strings[i..(i + feature.name.len)], feature.name);
-            feature_names[feature_index] = @truncate(i);
-            i += feature.name.len;
+            feature_names[feature_index] = @truncate(terrain_strings.items.len);
+            try terrain_strings.appendSlice(allocator, feature.name);
         }
-        feature_names[feature_names.len - 1] = @truncate(i);
+        feature_names[feature_names.len - 1] = @truncate(terrain_strings.items.len);
 
-        vegetation_names[0] = @truncate(i);
+        vegetation_names[0] = @truncate(terrain_strings.items.len);
         for (terrain.vegetation, 1..) |vegetation, vegetation_index| {
-            std.mem.copyForwards(u8, terrain_strings[i..(i + vegetation.name.len)], vegetation.name);
-            vegetation_names[vegetation_index] = @truncate(i);
-            i += vegetation.name.len;
+            vegetation_names[vegetation_index] = @truncate(terrain_strings.items.len);
+            try terrain_strings.appendSlice(allocator, vegetation.name);
         }
-        vegetation_names[vegetation_names.len - 1] = @truncate(i);
+        vegetation_names[vegetation_names.len - 1] = @truncate(terrain_strings.items.len);
     }
 
-    rules.terrain_strings = terrain_strings;
     rules.base_names = base_names.ptr;
     rules.feature_names = feature_names.ptr;
     rules.vegetation_names = vegetation_names.ptr;
@@ -232,10 +215,15 @@ fn parseTerrain(
     var maps = TerrainMaps.init(allocator);
     errdefer maps.deinit();
 
+    var tile_names_arena = std.heap.ArenaAllocator.init(allocator);
+    defer tile_names_arena.deinit();
+
+    var tile_names = std.ArrayListUnmanaged([]const u8){};
+    defer tile_names.deinit(allocator);
+
     // Add base tiles
     for (terrain.bases, 0..) |base, base_index| {
-        const base_enum: Terrain.Base = @enumFromInt(base_index);
-        _ = try maps.base.add(base_enum.name(rules));
+        _ = try maps.base.add(try maps.arena.allocator().dupe(u8, base.name));
         try tiles.append(allocator, .{
             .unpacked = .{
                 .base = @enumFromInt(base_index),
@@ -247,6 +235,7 @@ fn parseTerrain(
             .happiness = base.happiness,
             .combat_bonus = base.combat_bonus,
         });
+        try tile_names.append(allocator, base.name);
     }
 
     // Add feature tiles
@@ -254,8 +243,7 @@ fn parseTerrain(
         _ = try maps.feature.add("none");
         const tiles_len = tiles.items.len;
         for (terrain.features, 1..) |feature, feature_index| {
-            const feature_enum: Terrain.Feature = @enumFromInt(feature_index);
-            _ = try maps.feature.add(feature_enum.name(rules));
+            _ = try maps.feature.add(try maps.arena.allocator().dupe(u8, feature.name));
             const allowed_bases = maps.base.flagsFromKeys(feature.bases);
             for (0..tiles_len) |tile_index| {
                 const tile = tiles.items[tile_index];
@@ -273,6 +261,12 @@ fn parseTerrain(
                 new_tile.unpacked.feature = @enumFromInt(feature_index);
                 new_tile.combat_bonus = feature.combat_bonus;
                 try tiles.append(allocator, new_tile);
+
+                try tile_names.append(allocator, try std.mem.concat(tile_names_arena.allocator(), u8, &.{
+                    tile_names.items[tile_index],
+                    "_",
+                    feature.name,
+                }));
             }
         }
     }
@@ -282,8 +276,7 @@ fn parseTerrain(
         _ = try maps.vegetation.add("none");
         const tiles_len = tiles.items.len;
         for (terrain.vegetation, 1..) |vegetation, vegetation_index| {
-            const vegetation_enum: Terrain.Vegetation = @enumFromInt(vegetation_index);
-            _ = try maps.vegetation.add(vegetation_enum.name(rules));
+            _ = try maps.vegetation.add(try maps.arena.allocator().dupe(u8, vegetation.name));
 
             const allowed_bases = maps.base.flagsFromKeys(vegetation.bases);
             const allowed_features = maps.feature.flagsFromKeys(vegetation.features);
@@ -304,6 +297,12 @@ fn parseTerrain(
                 new_tile.yield = vegetation.yield;
                 new_tile.combat_bonus = vegetation.combat_bonus;
                 try tiles.append(allocator, new_tile);
+
+                try tile_names.append(allocator, try std.mem.concat(tile_names_arena.allocator(), u8, &.{
+                    tile_names.items[tile_index],
+                    "_",
+                    vegetation.name,
+                }));
             }
         }
     }
@@ -319,6 +318,10 @@ fn parseTerrain(
             new_tile.attributes.has_freshwater = true;
             new_tile.normalize();
             try tiles.append(allocator, new_tile);
+            try tile_names.append(allocator, try std.mem.concat(tile_names_arena.allocator(), u8, &.{
+                tile_names.items[tile_index],
+                "_river",
+            }));
         }
 
         for (0..tiles.items.len) |tile_index| {
@@ -329,6 +332,37 @@ fn parseTerrain(
             new_tile.attributes.has_freshwater = true;
             new_tile.normalize();
             try tiles.append(allocator, new_tile);
+            try tile_names.append(allocator, try std.mem.concat(tile_names_arena.allocator(), u8, &.{
+                tile_names.items[tile_index],
+                "_freshwater",
+            }));
+        }
+    }
+
+    for (terrain.overrides) |override| {
+        loop: for (0..tiles.items.len) |tile_index| {
+            const tile = tiles.items[tile_index];
+            const override_base: Terrain.Base = @enumFromInt(maps.base.get(override.base) orelse continue);
+            if (tile.unpacked.base != override_base) continue;
+
+            if (override.feature) |feature_str| {
+                const override_feature: Terrain.Feature = @enumFromInt(maps.feature.get(feature_str) orelse continue);
+                if (tile.unpacked.feature != override_feature) continue;
+            } else if (tile.unpacked.feature != .none) continue;
+
+            if (override.vegetation) |vegetation_str| {
+                const override_vegetation: Terrain.Vegetation = @enumFromInt(maps.vegetation.get(vegetation_str) orelse continue);
+                if (tile.unpacked.vegetation != override_vegetation) continue;
+            } else if (tile.unpacked.vegetation != .none) continue;
+
+            inline for (@typeInfo(Terrain.Attributes).Struct.fields) |field| {
+                if (@field(override.attributes, field.name) and !@field(tile.attributes, field.name)) continue :loop;
+            }
+
+            if (override.name) |name| tile_names.items[tile_index] = name;
+            if (override.yield) |yield| tiles.items[tile_index].yield = yield;
+            if (override.happiness) |happiness| tiles.items[tile_index].happiness = happiness;
+            if (override.combat_bonus) |combat_bonus| tiles.items[tile_index].combat_bonus = combat_bonus;
         }
     }
 
@@ -343,6 +377,7 @@ fn parseTerrain(
     const terrain_happiness = try arena_allocator.alloc(u8, tiles.items.len);
     const terrain_combat_bonus = try arena_allocator.alloc(i8, tiles.items.len);
     const terrain_no_vegetation = try arena_allocator.alloc(Terrain, tiles.items.len);
+    const terrain_names = try arena_allocator.alloc(u16, tile_names.items.len + 1);
     var terrain_unpacked_map: @TypeOf(rules.terrain_unpacked_map) = .{};
     try terrain_unpacked_map.ensureUnusedCapacity(arena_allocator, @intCast(rules.terrain_count));
     for (tiles.items, 0..) |tile, tile_index| {
@@ -354,7 +389,12 @@ fn parseTerrain(
         terrain_happiness[tile_index] = tile.happiness;
         terrain_combat_bonus[tile_index] = tile.combat_bonus;
         terrain_unpacked_map.putAssumeCapacity(tile.unpacked, @enumFromInt(tile_index));
+        terrain_names[tile_index] = @intCast(terrain_strings.items.len);
+        try terrain_strings.appendSlice(allocator, tile_names.items[tile_index]);
     }
+    terrain_names[terrain_names.len - 1] = @intCast(terrain_strings.items.len);
+
+    std.debug.assert(terrain_strings.items.len <= std.math.maxInt(u16));
 
     for (tiles.items, 0..) |tile, tile_index| {
         if (tile.unpacked.vegetation != .none) {
@@ -374,7 +414,9 @@ fn parseTerrain(
     rules.terrain_happiness = terrain_happiness.ptr;
     rules.terrain_combat_bonus = terrain_combat_bonus.ptr;
     rules.terrain_no_vegetation = terrain_no_vegetation.ptr;
+    rules.terrain_names = terrain_names.ptr;
     rules.terrain_unpacked_map = terrain_unpacked_map;
+    rules.terrain_strings = try terrain_strings.toOwnedSlice(arena_allocator);
 
     return .{
         .tiles = try tiles.toOwnedSlice(allocator),

@@ -23,6 +23,7 @@ terrain_happiness: [*]const u8,
 terrain_combat_bonus: [*]const i8,
 terrain_no_vegetation: [*]const Terrain,
 terrain_unpacked_map: std.AutoHashMapUnmanaged(Terrain.Unpacked, Terrain),
+terrain_names: [*]const u16,
 
 resource_count: usize,
 resource_kinds: [*]const Resource.Kind,
@@ -199,6 +200,12 @@ pub const Terrain = enum(u8) {
 
     pub fn withoutVegetation(self: Terrain, rules: *const Rules) Terrain {
         return rules.terrain_no_vegetation[@intFromEnum(self)];
+    }
+
+    pub fn name(self: Terrain, rules: *const Rules) []const u8 {
+        const start = rules.terrain_names[@intFromEnum(self)];
+        const end = rules.terrain_names[@intFromEnum(self) + 1];
+        return rules.terrain_strings[start..end];
     }
 };
 
