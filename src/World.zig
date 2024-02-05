@@ -165,9 +165,19 @@ pub fn moveCost(
 
     const unit = self.units.deref(reference) orelse return .disallowed;
 
-    if (self.units.firstReference(to)) |to_ref| {
-        const to_unit = self.units.deref(to_ref) orelse unreachable;
-        if (to_unit.faction_id != unit.faction_id) return .disallowed;
+    // Check if tile is already occupied
+    {
+        var maybe_ref = self.units.firstReference(to);
+        const initial: ?Units.Slot = if (maybe_ref) |ref| ref.slot else null;
+        loop: while (maybe_ref) |ref| {
+            const to_unit = self.units.deref(ref) orelse unreachable;
+            switch (ref.slot) {
+                .trade => if (reference.slot == .trade) return .disallowed,
+                else => if (to_unit.faction_id != unit.faction_id) return .disallowed,
+            }
+            maybe_ref = self.units.nextReference(ref);
+            if (initial.? == maybe_ref.?.slot) break :loop;
+        }
     }
 
     const terrain = self.terrain[to];
@@ -285,6 +295,21 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
         self.units.removeReference(attacker);
     } else if (defender_unit.hit_points == 0) {
         self.units.removeReference(defender);
+        var ref = defender;
+        while (self.units.nextReference(ref)) |next_ref| {
+            ref = next_ref;
+            const unit = self.units.derefToPtr(ref) orelse unreachable;
+            switch (ref.slot) {
+                .civilian_land,
+                .civilian_sea,
+                => unit.faction_id = attacker_unit.faction_id,
+                .embarked => self.units.removeReference(ref),
+                .trade => {},
+                .military_land,
+                .military_sea,
+                => unreachable,
+            }
+        }
         _ = try self.move(attacker, to);
     }
 

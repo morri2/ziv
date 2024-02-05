@@ -230,8 +230,8 @@ pub fn nextReference(self: *const Self, reference: Reference) ?Reference {
             .idx = reference.idx,
             .slot = slot,
         };
-        slot.nextLoop();
         if (slot == initial) return null;
+        slot.nextLoop();
     }
 }
 
