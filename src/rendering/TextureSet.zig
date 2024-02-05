@@ -39,7 +39,7 @@ terrain_textures: []const raylib.Texture2D,
 pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
     const font = raylib.LoadFont("textures/custom_alagard.png");
     //const universal_fallback = loadTexture("textures/placeholder.png", null);
-    const universal_fallback = loadTexture("textures/rastor/1x/h_blank.png", null);
+    const universal_fallback = loadTexture("textures/rastor/h_blank.png", null);
 
     //const hex_radius = @as(f32, @floatFromInt(universal_fallback.height)) * 0.5;
 
@@ -54,12 +54,12 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
         .font = font,
         //.hex_radius = hex_radius,
         .edge_textures = try loadTexturesList(&[_][]const u8{
-            "textures/rastor/1x/edge.png",
-            "textures/rastor/1x/edge.png",
-            "textures/rastor/1x/edge.png",
+            "textures/rastor/edge.png",
+            "textures/rastor/edge.png",
+            "textures/rastor/edge.png",
         }, universal_fallback, 3, allocator),
 
-        .city_textures = try loadNumberedTextures("textures/rastor/1x/city_{}.png", universal_fallback, 6, allocator),
+        .city_textures = try loadNumberedTextures("textures/rastor/city_{}.png", universal_fallback, 6, allocator),
 
         .base_textures = try loadTextures(
             "textures/{s}.png",
@@ -116,16 +116,16 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.unit_type_count,
             allocator,
         ),
-        .smoke_texture = loadTexture("textures/rastor/1x/h_fog.png", null),
+        .smoke_texture = loadTexture("textures/rastor/h_fog.png", null),
         .red_pop = loadTexture("textures/redpop.png", null),
         .green_pop = loadTexture("textures/pop.png", null),
-        .city_border_texture = loadTexture("textures/rastor/1x/h_outline_dashed.png", null),
+        .city_border_texture = loadTexture("textures/rastor/h_outline_dashed.png", null),
 
         //.hex_radius = hex_radius,
         .unit = unit,
         .hex_height = hex_height,
         .hex_width = hex_width,
-        .terrain_textures = try loadTerrainTextures("textures/rastor/1x/t_{s}.png", universal_fallback, rules, allocator),
+        .terrain_textures = try loadTerrainTextures("textures/rastor/t_{s}.png", universal_fallback, rules, allocator),
     };
 }
 
