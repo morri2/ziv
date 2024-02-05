@@ -53,8 +53,8 @@ pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const P
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
 pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {
     const outline_color = .{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
-    for (bbox.x_min..bbox.x_max) |x| {
-        for (bbox.y_min..bbox.y_max) |y| {
+    for (bbox.y_min..bbox.y_max) |y| {
+        for (bbox.x_min..bbox.x_max) |x| {
             const idx = world.grid.idxFromCoords(x, y);
 
             var terrain = world.terrain[idx];
