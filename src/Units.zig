@@ -81,7 +81,7 @@ pub const Storage = struct {
 };
 
 pub const Stacked = struct {
-    pub const Key = usize;
+    pub const Key = u32;
 
     idx: Idx,
     slot: Slot,
