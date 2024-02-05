@@ -105,6 +105,7 @@ pub fn init(
     player_count: u8,
     rules: *const Rules,
 ) !Self {
+    std.debug.assert(player_count >= 1);
     const grid = Grid.init(width, height, wrap_around);
 
     const terrain = try allocator.alloc(Terrain, grid.len);
@@ -164,6 +165,11 @@ pub fn moveCost(
 
     const unit = self.units.deref(reference) orelse return .disallowed;
 
+    if (self.units.firstReference(to)) |to_ref| {
+        const to_unit = self.units.deref(to_ref) orelse unreachable;
+        if (to_unit.faction_id != unit.faction_id) return .disallowed;
+    }
+
     const terrain = self.terrain[to];
     const improvements = self.improvements[to];
 
@@ -195,6 +201,93 @@ pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
         .embarkation => try self.units.putNoStack(to, unit, .embarked),
         .disembarkation => try self.units.putNoStackAutoSlot(to, unit),
     }
+    return true;
+}
+
+pub fn canAttack(self: *const Self, attacker: Units.Reference, to: Idx) !bool {
+    if (!self.grid.isNeighbour(attacker.idx, to)) return false;
+
+    const attacker_unit = self.units.deref(attacker) orelse return false;
+
+    const terrain = self.terrain[to];
+    const river_crossing = if (self.grid.edgeBetween(attacker.idx, to)) |edge| self.rivers.contains(edge) else false;
+    const improvements = self.improvements[to];
+
+    const cost = attacker_unit.moveCost(.{
+        .target_terrain = terrain,
+        .river_crossing = river_crossing,
+        .transport = if (improvements.pillaged_transport) .none else improvements.transport,
+        .embarked = attacker.slot == .embarked,
+        .city = self.cities.contains(to),
+    }, self.rules);
+
+    if (!cost.allowsAttack()) return false;
+
+    if (Rules.Promotion.Effect.cannot_melee.in(attacker_unit.promotions, self.rules)) return false;
+
+    const defender = self.units.firstReference(to) orelse return false;
+    const defender_unit = self.units.deref(defender) orelse return false;
+
+    if (attacker_unit.faction_id == defender_unit.faction_id) return false;
+
+    return true;
+}
+
+pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
+    if (!try self.canAttack(attacker, to)) return false;
+
+    const attacker_unit = self.units.derefToPtr(attacker) orelse return false;
+
+    const defender = self.units.firstReference(to) orelse return false;
+    const defender_unit = self.units.derefToPtr(defender) orelse return false;
+
+    // Check if this is a capture
+    if (attacker.slot.isMilitary() and defender.slot.isCivilian()) {
+        defender_unit.faction_id = attacker_unit.faction_id;
+        _ = try self.move(attacker, to);
+        return true;
+    }
+
+    const terrain = self.terrain[to];
+    const river_crossing = if (self.grid.edgeBetween(attacker.idx, to)) |edge| self.rivers.contains(edge) else false;
+
+    // TODO: Implement ranged combat
+    const attacker_strength = attacker_unit.strength(.{
+        .is_attacker = true,
+        .target_terrain = terrain,
+        .river_crossing = river_crossing,
+        .is_ranged = false,
+    }, self.rules);
+
+    const defender_strength = defender_unit.strength(.{
+        .is_attacker = false,
+        .target_terrain = terrain,
+        .river_crossing = river_crossing,
+        .is_ranged = false,
+    }, self.rules);
+
+    const ratio = attacker_strength.total / defender_strength.total;
+    const attacker_damage: u8 = @intFromFloat(1.0 / ratio * 35.0);
+    const defender_damage: u8 = @intFromFloat(ratio * 35.0);
+
+    const attacker_higher_hp = attacker_unit.hit_points > defender_unit.hit_points;
+    attacker_unit.hit_points -|= attacker_damage;
+    defender_unit.hit_points -|= defender_damage;
+
+    if (attacker_unit.hit_points == 0 and defender_unit.hit_points == 0) {
+        if (attacker_higher_hp)
+            attacker_unit.hit_points = 1
+        else
+            defender_unit.hit_points = 1;
+    }
+
+    if (attacker_unit.hit_points == 0) {
+        self.units.removeReference(attacker);
+    } else if (defender_unit.hit_points == 0) {
+        self.units.removeReference(defender);
+        _ = try self.move(attacker, to);
+    }
+
     return true;
 }
 

@@ -47,6 +47,32 @@ pub const Slot = enum(u3) {
         else
             self.* = @enumFromInt(@intFromEnum(self.*) + 1);
     }
+
+    pub fn isCivilian(self: Slot) bool {
+        return switch (self) {
+            .civilian_land,
+            .civilian_sea,
+            => true,
+            .military_land,
+            .military_sea,
+            .embarked,
+            .trade,
+            => false,
+        };
+    }
+
+    pub fn isMilitary(self: Slot) bool {
+        return switch (self) {
+            .military_land,
+            .military_sea,
+            => true,
+            .civilian_land,
+            .civilian_sea,
+            .embarked,
+            .trade,
+            => false,
+        };
+    }
 };
 
 pub const Storage = struct {
@@ -219,6 +245,18 @@ pub fn deref(self: *const Self, reference: Reference) ?Unit {
 
     const storage = self.maps[@intFromEnum(reference.slot)].get(reference.idx) orelse return null;
     return storage.unit;
+}
+
+pub fn derefToPtr(self: *Self, reference: Reference) ?*Unit {
+    if (reference.stacked) |key| {
+        const stacked = self.stacked.getPtr(key) orelse return null;
+        if (stacked.idx != reference.idx) return null;
+        if (stacked.slot != reference.slot) return null;
+        return &stacked.storage.unit;
+    }
+
+    const storage = self.maps[@intFromEnum(reference.slot)].getPtr(reference.idx) orelse return null;
+    return &storage.unit;
 }
 
 pub fn removeReference(self: *Self, reference: Reference) void {
