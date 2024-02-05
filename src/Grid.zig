@@ -5,7 +5,7 @@ const Self = @This();
 /// as multiple diffrent coordinates in the other representation (still
 /// there is a cannonical version for each coordinate type).
 /// The GAME STATE should only ever hold Idx:es.
-pub const Idx = usize;
+pub const Idx = u32;
 pub const uCoord = u16;
 pub const iCoord = i16;
 
@@ -138,12 +138,12 @@ pub const Edge = struct {
     }
 };
 
-width: usize,
-height: usize,
+width: u32,
+height: u32,
 wrap_around: bool,
-len: usize,
+len: u32,
 
-pub fn init(width: usize, height: usize, wrap_around: bool) Self {
+pub fn init(width: u32, height: u32, wrap_around: bool) Self {
     return Self{
         .width = width,
         .height = height,
@@ -152,15 +152,15 @@ pub fn init(width: usize, height: usize, wrap_around: bool) Self {
     };
 }
 
-pub fn idxFromCoords(self: Self, x: usize, y: usize) Idx {
+pub fn idxFromCoords(self: Self, x: u32, y: u32) Idx {
     return y * self.width + x;
 }
 
-pub fn xFromIdx(self: Self, idx: Idx) usize {
+pub fn xFromIdx(self: Self, idx: Idx) u32 {
     return idx % self.width;
 }
 
-pub fn yFromIdx(self: Self, idx: Idx) usize {
+pub fn yFromIdx(self: Self, idx: Idx) u32 {
     return idx / self.width;
 }
 

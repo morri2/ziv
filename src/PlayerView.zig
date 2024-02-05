@@ -84,8 +84,8 @@ pub fn update(self: *Self, idx: Idx, world: *const World) void {
 
 pub fn unsetAllVisable(self: *Self, world: *const World) void {
     for (0..world.grid.len) |idx| {
-        self.update(idx, world);
-        self.in_view.remove(idx);
+        self.update(@intCast(idx), world);
+        self.in_view.remove(@intCast(idx));
     }
 }
 

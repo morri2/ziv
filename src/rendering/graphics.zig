@@ -40,7 +40,7 @@ pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const P
     const fow_color = .{ .a = 90, .r = 150, .g = 150, .b = 150 };
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
-            const idx = grid.idxFromCoords(x, y);
+            const idx = grid.idxFromCoords(@intCast(x), @intCast(y));
             switch (maybe_view.?.visability(idx)) {
                 .fov => render.renderTextureHex(idx, grid, ts.smoke_texture, .{ .tint = fow_color }, ts),
                 .hidden => render.renderTextureHex(idx, grid, ts.smoke_texture, .{}, ts),
@@ -55,7 +55,7 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
     const outline_color = .{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
     for (bbox.y_min..bbox.y_max) |y| {
         for (bbox.x_min..bbox.x_max) |x| {
-            const idx = world.grid.idxFromCoords(x, y);
+            const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
 
             var terrain = world.terrain[idx];
             var improvement = world.improvements[idx];
@@ -206,7 +206,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
 pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
-            const idx = world.grid.idxFromCoords(x, y);
+            const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
 
             var yield = world.tileYield(idx);
             if (maybe_view) |view| {
