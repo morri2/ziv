@@ -249,13 +249,11 @@ pub const Building = enum(u8) {
     pub fn allowedOn(
         self: Building,
         terrain: Terrain,
-        resource: ?Resource,
         rules: *const Rules,
     ) Allowed {
         return rules.building_allowed_map.get(.{
             .terrain = terrain,
             .building = self,
-            .resource = resource,
         }) orelse .not_allowed;
     }
 
