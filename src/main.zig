@@ -259,7 +259,7 @@ pub fn main() !void {
         if (in_pallet) {
             for (bounding_box.x_min..bounding_box.x_max) |x| {
                 for (bounding_box.y_min..bounding_box.y_max) |y| {
-                    const idx = world.grid.idxFromCoords(x, y);
+                    const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
                     graphics.renderTerrain(
                         @enumFromInt(idx % rules.terrain_count),
                         idx,
@@ -275,7 +275,7 @@ pub fn main() !void {
                 if (raylib.IsKeyDown(raylib.KEY_M)) {
                     for (bounding_box.x_min..bounding_box.x_max) |x| {
                         for (bounding_box.y_min..bounding_box.y_max) |y| {
-                            const idx = world.grid.idxFromCoords(x, y);
+                            const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
                             render.renderFormatHexAuto(idx, world.grid, "{}", .{world.grid.distance(selected_idx, idx)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
                         }
                     }
@@ -317,7 +317,7 @@ pub fn main() !void {
                 if (raylib.IsKeyDown(raylib.KEY_Z)) {
                     for (bounding_box.x_min..bounding_box.x_max) |x| {
                         for (bounding_box.y_min..bounding_box.y_max) |y| {
-                            const index = world.grid.idxFromCoords(x, y);
+                            const index = world.grid.idxFromCoords(@intCast(x), @intCast(y));
                             const xy = Grid.CoordXY.fromIdx(index, world.grid);
                             const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
 
