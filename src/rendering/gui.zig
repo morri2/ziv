@@ -6,6 +6,146 @@ const raylib = @cImport({
     @cInclude("raygui.h");
 });
 
+pub const InfoWindowOptions = struct {
+    LINE_HEIGHT: f32 = 20,
+
+    SPACEING: f32 = 5,
+    TOP_SPACEING: f32 = 30,
+    WIDTH: f32 = 200,
+
+    MAX_LINES: u16 = 255,
+    X_TO_CLOSE: bool = false,
+    X_TO_COLLAPSE: bool = true,
+
+    START_COLLAPSED: bool = true,
+};
+
+pub fn InfoWindow(options: InfoWindowOptions) type {
+    return struct {
+        const Self = @This();
+
+        const OPTIONS = options;
+
+        name: [255:0]u8 = undefined,
+
+        should_close: bool = false,
+        collapsed: bool,
+
+        len: u16,
+        lines: [OPTIONS.MAX_LINES]Line,
+
+        bounds: raylib.Rectangle,
+
+        draging_window: bool = false,
+
+        const Line = struct {
+            id: u16,
+            value: [255:0]u8,
+            category_header: bool = false,
+        };
+
+        pub fn newEmpty() Self {
+            var out: Self = .{
+                .len = 0,
+                .lines = undefined,
+                .bounds = .{ .x = 10, .y = 10, .width = OPTIONS.WIDTH, .height = OPTIONS.TOP_SPACEING },
+                .collapsed = OPTIONS.START_COLLAPSED,
+            };
+            out.setName("[SELECT WINDOW]");
+            out.recalculateBounds();
+            return out;
+        }
+
+        pub fn setName(self: *Self, name: []const u8) void {
+            _ = std.fmt.bufPrintZ(&self.name, "{s}", .{name}) catch unreachable;
+        }
+
+        pub fn addLineFormat(self: *Self, comptime fmt: []const u8, fmt_args: anytype, category_header: bool) void {
+            _ = std.fmt.bufPrintZ(&self.lines[self.len].value, fmt, fmt_args) catch
+                std.debug.panic("LINE TOO LONG!", .{});
+            self.lines[self.len].id = self.len;
+            self.lines[self.len].category_header = category_header;
+            self.len += 1;
+
+            self.recalculateBounds();
+        }
+
+        pub fn addLine(self: *Self, line: []const u8) void {
+            self.addLineFormat("{s}", .{line}, false);
+        }
+
+        pub fn addCategoryHeader(self: *Self, line: []const u8) void {
+            self.addLineFormat("{s}", .{line}, true);
+        }
+
+        pub fn clear(self: *Self) void {
+            self.lines = undefined;
+            self.len = 0;
+        }
+
+        pub fn renderUpdate(self: *Self) void {
+            self.handleDrag();
+
+            if (raylib.GuiWindowBox(self.bounds, &self.name) != 0) {
+                if (OPTIONS.X_TO_CLOSE) self.should_close = true;
+                if (OPTIONS.X_TO_COLLAPSE) self.collapsed = !self.collapsed;
+                self.recalculateBounds();
+            }
+
+            if (self.collapsed) return;
+
+            for (self.lines[0..self.len], 0..) |line, i| {
+                if (line.category_header)
+                    _ = raylib.GuiLine(self.entryBounds(@intCast(i)), &line.value)
+                else
+                    _ = raylib.GuiLabel(self.entryBounds(@intCast(i)), &line.value);
+            }
+        }
+
+        fn entryBounds(self: *const Self, i: u16) raylib.Rectangle {
+            return .{
+                .x = self.bounds.x + OPTIONS.SPACEING,
+                .y = self.bounds.y + (OPTIONS.SPACEING + OPTIONS.LINE_HEIGHT * @as(f32, @floatFromInt(i))) + OPTIONS.TOP_SPACEING,
+                .width = OPTIONS.WIDTH - 2 * OPTIONS.SPACEING,
+                .height = OPTIONS.LINE_HEIGHT,
+            };
+        }
+
+        pub fn checkMouseCapture(self: *const Self) bool {
+            const mouse_pos = raylib.GetMousePosition();
+            const delta = raylib.GetMouseDelta();
+            const mouse_last = raylib.Vector2Subtract(mouse_pos, delta);
+            return (raylib.CheckCollisionPointRec(mouse_pos, self.bounds)) or
+                (raylib.CheckCollisionPointRec(mouse_last, self.bounds));
+        }
+
+        pub fn handleDrag(self: *Self) void {
+            if (!raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
+                const mouse_pos = raylib.GetMousePosition();
+                const delta = raylib.GetMouseDelta();
+                const mouse_last = raylib.Vector2Subtract(mouse_pos, delta);
+
+                var header_rect: raylib.Rectangle = self.bounds;
+                header_rect.height = 25; // PLACEHOLDER NUMBER
+                if (raylib.CheckCollisionPointRec(mouse_last, header_rect)) {
+                    self.bounds.x += delta.x;
+                    self.bounds.y += delta.y;
+                }
+            }
+        }
+
+        fn recalculateBounds(self: *Self) void {
+            if (self.collapsed) {
+                self.bounds.width = OPTIONS.WIDTH;
+                self.bounds.height = 25; // PLACEHOLDER
+            } else {
+                self.bounds.width = OPTIONS.WIDTH;
+                self.bounds.height = OPTIONS.TOP_SPACEING + OPTIONS.LINE_HEIGHT * @as(f32, @floatFromInt(self.len)) + OPTIONS.SPACEING;
+            }
+        }
+    };
+}
+
 pub const SelectWindowOptions = struct {
     ENTRY_HEIGHT: f32 = 100,
     SPACEING: f32 = 5,
@@ -17,19 +157,22 @@ pub const SelectWindowOptions = struct {
     X_TO_CLOSE: bool = false,
     X_TO_COLLAPSE: bool = true,
     CLOSE_AFTER_SELECT: bool = false,
+    KEEP_HIGHLIGHT: bool = true,
     NULL_OPTION: bool = false,
     TEXTURE_ENTRY_FRACTION: f32 = 0.75,
+    START_COLLAPSED: bool = true,
 };
 
-// Popsup
-pub fn SelectWindow(comptime R: type, comptime option: SelectWindowOptions) type {
+pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) type {
     return struct {
         const Self = @This();
 
-        const OPTIONS = option;
+        const OPTIONS = options;
+
+        name: [255:0]u8 = undefined,
 
         should_close: bool = false,
-        collapsed: bool = false,
+        collapsed: bool,
         new_selection: bool = false,
         last_selection: ?R = null,
         last_i: ?u16 = null,
@@ -48,7 +191,14 @@ pub fn SelectWindow(comptime R: type, comptime option: SelectWindowOptions) type
         };
 
         pub fn newEmpty() Self {
-            return .{ .len = 0, .items = undefined, .bounds = .{ .x = 10, .y = 10, .width = OPTIONS.WIDTH, .height = OPTIONS.TOP_SPACEING } };
+            var out: Self = .{
+                .len = 0,
+                .items = undefined,
+                .bounds = .{ .x = 10, .y = 10, .width = OPTIONS.WIDTH, .height = OPTIONS.TOP_SPACEING },
+                .collapsed = OPTIONS.START_COLLAPSED,
+            };
+            out.setName("[SELECT WINDOW]");
+            return out;
         }
 
         pub fn new(values: []R) Self {
@@ -57,6 +207,10 @@ pub fn SelectWindow(comptime R: type, comptime option: SelectWindowOptions) type
                 out.addItem(value);
             }
             return out;
+        }
+
+        pub fn setName(self: *Self, name: []const u8) void {
+            _ = std.fmt.bufPrintZ(&self.name, "{s}", .{name}) catch unreachable;
         }
 
         pub fn addItem(self: *Self, value: R, label: []const u8) void {
@@ -81,7 +235,7 @@ pub fn SelectWindow(comptime R: type, comptime option: SelectWindowOptions) type
         pub fn renderUpdate(self: *Self) void {
             self.handleDrag();
 
-            if (raylib.GuiWindowBox(self.bounds, "SELECT WINDOW") != 0) {
+            if (raylib.GuiWindowBox(self.bounds, &self.name) != 0) {
                 if (OPTIONS.X_TO_CLOSE) self.should_close = true;
                 if (OPTIONS.X_TO_COLLAPSE) self.collapsed = !self.collapsed;
                 self.recalculateBounds();
@@ -90,14 +244,16 @@ pub fn SelectWindow(comptime R: type, comptime option: SelectWindowOptions) type
             if (self.collapsed) return;
 
             for (self.items[0..self.len], 0..) |item, i| {
-                const box = self.entryBounds(@intCast(i));
-                if (self.last_i) |last| if (last == i) raylib.DrawRectangleRec(box, raylib.BLUE);
+                var box = self.entryBounds(@intCast(i));
+                if (self.last_i) |last| if (last == i and OPTIONS.KEEP_HIGHLIGHT) raylib.DrawRectangleRec(box, raylib.BLUE);
 
                 const split_box = splitRectangleHorizontal(box, OPTIONS.TEXTURE_ENTRY_FRACTION);
-                if (item.texture) |texture|
+                if (item.texture) |texture| {
                     textureInRectangle(rectanglePadded(split_box.top, OPTIONS.SPACEING), texture);
+                    box = split_box.bottom;
+                }
 
-                if (raylib.GuiButton(rectanglePadded(split_box.bottom, OPTIONS.SPACEING), &item.label) != 0) {
+                if (raylib.GuiButton(rectanglePadded(box, OPTIONS.SPACEING), &item.label) != 0) {
                     self.new_selection = true;
                     self.last_selection = item.value;
                     self.last_i = @intCast(i);
@@ -167,7 +323,7 @@ pub fn SelectWindow(comptime R: type, comptime option: SelectWindowOptions) type
 
         fn recalculateBounds(self: *Self) void {
             if (self.collapsed) {
-                self.bounds.height = 0;
+                self.bounds.height = 25; // PLACEHOLDER
             } else {
                 self.bounds.width = @min(OPTIONS.WIDTH, @as(f32, @floatFromInt(self.cols())) * (OPTIONS.WIDTH / OPTIONS.COLUMNS));
                 self.bounds.height = OPTIONS.TOP_SPACEING + @as(f32, @floatFromInt(self.rows())) * (OPTIONS.ENTRY_HEIGHT + OPTIONS.SPACEING);

@@ -52,7 +52,7 @@ pub const MoveCost = union(enum) {
 
 type: UnitType,
 hit_points: u8 = 100, // All units have 100 HP
-prepared: bool = false,
+prepared: bool = false, // catapults etc
 fortified: bool = false,
 promotions: Promotion.Set = Promotion.Set.initEmpty(),
 faction_id: Player.FactionID,

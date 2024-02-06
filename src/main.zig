@@ -15,6 +15,8 @@ const TextureSet = @import("rendering/TextureSet.zig");
 const render = @import("rendering/render_util.zig");
 const graphics = @import("rendering/graphics.zig");
 
+const gui = @import("rendering/gui.zig");
+
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
@@ -46,24 +48,11 @@ pub fn main() !void {
 
     try world.loadFromFile("maps/last_saved.map");
 
-    var w1 = Unit.new(@enumFromInt(3), 0, &rules); // Warrior
-    w1.promotions.set(11); // Mobility
-
-    var a1 = Unit.new(@enumFromInt(4), 0, &rules);
-    a1.promotions.set(11); // Mobility
-    a1.promotions.set(5); // Shock I
-    a1.promotions.set(6); // Shock II
-    a1.promotions.set(7); // Shock III
-    a1.promotions.set(13); // CanEmbark
-
+    // UNITS
+    const w1 = Unit.new(@enumFromInt(3), 0, &rules); // Warrior
+    const a1 = Unit.new(@enumFromInt(4), 0, &rules); // Archer
     const b1 = Unit.new(@enumFromInt(7), 0, &rules); // Trireme
-
-    var s1 = Unit.new(@enumFromInt(5), 0, &rules);
-    s1.promotions.set(8); // Drill I
-    s1.promotions.set(9); // Drill II
-    s1.promotions.set(10); // Drill III
-    s1.promotions.set(13); // CanEmbark
-    s1.promotions.set(14); // Can cross ocean
+    const s1 = Unit.new(@enumFromInt(5), 0, &rules); // Scout
 
     try world.units.putNoStackAutoSlot(1200, w1);
     try world.units.putNoStackAutoSlot(1201, a1);
@@ -91,26 +80,52 @@ pub fn main() !void {
     var maybe_unit_reference: ?Units.Reference = null;
 
     // MAP EDIT MODE
-    var terrain_brush: ?Rules.Terrain = null;
 
-    const gui = @import("rendering/gui.zig");
+    var hide_gui = false;
 
-    const EditWindow = gui.SelectWindow(Rules.Terrain, .{
+    const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
-        .COLUMNS = 4,
+        .COLUMNS = 5,
         .NULL_OPTION = true,
-        .ENTRY_HEIGHT = 75,
+        .ENTRY_HEIGHT = 50,
+        .SPACEING = 2,
         .TEXTURE_ENTRY_FRACTION = 0.6,
     });
 
-    var edit_window: EditWindow = EditWindow.newEmpty();
+    var edit_window: PaletWindow = PaletWindow.newEmpty();
     for (0..rules.terrain_count) |ti| {
         const t = @as(Rules.Terrain, @enumFromInt(ti));
         if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river) continue;
         const texture: ?raylib.Texture2D = texture_set.terrain_textures[ti];
         edit_window.addItemTexture(t, t.name(&rules), texture);
     }
+    edit_window.setName("Edit Palet");
+    var terrain_brush: ?Rules.Terrain = null;
 
+    const PromotionWindow = gui.SelectWindow(Rules.Promotion, .{
+        .WIDTH = 150,
+        .COLUMNS = 1,
+        .ENTRY_HEIGHT = 25,
+        .KEEP_HIGHLIGHT = false,
+        .SPACEING = 2,
+    });
+
+    var promotion_window: PromotionWindow = PromotionWindow.newEmpty();
+    for (0..rules.promotion_count) |pi| {
+        const p = @as(Rules.Promotion, @enumFromInt(pi));
+
+        promotion_window.addItem(p, p.name(&rules));
+    }
+    promotion_window.setName("Add Promotion");
+    var set_promotion: ?Rules.Promotion = null;
+
+    const UnitInfoWindow = gui.InfoWindow(.{});
+
+    var unit_info_window: UnitInfoWindow = UnitInfoWindow.newEmpty();
+
+    unit_info_window.setName("Unit info: [NONE]");
+
+    // MAIN GAME LOOP
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
 
@@ -126,13 +141,53 @@ pub fn main() !void {
         // CONTROLL STUFF //
         // ////////////// //
         control_blk: {
+            if (raylib.IsKeyPressed(raylib.KEY_H)) hide_gui = !hide_gui;
 
             // GUI STUFF
-            _ = edit_window.fetchSelectedNull(&terrain_brush);
 
-            if (edit_window.checkMouseCapture()) break :control_blk;
+            if (!hide_gui) {
+                _ = promotion_window.fetchSelectedNull(&set_promotion);
+                // Set unit promotions
+                if (set_promotion) |promotion|
+                    if (maybe_unit_reference) |unit_ref|
+                        if (world.units.derefToPtr(unit_ref)) |unit|
+                            unit.promotions.set(@intFromEnum(promotion));
+                set_promotion = null;
 
-            // OlD SCHOOL CONTROL STUFF
+                _ = edit_window.fetchSelectedNull(&terrain_brush);
+
+                // UPDATE UNIT INFO
+                if (maybe_unit_reference) |ref| {
+                    if (world.units.derefToPtr(ref)) |unit| {
+                        unit_info_window.clear();
+
+                        unit_info_window.addCategoryHeader("General");
+
+                        unit_info_window.addLineFormat("HP: {}", .{unit.hit_points}, false);
+                        unit_info_window.addLineFormat("Move: {d:.1}/{d:.1}", .{ unit.movement, unit.maxMovement(world.rules) }, false);
+                        unit_info_window.addLineFormat("Faction id: {}", .{unit.faction_id}, false);
+                        unit_info_window.addLineFormat("Fortified: {}", .{unit.fortified}, false);
+                        unit_info_window.addLineFormat("Prepared: {}", .{unit.prepared}, false);
+
+                        unit_info_window.addCategoryHeader("Promotions");
+                        for (0..rules.promotion_count) |pi| {
+                            unit_info_window.setName(unit.type.name(world.rules));
+                            const p: Rules.Promotion = @enumFromInt(pi);
+
+                            if (unit.promotions.isSet(pi)) {
+                                unit_info_window.addLineFormat("{s}", .{p.name(world.rules)}, false);
+                            }
+                        }
+                    }
+                }
+
+                // Check capture
+                if (unit_info_window.checkMouseCapture()) break :control_blk;
+                if (promotion_window.checkMouseCapture()) break :control_blk;
+                if (edit_window.checkMouseCapture()) break :control_blk;
+            }
+
+            // OLD SCHOOL CONTROL STUFF
             {
                 // EDIT MAP STUFF
                 const mouse_tile = camera.getMouseTile(world.grid, bounding_box, texture_set);
@@ -169,8 +224,6 @@ pub fn main() !void {
                 try world.saveToFile("maps/last_saved.map");
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
-
-            if (raylib.IsKeyPressed(raylib.KEY_B)) {}
 
             if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
                 for (world.cities.keys()) |city_key| {
@@ -356,8 +409,14 @@ pub fn main() !void {
 
         raylib.EndMode2D();
 
-        edit_window.renderUpdate();
+        if (!hide_gui) {
+            // TODO: CAPTURE MOUSE TO DISSALLOW MULTI CLICKS
 
+            edit_window.renderUpdate();
+            promotion_window.renderUpdate();
+
+            unit_info_window.renderUpdate();
+        }
         raylib.EndDrawing();
 
         _ = camera.update(16.0);
