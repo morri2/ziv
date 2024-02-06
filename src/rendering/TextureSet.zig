@@ -9,6 +9,7 @@ const std = @import("std");
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
+    @cInclude("raygui.h");
 });
 
 allocator: std.mem.Allocator,

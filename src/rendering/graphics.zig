@@ -21,6 +21,7 @@ const BoundingBox = Camera.BoundingBox;
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
+    @cInclude("raygui.h");
 });
 
 pub fn renderWorld(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {

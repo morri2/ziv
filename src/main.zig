@@ -18,6 +18,7 @@ const graphics = @import("rendering/graphics.zig");
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
+    @cInclude("raygui.h");
 });
 
 pub fn main() !void {
@@ -94,6 +95,29 @@ pub fn main() !void {
     var in_pallet = false;
     var terrain_brush: ?Rules.Terrain = null;
 
+    const gui = @import("rendering/gui.zig");
+
+    const EditWindow = gui.SelectWindow(Rules.Terrain, .{
+        .WIDTH = 400,
+        .COLUMNS = 5,
+        .NULL_OPTION = true,
+        .ENTRY_HEIGHT = 75,
+        .TEXTURE_ENTRY_FRACTION = 0.6,
+    });
+
+    var edit_window: EditWindow = EditWindow.newEmpty();
+    for (0..rules.terrain_count) |ti| {
+        const t = @as(Rules.Terrain, @enumFromInt(ti));
+        if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river or t.attributes(&rules).is_wonder) continue;
+        const texture: ?raylib.Texture2D = texture_set.terrain_textures[ti];
+        edit_window.addItemTexture(t, t.name(&rules), texture);
+    }
+    for (0..rules.terrain_count) |ti| {
+        const t = @as(Rules.Terrain, @enumFromInt(ti));
+        if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river or !t.attributes(&rules).is_wonder) continue;
+        edit_window.addItem(t, t.name(&rules));
+    }
+
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
 
@@ -105,19 +129,11 @@ pub fn main() !void {
             texture_set,
         );
         {
-            if (raylib.IsKeyPressed(raylib.KEY_Y)) in_edit_mode = !in_edit_mode;
-
-            // EDIT MODE CONTROLLS
-            if (in_edit_mode) {
-                if (raylib.IsKeyPressed(raylib.KEY_E)) in_pallet = !in_pallet;
-                const mouse_tile = camera.getMouseTile(
-                    world.grid,
-                    bounding_box,
-                    texture_set,
-                );
+            {
+                // EDIT MAP STUFF
+                const mouse_tile = camera.getMouseTile(world.grid, bounding_box, texture_set);
                 if (raylib.IsKeyPressed(raylib.KEY_R)) {
                     const res = world.resources.getPtr(mouse_tile);
-
                     if (res != null) {
                         res.?.type = @enumFromInt((@intFromEnum(res.?.type) + 1) % rules.resource_count);
                     } else {
@@ -139,9 +155,8 @@ pub fn main() !void {
                     if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
                 }
 
-                if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and in_edit_mode) { // DRAW / Pallet
-                    if (!in_pallet and terrain_brush != null) world.terrain[mouse_tile] = terrain_brush.?;
-                    if (in_pallet) terrain_brush = @enumFromInt(mouse_tile % rules.terrain_count);
+                if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and terrain_brush != null) {
+                    if (terrain_brush != null) world.terrain[mouse_tile] = terrain_brush.?;
                 }
             }
 
@@ -151,7 +166,6 @@ pub fn main() !void {
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-            if (!in_edit_mode) {
                 if (raylib.IsKeyPressed(raylib.KEY_B)) {}
 
                 if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
@@ -246,6 +260,27 @@ pub fn main() !void {
                         }
                     }
                 }
+        }
+
+        _ = edit_window.fetchSelectedNull(&terrain_brush);
+
+        if (maybe_selected_idx) |selected_idx| {
+            if (raylib.IsKeyPressed(raylib.KEY_B)) {
+                const b = world.canBuildImprovement(selected_idx, @as(Rules.Building, @enumFromInt(building)));
+                std.debug.print("\nCAN BUILD: {s} ", .{@tagName(b)});
+                if (b == .allowed) {
+                    _ = world.progressTileWork(
+                        selected_idx,
+                        .{ .building = @as(Rules.Building, @enumFromInt(building)) },
+                    );
+                }
+            }
+        } else {
+            if (raylib.IsKeyPressed(raylib.KEY_B)) {
+                building += 1;
+                building = building % @as(u8, @intCast(world.rules.building_count));
+                const name = @as(Rules.Building, @enumFromInt(building)).name(world.rules);
+                std.debug.print("\n BUILDING: {s} \n", .{name});
             }
         }
 
@@ -256,20 +291,7 @@ pub fn main() !void {
         raylib.ClearBackground(raylib.BLACK);
 
         raylib.BeginMode2D(camera.camera);
-        if (in_pallet) {
-            for (bounding_box.x_min..bounding_box.x_max) |x| {
-                for (bounding_box.y_min..bounding_box.y_max) |y| {
-                    const idx = world.grid.idxFromCoords(x, y);
-                    graphics.renderTerrain(
-                        @enumFromInt(idx % rules.terrain_count),
-                        idx,
-                        world.grid,
-                        texture_set,
-                        &rules,
-                    );
-                }
-            }
-        } else {
+
             graphics.renderWorld(&world, bounding_box, &world.players[0].view, texture_set);
             if (maybe_selected_idx) |selected_idx| {
                 if (raylib.IsKeyDown(raylib.KEY_M)) {
@@ -347,12 +369,14 @@ pub fn main() !void {
                             texture_set,
                         );
                         j += 1;
-                    }
                 }
             }
         }
 
         raylib.EndMode2D();
+
+        edit_window.renderUpdate();
+
         raylib.EndDrawing();
 
         _ = camera.update(16.0);

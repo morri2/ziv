@@ -8,6 +8,7 @@ const Idx = Grid.Idx;
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
+    @cInclude("raygui.h");
 });
 
 const Self = @This();

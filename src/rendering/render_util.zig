@@ -8,6 +8,7 @@ const TextureSet = @import("TextureSet.zig");
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
+    @cInclude("raygui.h");
 });
 
 pub const RenderTextureArgs = struct {
