@@ -257,6 +257,7 @@ pub fn main() !void {
                 if (promotion_window.checkMouseCapture()) break :control_blk;
                 if (palet_window.checkMouseCapture()) break :control_blk;
                 if (city_construction_window.checkMouseCapture()) break :control_blk;
+                if (edit_window.checkMouseCapture()) break :control_blk;
             }
 
             // OLD SCHOOL CONTROL STUFF
