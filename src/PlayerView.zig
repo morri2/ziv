@@ -46,7 +46,7 @@ pub fn viewYield(self: *const Self, idx: Idx, world: *const World) ?Yield {
 
 pub fn viewTerrain(self: *const Self, idx: Idx, world: *const World) ?Terrain {
     if (!self.explored.contains(idx)) return null;
-    if (!self.in_view.contains(idx)) return self.last_seen_yields[idx];
+    if (!self.in_view.contains(idx)) return self.last_seen_terrain[idx];
     return world.terrain[idx];
 }
 
@@ -84,6 +84,7 @@ pub fn update(self: *Self, idx: Idx, world: *const World) void {
 
 pub fn unsetAllVisable(self: *Self, world: *const World) void {
     for (0..world.grid.len) |idx| {
+        if (!self.in_view.contains(@intCast(idx))) continue;
         self.update(@intCast(idx), world);
         self.in_view.remove(@intCast(idx));
     }

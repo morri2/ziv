@@ -62,14 +62,10 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
             var improvement = world.improvements[idx];
 
             if (maybe_view) |view| {
-                if (!view.explored.contains(idx)) {
-                    // RENDER DENSE FOG
-                    continue;
-                }
-                if (view.in_view.contains(idx)) {
-                    terrain = view.last_seen_terrain[idx];
-                    improvement = view.last_seen_improvements[idx];
-                }
+                if (!view.explored.contains(idx)) continue;
+
+                terrain = view.viewTerrain(idx, world) orelse unreachable;
+                improvement = view.viewImprovements(idx, world) orelse unreachable;
             }
 
             renderTerrain(terrain, idx, world.grid, ts, world.rules);
