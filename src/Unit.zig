@@ -139,7 +139,7 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
         rules,
     )) return .disallowed;
 
-    if (context.river_crossing) return .allowed_final;
+    if (context.river_crossing and !Promotion.Effect.ignore_terrain_move.in(self.promotions, rules)) return .allowed_final;
 
     if (context.city) return .{ .allowed = 1 }; // obs! should be after river crossing check
 
