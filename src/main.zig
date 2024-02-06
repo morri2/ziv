@@ -330,27 +330,8 @@ pub fn main() !void {
                 for (world.cities.keys()) |city_key| {
                     var city = world.cities.getPtr(city_key) orelse continue;
 
-                    if (city_key == clicked_tile) {
-                        if (raylib.IsKeyDown(raylib.KEY_Y)) {
-                            // Warrior
-                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(3) }, &rules);
-                        } else if (raylib.IsKeyDown(raylib.KEY_U)) {
-                            // Settler
-                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(1) }, &rules);
-                        } else if (raylib.IsKeyDown(raylib.KEY_I)) {
-                            // Archer
-                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(4) }, &rules);
-                        } else if (raylib.IsKeyDown(raylib.KEY_O)) {
-                            // Work Boat
-                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(2) }, &rules);
-                        } else if (raylib.IsKeyDown(raylib.KEY_P)) {
-                            // Chariot Archer
-                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(6) }, &rules);
-                        }
+                    if (city_key == clicked_tile) _ = city.expandBorder(&world);
 
-                        std.debug.print("EXPANDING CITY!\n", .{});
-                        _ = city.expandBorder(&world);
-                    }
                     if (city.claimed.contains(clicked_tile)) {
                         if (city.unsetWorked(clicked_tile)) break;
                         if (city.setWorkedWithAutoReassign(clicked_tile, &world)) break;
