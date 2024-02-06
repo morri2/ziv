@@ -128,6 +128,28 @@ pub fn main() !void {
     unit_info_window.setName("[UNIT]");
     unit_info_window.addLine("Select a unit to view info...");
 
+    const CityConstructionWindow = gui.SelectWindow(City.ProductionTarget, .{
+        .WIDTH = 150,
+        .COLUMNS = 1,
+        .ENTRY_HEIGHT = 25,
+        .KEEP_HIGHLIGHT = false,
+        .SPACEING = 2,
+    });
+
+    var city_construction_window: CityConstructionWindow = CityConstructionWindow.newEmpty();
+    city_construction_window.bounds.y += 150;
+    city_construction_window.setName("Build in city.");
+
+    for (0..rules.unit_type_count) |uti| {
+        const ut: Rules.UnitType = @enumFromInt(uti);
+        const pt = City.ProductionTarget{ .UnitType = ut };
+        var buf: [255]u8 = undefined;
+        const label = try std.fmt.bufPrint(&buf, "Build unit: {s}", .{ut.name(world.rules)});
+        city_construction_window.addItem(pt, label);
+    }
+
+    var set_production_target: ?City.ProductionTarget = null;
+
     // MAIN GAME LOOP
     while (!raylib.WindowShouldClose()) {
         world.fullUpdateViews();
@@ -156,6 +178,20 @@ pub fn main() !void {
                         if (world.units.derefToPtr(unit_ref)) |unit|
                             unit.promotions.set(@intFromEnum(promotion));
                 set_promotion = null;
+
+                _ = edit_window.fetchSelectedNull(&terrain_brush);
+
+                _ = city_construction_window.fetchSelectedNull(&set_production_target);
+                // Set construction
+                if (set_production_target) |production_target|
+                    if (maybe_selected_idx) |idx| {
+                        if (world.cities.getPtr(idx)) |city| {
+                            _ = city.startConstruction(production_target, world.rules);
+                        }
+                    };
+                set_production_target = null;
+
+                // Set edit brush
 
                 _ = edit_window.fetchSelectedNull(&terrain_brush);
 
@@ -188,6 +224,7 @@ pub fn main() !void {
                 if (unit_info_window.checkMouseCapture()) break :control_blk;
                 if (promotion_window.checkMouseCapture()) break :control_blk;
                 if (edit_window.checkMouseCapture()) break :control_blk;
+                if (city_construction_window.checkMouseCapture()) break :control_blk;
             }
 
             // OLD SCHOOL CONTROL STUFF
@@ -419,6 +456,7 @@ pub fn main() !void {
             promotion_window.renderUpdate();
 
             unit_info_window.renderUpdate();
+            city_construction_window.renderUpdate();
         }
         raylib.EndDrawing();
 
