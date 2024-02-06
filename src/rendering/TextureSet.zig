@@ -12,6 +12,8 @@ const raylib = @cImport({
     @cInclude("raygui.h");
 });
 
+pub const log = std.log.scoped(.texture_set);
+
 allocator: std.mem.Allocator,
 font: raylib.Font,
 vegetation_textures: []const raylib.Texture2D,
@@ -300,7 +302,7 @@ pub fn loadEnumTextures(
 pub fn loadTexture(path: []const u8, fallback: ?raylib.Texture2D) raylib.Texture2D {
     std.fs.Dir.access(std.fs.cwd(), path, .{}) catch {
         if (!std.mem.containsAtLeast(u8, path, 1, "none")) {
-            std.debug.print("No texture '{s}'.\n", .{path});
+            log.warn("No texture '{s}'.", .{path});
         }
         return fallback orelse @panic("loadTexture failed (No placeholder set)\n");
     };

@@ -23,6 +23,15 @@ const raylib = @cImport({
     @cInclude("raygui.h");
 });
 
+pub const std_options = struct {
+    pub const log_scope_levels = &[_]std.log.ScopeLevel{
+        .{
+            .scope = .texture_set,
+            .level = .err,
+        },
+    };
+};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
