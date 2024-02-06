@@ -175,16 +175,25 @@ pub fn loadTerrainTextures(
         var name_buf: [256]u8 = undefined;
         var j: usize = 0;
         var name: []u8 = &name_buf;
-        name = std.fmt.bufPrintZ(name_buf[j..], "{s}", .{e.base(rules).name(rules)}) catch unreachable;
-        j += name.len;
-        if (e.feature(rules) != .none) {
-            name = std.fmt.bufPrintZ(name_buf[j..], "_{s}", .{e.feature(rules).name(rules)}) catch unreachable;
+        if (!e.attributes(rules).is_wonder) {
+            name = std.fmt.bufPrintZ(name_buf[j..], "{s}", .{e.base(rules).name(rules)}) catch unreachable;
             j += name.len;
-        }
 
-        if (e.vegetation(rules) != .none) {
-            name = std.fmt.bufPrintZ(name_buf[j..], "_{s}", .{e.vegetation(rules).name(rules)}) catch unreachable;
-            j += name.len;
+            if (e.feature(rules) != .none) {
+                name = std.fmt.bufPrintZ(name_buf[j..], "_{s}", .{e.feature(rules).name(rules)}) catch unreachable;
+                j += name.len;
+            }
+
+            if (e.vegetation(rules) != .none) {
+                name = std.fmt.bufPrintZ(name_buf[j..], "_{s}", .{e.vegetation(rules).name(rules)}) catch unreachable;
+                j += name.len;
+            }
+        } else {
+            name = std.fmt.bufPrintZ(name_buf[0..], "nw_mountain", .{}) catch unreachable;
+
+            if (e.attributes(rules).is_water) // WTF IS WATER MAKES SHIT CRASH....
+                name = std.fmt.bufPrintZ(name_buf[0..], "nw_lake", .{}) catch unreachable;
+            j = name.len;
         }
 
         var path_buf: [256]u8 = undefined;

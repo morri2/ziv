@@ -97,7 +97,7 @@ pub fn main() !void {
 
     const EditWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
-        .COLUMNS = 5,
+        .COLUMNS = 4,
         .NULL_OPTION = true,
         .ENTRY_HEIGHT = 75,
         .TEXTURE_ENTRY_FRACTION = 0.6,
@@ -106,14 +106,9 @@ pub fn main() !void {
     var edit_window: EditWindow = EditWindow.newEmpty();
     for (0..rules.terrain_count) |ti| {
         const t = @as(Rules.Terrain, @enumFromInt(ti));
-        if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river or t.attributes(&rules).is_wonder) continue;
+        if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river) continue;
         const texture: ?raylib.Texture2D = texture_set.terrain_textures[ti];
         edit_window.addItemTexture(t, t.name(&rules), texture);
-    }
-    for (0..rules.terrain_count) |ti| {
-        const t = @as(Rules.Terrain, @enumFromInt(ti));
-        if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river or !t.attributes(&rules).is_wonder) continue;
-        edit_window.addItem(t, t.name(&rules));
     }
 
     while (!raylib.WindowShouldClose()) {
@@ -126,7 +121,18 @@ pub fn main() !void {
             screen_height,
             texture_set,
         );
-        {
+
+        // ////////////// //
+        // CONTROLL STUFF //
+        // ////////////// //
+        control_blk: {
+
+            // GUI STUFF
+            _ = edit_window.fetchSelectedNull(&terrain_brush);
+
+            if (edit_window.checkMouseCapture()) break :control_blk;
+
+            // OlD SCHOOL CONTROL STUFF
             {
                 // EDIT MAP STUFF
                 const mouse_tile = camera.getMouseTile(world.grid, bounding_box, texture_set);
@@ -259,8 +265,6 @@ pub fn main() !void {
                 }
             }
         }
-
-        _ = edit_window.fetchSelectedNull(&terrain_brush);
 
         // ///////// //
         // RENDERING //
