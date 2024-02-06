@@ -18,6 +18,7 @@ pub const InfoWindowOptions = struct {
     X_TO_COLLAPSE: bool = true,
 
     START_COLLAPSED: bool = true,
+    COLLAPSED_HEIGHT: f32 = 50, // should always be > 2x window top bar size
 };
 
 pub fn InfoWindow(options: InfoWindowOptions) type {
@@ -92,7 +93,16 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
                 self.recalculateBounds();
             }
 
-            if (self.collapsed) return;
+            if (self.collapsed) {
+                const box = rectanglePadded(splitRectangleHorizontal(self.bounds, 0.5).bottom, 2);
+
+                if (self.collapsed)
+                    if (raylib.GuiButton(box, "Click HERE to expand...") != 0) {
+                        self.collapsed = false;
+                        self.recalculateBounds();
+                    };
+                return;
+            }
 
             for (self.lines[0..self.len], 0..) |line, i| {
                 if (line.category_header)
@@ -137,7 +147,7 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
         fn recalculateBounds(self: *Self) void {
             if (self.collapsed) {
                 self.bounds.width = OPTIONS.WIDTH;
-                self.bounds.height = 25; // PLACEHOLDER
+                self.bounds.height = OPTIONS.COLLAPSED_HEIGHT;
             } else {
                 self.bounds.width = OPTIONS.WIDTH;
                 self.bounds.height = OPTIONS.TOP_SPACEING + OPTIONS.LINE_HEIGHT * @as(f32, @floatFromInt(self.len)) + OPTIONS.SPACEING;
@@ -161,6 +171,7 @@ pub const SelectWindowOptions = struct {
     NULL_OPTION: bool = false,
     TEXTURE_ENTRY_FRACTION: f32 = 0.75,
     START_COLLAPSED: bool = true,
+    COLLAPSED_HEIGHT: f32 = 50, // should always be > 2x window top bar size
 };
 
 pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) type {
@@ -241,7 +252,16 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
                 self.recalculateBounds();
             }
 
-            if (self.collapsed) return;
+            if (self.collapsed) {
+                const box = rectanglePadded(splitRectangleHorizontal(self.bounds, 0.5).bottom, 2);
+
+                if (self.collapsed)
+                    if (raylib.GuiButton(box, "Click HERE to expand...") != 0) {
+                        self.collapsed = false;
+                        self.recalculateBounds();
+                    };
+                return;
+            }
 
             for (self.items[0..self.len], 0..) |item, i| {
                 var box = self.entryBounds(@intCast(i));
@@ -323,7 +343,7 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
 
         fn recalculateBounds(self: *Self) void {
             if (self.collapsed) {
-                self.bounds.height = 25; // PLACEHOLDER
+                self.bounds.height = OPTIONS.COLLAPSED_HEIGHT;
             } else {
                 self.bounds.width = @min(OPTIONS.WIDTH, @as(f32, @floatFromInt(self.cols())) * (OPTIONS.WIDTH / OPTIONS.COLUMNS));
                 self.bounds.height = OPTIONS.TOP_SPACEING + @as(f32, @floatFromInt(self.rows())) * (OPTIONS.ENTRY_HEIGHT + OPTIONS.SPACEING);

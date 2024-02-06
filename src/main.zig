@@ -100,6 +100,7 @@ pub fn main() !void {
         edit_window.addItemTexture(t, t.name(&rules), texture);
     }
     edit_window.setName("Edit Palet");
+
     var terrain_brush: ?Rules.Terrain = null;
 
     const PromotionWindow = gui.SelectWindow(Rules.Promotion, .{
@@ -117,13 +118,15 @@ pub fn main() !void {
         promotion_window.addItem(p, p.name(&rules));
     }
     promotion_window.setName("Add Promotion");
+    promotion_window.bounds.y += 50;
     var set_promotion: ?Rules.Promotion = null;
 
     const UnitInfoWindow = gui.InfoWindow(.{});
 
     var unit_info_window: UnitInfoWindow = UnitInfoWindow.newEmpty();
-
-    unit_info_window.setName("Unit info: [NONE]");
+    unit_info_window.bounds.y += 100;
+    unit_info_window.setName("[UNIT]");
+    unit_info_window.addLine("Select a unit to view info...");
 
     // MAIN GAME LOOP
     while (!raylib.WindowShouldClose()) {
