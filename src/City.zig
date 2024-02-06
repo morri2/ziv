@@ -403,7 +403,7 @@ pub const ProductionTarget = union(enum) {
 
 // TODO
 // Add pass through from player/civ to check resources
-pub fn startConstruction(self: *Self, construction_target: ProductionTarget, rules: *Rules) bool {
+pub fn startConstruction(self: *Self, construction_target: ProductionTarget, rules: *const Rules) bool {
     if (self.current_production_project) |project| {
         if (@intFromEnum(project.project) == @intFromEnum(construction_target)) return true;
     }

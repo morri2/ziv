@@ -301,24 +301,24 @@ pub fn loadTexture(path: []const u8, fallback: ?raylib.Texture2D) raylib.Texture
 }
 
 /// functions from hex util
-pub fn tilingX(self: *const Self, x: usize, y: usize) f32 {
+pub fn tilingX(self: *const Self, x: u32, y: u32) f32 {
     const fx: f32 = @floatFromInt(x);
     const y_odd: f32 = @floatFromInt(y & 1);
 
     return self.hex_width * fx + self.hex_width * 0.5 * y_odd;
 }
 
-pub fn tilingY(self: *const Self, y: usize) f32 {
+pub fn tilingY(self: *const Self, y: u32) f32 {
     const fy: f32 = @floatFromInt(y);
     return fy * (self.hex_height / 2) * 1.5;
 }
 
-pub fn tilingWidth(self: *const Self, map_width: usize) f32 {
+pub fn tilingWidth(self: *const Self, map_width: u32) f32 {
     const fwidth: f32 = @floatFromInt(map_width);
     return self.hex_width * (fwidth + 0.5); // TODO is this why one column is not renderd?
 }
 
-pub fn tilingHeight(self: *const Self, map_height: usize) f32 {
+pub fn tilingHeight(self: *const Self, map_height: u32) f32 {
     const fheight: f32 = @floatFromInt(map_height);
     return 0.5 * (self.hex_height / 1.5) * (fheight - 1.0) + self.hex_height; // messy :)
 }

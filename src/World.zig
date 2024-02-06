@@ -99,8 +99,8 @@ pub fn tileYield(self: *const Self, idx: Idx) Yield {
 
 pub fn init(
     allocator: std.mem.Allocator,
-    width: usize,
-    height: usize,
+    width: u32,
+    height: u32,
     wrap_around: bool,
     player_count: u8,
     rules: *const Rules,
@@ -422,7 +422,7 @@ pub fn loadFromFile(self: *Self, path: []const u8) !void {
             const k = try reader.readInt(usize, .little);
 
             const v = try reader.readStruct(ResourceAndAmount);
-            try self.resources.put(self.allocator, k, v);
+            try self.resources.put(self.allocator, @intCast(k), v);
         }
     }
 

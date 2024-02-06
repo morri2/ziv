@@ -91,8 +91,6 @@ pub fn main() !void {
     var maybe_unit_reference: ?Units.Reference = null;
 
     // MAP EDIT MODE
-    var in_edit_mode = false;
-    var in_pallet = false;
     var terrain_brush: ?Rules.Terrain = null;
 
     const gui = @import("rendering/gui.zig");
@@ -166,123 +164,103 @@ pub fn main() !void {
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-                if (raylib.IsKeyPressed(raylib.KEY_B)) {}
+            if (raylib.IsKeyPressed(raylib.KEY_B)) {}
 
-                if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
-                    for (world.cities.keys()) |city_key| {
-                        var city = world.cities.getPtr(city_key) orelse continue;
-                        const ya = city.getWorkedTileYields(&world);
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
+                for (world.cities.keys()) |city_key| {
+                    var city = world.cities.getPtr(city_key) orelse continue;
+                    const ya = city.getWorkedTileYields(&world);
 
-                        _ = city.processYields(&ya);
-                        const growth_res = city.checkGrowth(&world);
-                        _ = city.checkExpansion();
-                        _ = try city.checkProduction(&world);
+                    _ = city.processYields(&ya);
+                    const growth_res = city.checkGrowth(&world);
+                    _ = city.checkExpansion();
+                    _ = try city.checkProduction(&world);
 
-                        switch (growth_res) {
-                            .growth => std.debug.print("TOWN HAS GROWN! \n", .{}),
-                            else => {},
-                        }
+                    switch (growth_res) {
+                        .growth => std.debug.print("TOWN HAS GROWN! \n", .{}),
+                        else => {},
                     }
-
-                    world.units.refresh();
                 }
 
-                // SELECTION
-                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    const mouse_idx = camera.getMouseTile(
-                        world.grid,
-                        bounding_box,
-                        texture_set,
-                    );
+                world.units.refresh();
+            }
 
-                    if (maybe_selected_idx) |selected_idx| {
-                        if (selected_idx != mouse_idx) blk: {
-                            if (maybe_unit_reference == null) {
-                                maybe_unit_reference = world.units.firstReference(selected_idx);
-                                if (maybe_unit_reference == null) {
-                                    maybe_selected_idx = mouse_idx;
-                                    maybe_unit_reference = world.units.firstReference(mouse_idx);
-                                    break :blk;
-                                }
-                            }
+            // SELECTION
+            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                const mouse_idx = camera.getMouseTile(
+                    world.grid,
+                    bounding_box,
+                    texture_set,
+                );
 
-                            if (raylib.IsKeyDown(raylib.KEY_Q)) {
-                                // Unit.tryBattle(selected_idx.?, clicked_idx, &world);
-                            } else {
-                                _ = try world.move(maybe_unit_reference.?, mouse_idx);
-                            }
-                            maybe_selected_idx = null;
-                        } else if (maybe_unit_reference) |ref| {
-                            maybe_unit_reference = world.units.nextReference(ref);
-                        } else {
+                if (maybe_selected_idx) |selected_idx| {
+                    if (selected_idx != mouse_idx) blk: {
+                        if (maybe_unit_reference == null) {
                             maybe_unit_reference = world.units.firstReference(selected_idx);
-                        }
-                    } else {
-                        maybe_selected_idx = mouse_idx;
-                        maybe_unit_reference = world.units.firstReference(mouse_idx);
-                    }
-                }
-
-                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
-                    const clicked_tile = camera.getMouseTile(
-                        world.grid,
-                        bounding_box,
-                        texture_set,
-                    );
-
-                    for (world.cities.keys()) |city_key| {
-                        var city = world.cities.getPtr(city_key) orelse continue;
-
-                        if (city_key == clicked_tile) {
-                            if (raylib.IsKeyDown(raylib.KEY_Y)) {
-                                // Warrior
-                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(3) }, &rules);
-                            } else if (raylib.IsKeyDown(raylib.KEY_U)) {
-                                // Settler
-                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(1) }, &rules);
-                            } else if (raylib.IsKeyDown(raylib.KEY_I)) {
-                                // Archer
-                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(4) }, &rules);
-                            } else if (raylib.IsKeyDown(raylib.KEY_O)) {
-                                // Work Boat
-                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(2) }, &rules);
-                            } else if (raylib.IsKeyDown(raylib.KEY_P)) {
-                                // Chariot Archer
-                                _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(6) }, &rules);
+                            if (maybe_unit_reference == null) {
+                                maybe_selected_idx = mouse_idx;
+                                maybe_unit_reference = world.units.firstReference(mouse_idx);
+                                break :blk;
                             }
+                        }
 
-                            std.debug.print("EXPANDING CITY!\n", .{});
-                            _ = city.expandBorder(&world);
+                        if (raylib.IsKeyDown(raylib.KEY_Q)) {
+                            // Unit.tryBattle(selected_idx.?, clicked_idx, &world);
+                        } else {
+                            _ = try world.move(maybe_unit_reference.?, mouse_idx);
                         }
-                        if (city.claimed.contains(clicked_tile)) {
-                            if (city.unsetWorked(clicked_tile)) break;
-                            if (city.setWorkedWithAutoReassign(clicked_tile, &world)) break;
+                        maybe_selected_idx = null;
+                    } else if (maybe_unit_reference) |ref| {
+                        maybe_unit_reference = world.units.nextReference(ref);
+                    } else {
+                        maybe_unit_reference = world.units.firstReference(selected_idx);
+                    }
+                } else {
+                    maybe_selected_idx = mouse_idx;
+                    maybe_unit_reference = world.units.firstReference(mouse_idx);
+                }
+            }
+
+            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
+                const clicked_tile = camera.getMouseTile(
+                    world.grid,
+                    bounding_box,
+                    texture_set,
+                );
+
+                for (world.cities.keys()) |city_key| {
+                    var city = world.cities.getPtr(city_key) orelse continue;
+
+                    if (city_key == clicked_tile) {
+                        if (raylib.IsKeyDown(raylib.KEY_Y)) {
+                            // Warrior
+                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(3) }, &rules);
+                        } else if (raylib.IsKeyDown(raylib.KEY_U)) {
+                            // Settler
+                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(1) }, &rules);
+                        } else if (raylib.IsKeyDown(raylib.KEY_I)) {
+                            // Archer
+                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(4) }, &rules);
+                        } else if (raylib.IsKeyDown(raylib.KEY_O)) {
+                            // Work Boat
+                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(2) }, &rules);
+                        } else if (raylib.IsKeyDown(raylib.KEY_P)) {
+                            // Chariot Archer
+                            _ = city.startConstruction(City.ProductionTarget{ .UnitType = @enumFromInt(6) }, &rules);
                         }
+
+                        std.debug.print("EXPANDING CITY!\n", .{});
+                        _ = city.expandBorder(&world);
+                    }
+                    if (city.claimed.contains(clicked_tile)) {
+                        if (city.unsetWorked(clicked_tile)) break;
+                        if (city.setWorkedWithAutoReassign(clicked_tile, &world)) break;
                     }
                 }
+            }
         }
 
         _ = edit_window.fetchSelectedNull(&terrain_brush);
-
-        if (maybe_selected_idx) |selected_idx| {
-            if (raylib.IsKeyPressed(raylib.KEY_B)) {
-                const b = world.canBuildImprovement(selected_idx, @as(Rules.Building, @enumFromInt(building)));
-                std.debug.print("\nCAN BUILD: {s} ", .{@tagName(b)});
-                if (b == .allowed) {
-                    _ = world.progressTileWork(
-                        selected_idx,
-                        .{ .building = @as(Rules.Building, @enumFromInt(building)) },
-                    );
-                }
-            }
-        } else {
-            if (raylib.IsKeyPressed(raylib.KEY_B)) {
-                building += 1;
-                building = building % @as(u8, @intCast(world.rules.building_count));
-                const name = @as(Rules.Building, @enumFromInt(building)).name(world.rules);
-                std.debug.print("\n BUILDING: {s} \n", .{name});
-            }
-        }
 
         // ///////// //
         // RENDERING //
@@ -291,84 +269,83 @@ pub fn main() !void {
         raylib.ClearBackground(raylib.BLACK);
 
         raylib.BeginMode2D(camera.camera);
-
-            graphics.renderWorld(&world, bounding_box, &world.players[0].view, texture_set);
-            if (maybe_selected_idx) |selected_idx| {
-                if (raylib.IsKeyDown(raylib.KEY_M)) {
-                    for (bounding_box.x_min..bounding_box.x_max) |x| {
-                        for (bounding_box.y_min..bounding_box.y_max) |y| {
-                            const idx = world.grid.idxFromCoords(x, y);
-                            render.renderFormatHexAuto(idx, world.grid, "{}", .{world.grid.distance(selected_idx, idx)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
-                        }
+        graphics.renderWorld(&world, bounding_box, &world.players[0].view, texture_set);
+        if (maybe_selected_idx) |selected_idx| {
+            if (raylib.IsKeyDown(raylib.KEY_M)) {
+                for (bounding_box.x_min..bounding_box.x_max) |x| {
+                    for (bounding_box.y_min..bounding_box.y_max) |y| {
+                        const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
+                        render.renderFormatHexAuto(idx, world.grid, "{}", .{world.grid.distance(selected_idx, idx)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
                     }
                 }
-
-                render.renderTextureHex(
-                    selected_idx,
-                    world.grid,
-                    texture_set.edge_textures[0],
-                    .{ .tint = .{ .r = 0, .g = 250, .b = 150, .a = 100 } },
-                    texture_set,
-                );
             }
-            if (maybe_selected_idx) |selected_idx| {
-                if (raylib.IsKeyDown(raylib.KEY_X)) {
-                    var vision_set = world.fov(3, selected_idx);
-                    defer vision_set.deinit();
 
-                    for (vision_set.slice()) |index| {
+            render.renderTextureHex(
+                selected_idx,
+                world.grid,
+                texture_set.edge_textures[0],
+                .{ .tint = .{ .r = 0, .g = 250, .b = 150, .a = 100 } },
+                texture_set,
+            );
+        }
+        if (maybe_selected_idx) |selected_idx| {
+            if (raylib.IsKeyDown(raylib.KEY_X)) {
+                var vision_set = world.fov(3, selected_idx);
+                defer vision_set.deinit();
+
+                for (vision_set.slice()) |index| {
+                    render.renderTextureHex(
+                        index,
+                        world.grid,
+                        texture_set.base_textures[6],
+                        .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } },
+                        texture_set,
+                    );
+
+                    if (world.terrain[index].attributes(world.rules).is_obscuring) {
                         render.renderTextureHex(
                             index,
                             world.grid,
                             texture_set.base_textures[6],
-                            .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } },
+                            .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } },
                             texture_set,
                         );
-
-                        if (world.terrain[index].attributes(world.rules).is_obscuring) {
-                            render.renderTextureHex(
-                                index,
-                                world.grid,
-                                texture_set.base_textures[6],
-                                .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } },
-                                texture_set,
-                            );
-                        }
                     }
                 }
-                if (raylib.IsKeyDown(raylib.KEY_Z)) {
-                    for (bounding_box.x_min..bounding_box.x_max) |x| {
-                        for (bounding_box.y_min..bounding_box.y_max) |y| {
-                            const index = world.grid.idxFromCoords(x, y);
-                            const xy = Grid.CoordXY.fromIdx(index, world.grid);
-                            const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
+            }
+            if (raylib.IsKeyDown(raylib.KEY_Z)) {
+                for (bounding_box.x_min..bounding_box.x_max) |x| {
+                    for (bounding_box.y_min..bounding_box.y_max) |y| {
+                        const index = world.grid.idxFromCoords(@intCast(x), @intCast(y));
+                        const xy = Grid.CoordXY.fromIdx(index, world.grid);
+                        const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
 
-                            render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
-                            render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
-                            render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
-                            if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
+                        render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
+                        render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
+                        render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
+                        if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
 
-                            render.renderFormatHexAuto(index, world.grid, "view: {}", .{
-                                world.players[0].view.in_view.hexes.get(index) orelse 0,
-                            }, 0, 0.8, .{}, texture_set);
-                        }
+                        render.renderFormatHexAuto(index, world.grid, "view: {}", .{
+                            world.players[0].view.in_view.hexes.get(index) orelse 0,
+                        }, 0, 0.8, .{}, texture_set);
                     }
+                }
 
-                    var spiral_iter = Grid.SpiralIterator.new(selected_idx, 12, world.grid);
-                    //var ring_iter = Grid.RingIterator.new(maybe_selected_idx.?, 2, world.grid);
-                    var j: u32 = 0;
-                    while (spiral_iter.next(world.grid)) |idx| {
-                        render.renderFormatHexAuto(
-                            idx,
-                            world.grid,
-                            "spiral={}",
-                            .{j},
-                            -0.4,
-                            -0.6,
-                            .{ .font_size = 6 },
-                            texture_set,
-                        );
-                        j += 1;
+                var spiral_iter = Grid.SpiralIterator.new(selected_idx, 12, world.grid);
+                //var ring_iter = Grid.RingIterator.new(maybe_selected_idx.?, 2, world.grid);
+                var j: u32 = 0;
+                while (spiral_iter.next(world.grid)) |idx| {
+                    render.renderFormatHexAuto(
+                        idx,
+                        world.grid,
+                        "spiral={}",
+                        .{j},
+                        -0.4,
+                        -0.6,
+                        .{ .font_size = 6 },
+                        texture_set,
+                    );
+                    j += 1;
                 }
             }
         }

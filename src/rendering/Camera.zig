@@ -142,12 +142,12 @@ pub fn getPointIdx(
     var min_dist: f32 = std.math.floatMax(f32);
     for (bounding_box.x_min..bounding_box.x_max) |x| {
         for (bounding_box.y_min..bounding_box.y_max) |y| {
-            const real_x = ts.tilingX(x, y) + ts.hex_height * 0.5;
-            const real_y = ts.tilingY(y) + ts.hex_width * 0.5;
+            const real_x = ts.tilingX(@intCast(x), @intCast(y)) + ts.hex_height * 0.5;
+            const real_y = ts.tilingY(@intCast(y)) + ts.hex_width * 0.5;
             const dist = std.math.pow(f32, real_x -
                 xf, 2) + std.math.pow(f32, real_y - yf, 2);
             if (dist < min_dist) {
-                idx = grid.idxFromCoords(x, y);
+                idx = grid.idxFromCoords(@intCast(x), @intCast(y));
                 min_dist = dist;
             }
         }
