@@ -27,6 +27,7 @@ green_pop: raylib.Texture2D,
 city_textures: []const raylib.Texture2D,
 city_border_texture: raylib.Texture2D,
 smoke_texture: raylib.Texture2D,
+river_textures: []const raylib.Texture2D,
 //hex_radius: f32,
 
 unit: f32, // the unit for rendering non hex elements, should be set as a function of hex size
@@ -59,6 +60,8 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             "textures/rastor/edge.png",
             "textures/rastor/edge.png",
         }, universal_fallback, 3, allocator),
+
+        .river_textures = try loadNumberedTextures("textures/rastor/river_{}.png", universal_fallback, 6, allocator),
 
         .city_textures = try loadNumberedTextures("textures/rastor/city_{}.png", universal_fallback, 6, allocator),
 
@@ -141,6 +144,7 @@ pub fn deinit(self: *Self) void {
     for (self.edge_textures) |texture| raylib.UnloadTexture(texture);
     for (self.terrain_textures) |texture| raylib.UnloadTexture(texture);
     for (self.city_textures) |texture| raylib.UnloadTexture(texture);
+    for (self.river_textures) |texture| raylib.UnloadTexture(texture);
 
     self.allocator.free(self.unit_icons);
     self.allocator.free(self.transport_textures);
@@ -152,6 +156,7 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.edge_textures);
     self.allocator.free(self.city_textures);
     self.allocator.free(self.terrain_textures);
+    self.allocator.free(self.river_textures);
 }
 
 /// For loading textures for full terrain, eg not components

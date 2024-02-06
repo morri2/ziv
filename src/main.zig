@@ -81,7 +81,27 @@ pub fn main() !void {
 
     // MAP EDIT MODE
 
+    const EditModes = enum {
+        none,
+        draw,
+        rivers,
+    };
+
     var hide_gui = false;
+
+    const EditWindow = gui.SelectWindow(EditModes, .{
+        .WIDTH = 200,
+        .COLUMNS = 3,
+        .ENTRY_HEIGHT = 30,
+        .SPACEING = 2,
+    });
+    var edit_mode: EditModes = .none;
+
+    var edit_window = EditWindow.newEmpty();
+    edit_window.setName("SELECT EDIT MODE");
+    edit_window.addItem(.none, "None");
+    edit_window.addItem(.draw, "Draw");
+    edit_window.addItem(.rivers, "River");
 
     const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
@@ -92,14 +112,14 @@ pub fn main() !void {
         .TEXTURE_ENTRY_FRACTION = 0.6,
     });
 
-    var edit_window: PaletWindow = PaletWindow.newEmpty();
+    var palet_window: PaletWindow = PaletWindow.newEmpty();
     for (0..rules.terrain_count) |ti| {
         const t = @as(Rules.Terrain, @enumFromInt(ti));
         if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river) continue;
         const texture: ?raylib.Texture2D = texture_set.terrain_textures[ti];
-        edit_window.addItemTexture(t, t.name(&rules), texture);
+        palet_window.addItemTexture(t, t.name(&rules), texture);
     }
-    edit_window.setName("Edit Palet");
+    palet_window.setName("Edit Palet");
 
     var terrain_brush: ?Rules.Terrain = null;
 
@@ -171,6 +191,9 @@ pub fn main() !void {
             // GUI STUFF
 
             if (!hide_gui) {
+                _ = edit_window.fetchSelected(&edit_mode);
+                if (edit_mode != .draw) palet_window.hidden = true else palet_window.hidden = false;
+
                 _ = promotion_window.fetchSelectedNull(&set_promotion);
                 // Set unit promotions
                 if (set_promotion) |promotion|
@@ -179,7 +202,7 @@ pub fn main() !void {
                             unit.promotions.set(@intFromEnum(promotion));
                 set_promotion = null;
 
-                _ = edit_window.fetchSelectedNull(&terrain_brush);
+                _ = palet_window.fetchSelectedNull(&terrain_brush);
 
                 _ = city_construction_window.fetchSelectedNull(&set_production_target);
                 // Set construction
@@ -193,7 +216,7 @@ pub fn main() !void {
 
                 // Set edit brush
 
-                _ = edit_window.fetchSelectedNull(&terrain_brush);
+                _ = palet_window.fetchSelectedNull(&terrain_brush);
 
                 // UPDATE UNIT INFO
                 if (maybe_unit_reference) |ref| {
@@ -223,7 +246,7 @@ pub fn main() !void {
                 // Check capture
                 if (unit_info_window.checkMouseCapture()) break :control_blk;
                 if (promotion_window.checkMouseCapture()) break :control_blk;
-                if (edit_window.checkMouseCapture()) break :control_blk;
+                if (palet_window.checkMouseCapture()) break :control_blk;
                 if (city_construction_window.checkMouseCapture()) break :control_blk;
             }
 
@@ -254,8 +277,17 @@ pub fn main() !void {
                     if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
                 }
 
-                if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and terrain_brush != null) {
+                if (edit_mode == .draw and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and terrain_brush != null) {
                     if (terrain_brush != null) world.terrain[mouse_tile] = terrain_brush.?;
+                }
+                if (edit_mode == .rivers and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                    if (camera.getMouseEdge(world.grid, bounding_box, texture_set)) |e| {
+                        if (world.rivers.contains(e)) {
+                            _ = world.rivers.swapRemove(e);
+                        } else {
+                            world.rivers.put(world.allocator, e, {}) catch unreachable;
+                        }
+                    }
                 }
             }
 
@@ -433,11 +465,12 @@ pub fn main() !void {
         if (!hide_gui) {
             // TODO: CAPTURE MOUSE TO DISSALLOW MULTI CLICKS
 
-            edit_window.renderUpdate();
+            palet_window.renderUpdate();
             promotion_window.renderUpdate();
 
             unit_info_window.renderUpdate();
             city_construction_window.renderUpdate();
+            edit_window.renderUpdate();
         }
         raylib.EndDrawing();
 

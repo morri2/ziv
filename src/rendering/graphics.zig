@@ -86,6 +86,11 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
             );
         }
     }
+    for (world.rivers.keys()) |edge| {
+        const edge_dir = world.grid.edgeDirection(edge) orelse continue;
+        const texture = ts.river_textures[@intFromEnum(edge_dir)];
+        render.renderTextureInHex(edge.low, world.grid, texture, 0, 0, .{}, ts);
+    }
 }
 
 pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void {

@@ -154,3 +154,54 @@ pub fn getPointIdx(
     }
     return idx;
 }
+
+pub fn getMouseEdge(
+    self: *const Self,
+    grid: Grid,
+    bounding_box: BoundingBox,
+    ts: TextureSet,
+) ?Grid.Edge {
+    const click_point = raylib.GetScreenToWorld2D(raylib.GetMousePosition(), self.camera);
+
+    return self.getPointEdge(
+        click_point.x,
+        click_point.y,
+        grid,
+        bounding_box,
+        ts,
+    );
+}
+
+// TODO Don't loop over bounding box
+pub fn getPointEdge(
+    _: *const Self,
+    xf: f32,
+    yf: f32,
+    grid: Grid,
+    bounding_box: BoundingBox,
+    ts: TextureSet,
+) ?Grid.Edge {
+    var idx: Grid.Idx = 0;
+    var idx_2: Grid.Idx = 0;
+
+    var min_dist_2: f32 = std.math.floatMax(f32);
+    var min_dist: f32 = std.math.floatMax(f32);
+    for (bounding_box.x_min..bounding_box.x_max) |x| {
+        for (bounding_box.y_min..bounding_box.y_max) |y| {
+            const real_x = ts.tilingX(@intCast(x), @intCast(y)) + ts.hex_height * 0.5;
+            const real_y = ts.tilingY(@intCast(y)) + ts.hex_width * 0.5;
+            const dist = std.math.pow(f32, real_x -
+                xf, 2) + std.math.pow(f32, real_y - yf, 2);
+            if (dist < min_dist) {
+                idx_2 = idx;
+                min_dist_2 = min_dist;
+                idx = grid.idxFromCoords(@intCast(x), @intCast(y));
+                min_dist = dist;
+            } else if (dist < min_dist_2) {
+                idx_2 = grid.idxFromCoords(@intCast(x), @intCast(y));
+                min_dist_2 = dist;
+            }
+        }
+    }
+    return grid.edgeBetween(idx, idx_2);
+}

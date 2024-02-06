@@ -184,6 +184,7 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
 
         should_close: bool = false,
         collapsed: bool,
+        hidden: bool = false,
         new_selection: bool = false,
         last_selection: ?R = null,
         last_i: ?u16 = null,
@@ -244,6 +245,7 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
         }
 
         pub fn renderUpdate(self: *Self) void {
+            if (self.hidden) return;
             self.handleDrag();
 
             if (raylib.GuiWindowBox(self.bounds, &self.name) != 0) {
@@ -300,9 +302,9 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
 
         pub fn fetchSelected(self: *Self, destination: *R) bool {
             var selected: ?R = null;
-            const res = self.fetchSelected(&selected);
+            const res = self.fetchSelectedNull(&selected);
             if (selected == null) return false;
-            destination = selected.?;
+            destination.* = selected.?;
             return res;
         }
 
@@ -319,6 +321,7 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
         }
 
         pub fn checkMouseCapture(self: *const Self) bool {
+            if (self.hidden) return false;
             const mouse_pos = raylib.GetMousePosition();
             const delta = raylib.GetMouseDelta();
             const mouse_last = raylib.Vector2Subtract(mouse_pos, delta);

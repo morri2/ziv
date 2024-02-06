@@ -316,25 +316,6 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
     return true;
 }
 
-pub fn saveToFile(self: *Self, path: []const u8) !void {
-    var file = try std.fs.cwd().createFile(path, .{});
-    var writer = file.writer();
-
-    for (0..self.grid.len) |i| {
-        const terrain_bytes: [@sizeOf(Terrain)]u8 = std.mem.asBytes(&self.terrain[i]).*;
-        _ = try file.write(&terrain_bytes);
-    }
-
-    _ = try writer.writeInt(usize, self.resources.count(), .little); // write len
-    for (self.resources.keys()) |key| {
-        const value = self.resources.get(key) orelse unreachable;
-        _ = try writer.writeInt(usize, key, .little);
-        _ = try writer.writeStruct(value);
-    }
-
-    file.close();
-}
-
 pub fn unitFOV(self: *const Self, unit: *const Unit, src: Idx) HexSet {
     const vision_range = Rules.Promotion.Effect.promotionsSum(.modify_sight_range, unit.promotions, self.rules);
     return self.fov(@intCast(vision_range + 2), src);
@@ -404,6 +385,30 @@ pub fn fullUpdateViews(self: *Self) void {
     }
 }
 
+pub fn saveToFile(self: *Self, path: []const u8) !void {
+    var file = try std.fs.cwd().createFile(path, .{});
+    var writer = file.writer();
+
+    for (0..self.grid.len) |i| {
+        const terrain_bytes: [@sizeOf(Terrain)]u8 = std.mem.asBytes(&self.terrain[i]).*;
+        _ = try file.write(&terrain_bytes);
+    }
+
+    _ = try writer.writeInt(u32, @intCast(self.resources.count()), .little); // write len
+    for (self.resources.keys()) |key| {
+        const value = self.resources.get(key) orelse unreachable;
+        _ = try writer.writeInt(Idx, key, .little);
+        _ = try writer.writeStruct(value);
+    }
+
+    _ = try writer.writeInt(u32, @intCast(self.rivers.count()), .little);
+    for (self.rivers.keys()) |edge| {
+        try writer.writeStruct(edge);
+    }
+
+    file.close();
+}
+
 pub fn loadFromFile(self: *Self, path: []const u8) !void {
     var file = try std.fs.cwd().openFile(path, .{});
     var reader = file.reader();
@@ -414,15 +419,26 @@ pub fn loadFromFile(self: *Self, path: []const u8) !void {
         self.terrain[i] = terrain.*;
     }
     blk: {
-        const len = reader.readInt(usize, .little) catch {
+        const len = reader.readInt(u32, .little) catch {
             std.debug.print("\nEarly return in loadFromFile\n", .{});
             break :blk;
         };
         for (0..len) |_| {
-            const k = try reader.readInt(usize, .little);
+            const k = try reader.readInt(Idx, .little);
 
             const v = try reader.readStruct(ResourceAndAmount);
             try self.resources.put(self.allocator, @intCast(k), v);
+        }
+    }
+
+    blk: {
+        const len = reader.readInt(u32, .little) catch {
+            std.debug.print("\nEarly return in loadFromFile\n", .{});
+            break :blk;
+        };
+        for (0..len) |_| {
+            const edge = try reader.readStruct(Grid.Edge);
+            try self.rivers.put(self.allocator, edge, {});
         }
     }
 

@@ -124,7 +124,7 @@ pub const CoordQRS = struct {
 };
 
 /// The lowest index is always in low :))
-pub const Edge = struct {
+pub const Edge = packed struct {
     low: Idx,
     high: Idx,
 
@@ -203,7 +203,7 @@ pub fn isNeighbour(self: Self, src: Idx, dest: Idx) bool {
 }
 
 pub const Direction = enum {
-    const directions = [_]@This(){ .East, .NorthEast, .NorthWest, .West, .SouthWest, .SouthEast };
+    pub const directions: [6]@This() = [_]@This(){ .East, .NorthEast, .NorthWest, .West, .SouthWest, .SouthEast };
 
     East,
     NorthEast,
@@ -243,6 +243,15 @@ pub fn neighbours(self: Self, src: Idx) [6]?Idx {
 pub fn edgeBetween(self: Self, a: Idx, b: Idx) ?Edge {
     if (!self.isNeighbour(a, b)) return null;
     return Edge.between(a, b);
+}
+
+// returns edge direction (low -> high)
+pub fn edgeDirection(self: Self, edge: Edge) ?Direction {
+    if (!self.isNeighbour(edge.low, edge.high)) return null;
+    for (self.neighbours(edge.low), 0..) |maybe_n, i| if (maybe_n) |n| {
+        if (n == edge.high) return Direction.directions[i];
+    };
+    unreachable;
 }
 
 pub const SpiralIterator = struct {
