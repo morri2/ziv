@@ -94,15 +94,16 @@ pub fn main() !void {
         none,
         draw,
         rivers,
+        resource,
     };
 
     var hide_gui = false;
 
     const EditWindow = gui.SelectWindow(EditModes, .{
         .WIDTH = 200,
-        .COLUMNS = 3,
+        .COLUMNS = 4,
         .ENTRY_HEIGHT = 30,
-        .SPACEING = 2,
+        .SPACEING = 4,
     });
     var edit_mode: EditModes = .none;
 
@@ -111,6 +112,7 @@ pub fn main() !void {
     edit_window.addItem(.none, "None");
     edit_window.addItem(.draw, "Draw");
     edit_window.addItem(.rivers, "River");
+    edit_window.addItem(.resource, "Resource");
 
     const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
@@ -131,6 +133,26 @@ pub fn main() !void {
     palet_window.setName("Edit Palet");
 
     var terrain_brush: ?Rules.Terrain = null;
+
+    const ResourceWindow = gui.SelectWindow(Rules.Resource, .{
+        .WIDTH = 400,
+        .COLUMNS = 5,
+        .NULL_OPTION = true,
+        .ENTRY_HEIGHT = 50,
+        .SPACEING = 2,
+        .TEXTURE_ENTRY_FRACTION = 0.6,
+    });
+
+    var resource_window: ResourceWindow = ResourceWindow.newEmpty();
+    for (0..rules.resource_count) |ri| {
+        const r = @as(Rules.Resource, @enumFromInt(ri));
+
+        const texture: ?raylib.Texture2D = texture_set.resource_icons[ri];
+        resource_window.addItemTexture(r, r.name(&rules), texture);
+    }
+    resource_window.setName("Resource Palet");
+
+    var resource_brush: ?Rules.Resource = null;
 
     const PromotionWindow = gui.SelectWindow(Rules.Promotion, .{
         .WIDTH = 150,
@@ -156,6 +178,13 @@ pub fn main() !void {
     unit_info_window.bounds.y += 100;
     unit_info_window.setName("[UNIT]");
     unit_info_window.addLine("Select a unit to view info...");
+
+    const HexInfoWindow = gui.InfoWindow(.{});
+
+    var hex_info_window: HexInfoWindow = HexInfoWindow.newEmpty();
+    hex_info_window.bounds.y += 200;
+    hex_info_window.setName("[HEX]");
+    hex_info_window.addLine("Select a hex to view info...");
 
     const CityConstructionWindow = gui.SelectWindow(City.ProductionTarget, .{
         .WIDTH = 150,
@@ -195,6 +224,7 @@ pub fn main() !void {
         // CONTROLL STUFF //
         // ////////////// //
         control_blk: {
+            if (raylib.IsKeyPressed(raylib.KEY_R)) try world.recalculateWaterAccess();
             if (raylib.IsKeyPressed(raylib.KEY_H)) hide_gui = !hide_gui;
 
             // GUI STUFF
@@ -202,6 +232,7 @@ pub fn main() !void {
             if (!hide_gui) {
                 _ = edit_window.fetchSelected(&edit_mode);
                 if (edit_mode != .draw) palet_window.hidden = true else palet_window.hidden = false;
+                if (edit_mode != .resource) resource_window.hidden = true else resource_window.hidden = false;
 
                 _ = promotion_window.fetchSelectedNull(&set_promotion);
                 // Set unit promotions
@@ -224,6 +255,8 @@ pub fn main() !void {
                 set_production_target = null;
 
                 // Set edit brush
+
+                _ = resource_window.fetchSelectedNull(&resource_brush);
 
                 _ = palet_window.fetchSelectedNull(&terrain_brush);
 
@@ -252,43 +285,41 @@ pub fn main() !void {
                     }
                 }
 
+                // UPDATE UNIT INFO
+                if (maybe_selected_idx) |idx| {
+                    const terrain = world.terrain[idx];
+                    const attributes = terrain.attributes(&rules);
+                    hex_info_window.clear();
+
+                    hex_info_window.addCategoryHeader("Attributes");
+
+                    hex_info_window.addLineFormat("Freshwater: {}", .{attributes.has_freshwater}, false);
+                    hex_info_window.addLineFormat("River: {}", .{attributes.has_river}, false);
+                }
+
                 // Check capture
                 if (unit_info_window.checkMouseCapture()) break :control_blk;
                 if (promotion_window.checkMouseCapture()) break :control_blk;
                 if (palet_window.checkMouseCapture()) break :control_blk;
                 if (city_construction_window.checkMouseCapture()) break :control_blk;
                 if (edit_window.checkMouseCapture()) break :control_blk;
+                if (resource_window.checkMouseCapture()) break :control_blk;
             }
 
             // OLD SCHOOL CONTROL STUFF
             {
                 // EDIT MAP STUFF
                 const mouse_tile = camera.getMouseTile(world.grid, bounding_box, texture_set);
-                if (raylib.IsKeyPressed(raylib.KEY_R)) {
-                    const res = world.resources.getPtr(mouse_tile);
-                    if (res != null) {
-                        res.?.type = @enumFromInt((@intFromEnum(res.?.type) + 1) % rules.resource_count);
-                    } else {
-                        try world.resources.put(world.allocator, mouse_tile, .{ .type = @enumFromInt(0), .amount = 1 });
-                    }
-                }
-                if (raylib.IsKeyPressed(raylib.KEY_F)) {
-                    const res = world.resources.getPtr(mouse_tile);
-                    if (res != null) {
-                        if (@intFromEnum(res.?.type) == 0) {
-                            _ = world.resources.swapRemove(mouse_tile);
-                        } else {
-                            res.?.type = @enumFromInt(@as(u8, (@intFromEnum(res.?.type)) -| 1));
-                        }
-                    }
-                }
                 if (raylib.IsKeyPressed(raylib.KEY_T)) {
                     const res = try world.resources.getOrPut(world.allocator, mouse_tile);
                     if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
                 }
 
                 if (edit_mode == .draw and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and terrain_brush != null) {
-                    if (terrain_brush != null) world.terrain[mouse_tile] = terrain_brush.?;
+                    world.terrain[mouse_tile] = terrain_brush.?;
+                }
+                if (edit_mode == .resource and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                    if (resource_brush != null) try world.resources.put(world.allocator, mouse_tile, .{ .type = resource_brush.? }) else _ = world.resources.swapRemove(mouse_tile);
                 }
                 if (edit_mode == .rivers and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
                     if (camera.getMouseEdge(world.grid, bounding_box, texture_set)) |e| {
@@ -414,23 +445,9 @@ pub fn main() !void {
                 defer vision_set.deinit();
 
                 for (vision_set.slice()) |index| {
-                    render.renderTextureHex(
-                        index,
-                        world.grid,
-                        texture_set.base_textures[6],
-                        .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } },
-                        texture_set,
-                    );
-
-                    if (world.terrain[index].attributes(world.rules).is_obscuring) {
-                        render.renderTextureHex(
-                            index,
-                            world.grid,
-                            texture_set.base_textures[6],
-                            .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } },
-                            texture_set,
-                        );
-                    }
+                    render.renderTextureHex(index, world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } }, texture_set);
+                    if (world.terrain[index].attributes(world.rules).is_obscuring)
+                        render.renderTextureHex(index, world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } }, texture_set);
                 }
             }
             if (raylib.IsKeyDown(raylib.KEY_Z)) {
@@ -481,6 +498,10 @@ pub fn main() !void {
             unit_info_window.renderUpdate();
             city_construction_window.renderUpdate();
             edit_window.renderUpdate();
+
+            resource_window.renderUpdate();
+
+            hex_info_window.renderUpdate();
         }
         raylib.EndDrawing();
 

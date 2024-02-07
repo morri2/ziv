@@ -39,7 +39,7 @@ pub const WorkInProgress = struct {
 
 pub const ResourceAndAmount = packed struct {
     type: Resource,
-    amount: u8,
+    amount: u8 = 1,
 };
 
 allocator: std.mem.Allocator,
@@ -71,6 +71,52 @@ cities: std.AutoArrayHashMapUnmanaged(Idx, City),
 pub fn claimed(self: *const Self, idx: Idx) bool {
     for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
     return false;
+}
+
+pub fn recalculateWaterAccess(self: *Self) !void {
+    var new_terrain = try self.allocator.alloc(Rules.Terrain.Unpacked, self.grid.len);
+    defer self.allocator.free(new_terrain);
+
+    for (0..self.grid.len) |idx| {
+        const terrain = self.terrain[idx];
+        new_terrain[idx] = .{
+            .base = terrain.base(self.rules),
+            .feature = terrain.feature(self.rules),
+            .vegetation = terrain.vegetation(self.rules),
+            .has_freshwater = false,
+            .has_river = false,
+        };
+    }
+
+    for (0..self.grid.len) |idx_us| {
+        const idx: u32 = @intCast(idx_us);
+
+        const terrain = self.terrain[idx];
+        if (terrain.attributes(self.rules).is_freshwater) {
+            new_terrain[idx].has_freshwater = true;
+            for (self.grid.neighbours(idx)) |maybe_n_idx|
+                if (maybe_n_idx) |n_idx| {
+                    new_terrain[n_idx].has_freshwater = true;
+                };
+        }
+    }
+
+    for (self.rivers.keys()) |edge| {
+        new_terrain[edge.low].has_freshwater = true;
+        new_terrain[edge.high].has_freshwater = true;
+        new_terrain[edge.low].has_river = true;
+        new_terrain[edge.high].has_river = true;
+    }
+
+    for (0..self.grid.len) |idx_us| {
+        const idx: u32 = @intCast(idx_us);
+        if (self.terrain[idx].attributes(self.rules).is_water) {
+            new_terrain[idx].has_freshwater = false;
+        }
+    }
+
+    for (0..self.grid.len) |idx| self.terrain[idx] = new_terrain[idx].pack(self.rules) orelse
+        std.debug.panic("Failed to pack tile", .{});
 }
 
 pub fn addCity(self: *Self, idx: Idx) !void {
