@@ -142,8 +142,6 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
         rules,
     )) return .disallowed;
 
-    if (context.river_crossing and !Promotion.Effect.ignore_terrain_move.in(self.promotions, rules)) return .allowed_final;
-
     if (context.city) return .{ .allowed = 1 }; // obs! should be after river crossing check
 
     const cost: MoveCost = switch (stats.domain) {
@@ -153,6 +151,8 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
             break :blk .{ .allowed = 1 };
         },
         .land => blk: {
+            if (context.river_crossing and !Promotion.Effect.ignore_terrain_move.in(self.promotions, rules)) return .allowed_final;
+
             var cost_amt: f32 = 1;
             if (terrain_attributes.is_rough and !Promotion.Effect.ignore_terrain_move.in(
                 self.promotions,
