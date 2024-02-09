@@ -99,7 +99,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
 
         for (city.claimed.slice()) |claimed| {
             render.renderTextureInHex(claimed, world.grid, ts.city_border_texture, 0, 0, .{
-                .tint = .{ .r = 250, .g = 50, .b = 50, .a = 180 },
+                .tint = ts.player_primary_color[city.faction_id],
                 .scale = 0.95,
             }, ts);
 
@@ -111,7 +111,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
         }
 
         render.renderTextureInHex(idx, world.grid, ts.city_border_texture, 0, 0, .{
-            .tint = .{ .r = 250, .g = 50, .b = 50, .a = 180 },
+            .tint = ts.player_primary_color[city.faction_id],
             .scale = 0.95,
         }, ts);
 
@@ -312,19 +312,19 @@ pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*con
 
         if (maybe_view) |view| {
             if (view.visability(idx) == .hidden) continue;
-        } else continue;
+        }
 
         const icon = ts.resource_icons[@intFromEnum(res.type)];
-        render.renderTextureInHex(idx, world.grid, icon, -0.5, -0.4, .{ .scale = 0.6 }, ts);
+        render.renderTextureInHex(idx, world.grid, icon, 0.5, -0.4, .{ .scale = 0.6 }, ts);
 
         if (res.amount > 1) render.renderFormatHexAuto(
             idx,
             world.grid,
             "x{}",
             .{res.amount},
-            -0.2,
+            0.2,
             -0.25,
-            .{ .font_size = 14 },
+            .{ .font_size = 10 },
             ts,
         );
     }

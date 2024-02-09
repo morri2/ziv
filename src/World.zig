@@ -74,6 +74,11 @@ pub fn claimed(self: *const Self, idx: Idx) bool {
     return false;
 }
 
+pub fn claimedFaction(self: *const Self, idx: Idx) ?Player.FactionID {
+    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
+    return null;
+}
+
 pub fn recalculateWaterAccess(self: *Self) !void {
     var new_terrain = try self.allocator.alloc(Rules.Terrain.Unpacked, self.grid.len);
     defer self.allocator.free(new_terrain);
@@ -120,8 +125,8 @@ pub fn recalculateWaterAccess(self: *Self) !void {
         std.debug.panic("Failed to pack tile", .{});
 }
 
-pub fn addCity(self: *Self, idx: Idx) !void {
-    const city = City.new(idx, 0, self);
+pub fn addCity(self: *Self, idx: Idx, faction_id: Player.FactionID) !void {
+    const city = City.new(idx, faction_id, self);
     try self.cities.put(self.allocator, idx, city);
 }
 
@@ -243,6 +248,30 @@ pub fn moveCost(
         .embarked = reference.slot == .embarked,
         .city = self.cities.contains(to),
     }, self.rules);
+}
+
+pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: Player.FactionID) bool {
+    if (self.claimedFaction(idx)) |claimed_by| {
+        if (claimed_by != faction) return false;
+    }
+    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
+    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
+    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(self.rules).is_water) return false;
+    return true;
+}
+
+pub fn settleCity(self: *Self, idx: Idx, refrence: Units.Reference) !bool {
+    const unit = self.units.deref(refrence) orelse return false;
+    if (!self.canSettleCityAt(idx, unit.faction_id)) return false;
+    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, self.rules)) return false;
+    if (refrence.idx != idx) return false;
+    if (unit.movement <= 0) return false;
+
+    try self.addCity(idx, unit.faction_id);
+    self.units.removeReference(refrence); // will this fuck up the refrence held by controll?
+
+    return true;
 }
 
 pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {

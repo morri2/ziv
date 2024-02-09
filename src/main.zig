@@ -15,6 +15,8 @@ const TextureSet = @import("rendering/TextureSet.zig");
 const render = @import("rendering/render_util.zig");
 const graphics = @import("rendering/graphics.zig");
 
+const Player = @import("Player.zig");
+
 const gui = @import("rendering/gui.zig");
 
 const raylib = @cImport({
@@ -66,7 +68,11 @@ pub fn main() !void {
     try world.addUnit(1206, @enumFromInt(7), 1);
     try world.addUnit(1139, @enumFromInt(3), 1);
 
-    try world.addCity(1089);
+    try world.addCity(1089, 0);
+    try world.addCity(485, 1);
+
+    var maybe_player_view: ?Player.FactionID = 0;
+    maybe_player_view = 0;
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -112,6 +118,23 @@ pub fn main() !void {
     edit_window.addItem(.rivers, "River");
     edit_window.addItem(.resource, "Resource");
 
+    const ViewWindow = gui.SelectWindow(Player.FactionID, .{
+        .WIDTH = 200,
+        .COLUMNS = 4,
+        .ENTRY_HEIGHT = 30,
+        .SPACEING = 4,
+        .NULL_OPTION = true,
+    });
+
+    var view_window = ViewWindow.newEmpty();
+    view_window.setName("SELECT VIEW");
+
+    for (0..world.player_count) |i| {
+        view_window.addItem(@intCast(i), "X");
+    }
+
+    view_window.bounds.x += 300;
+
     const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
         .COLUMNS = 5,
@@ -128,6 +151,7 @@ pub fn main() !void {
         const texture: ?raylib.Texture2D = texture_set.terrain_textures[ti];
         palet_window.addItemTexture(t, t.name(&rules), texture);
     }
+
     palet_window.setName("Edit Palet");
 
     var terrain_brush: ?Rules.Terrain = null;
@@ -252,6 +276,10 @@ pub fn main() !void {
                     };
                 set_production_target = null;
 
+                // view shit
+
+                _ = view_window.fetchSelectedNull(&maybe_player_view);
+
                 // Set edit brush
 
                 _ = resource_window.fetchSelectedNull(&resource_brush);
@@ -302,6 +330,7 @@ pub fn main() !void {
                 if (city_construction_window.checkMouseCapture()) break :control_blk;
                 if (edit_window.checkMouseCapture()) break :control_blk;
                 if (resource_window.checkMouseCapture()) break :control_blk;
+                if (view_window.checkMouseCapture()) break :control_blk;
             }
 
             // OLD SCHOOL CONTROL STUFF
@@ -408,6 +437,19 @@ pub fn main() !void {
                 }
             }
         }
+        // SETTLE CITY
+        if (raylib.IsKeyPressed(raylib.KEY_B)) {
+            if (maybe_unit_reference) |unit_ref| {
+                if (maybe_selected_idx) |sel_idx| {
+                    if (try world.settleCity(sel_idx, unit_ref)) {
+                        std.debug.print("Settled city!\n", .{});
+                        //maybe_unit_reference = null;
+                    } else {
+                        std.debug.print("failed to settle city\n", .{});
+                    }
+                }
+            }
+        }
 
         // ///////// //
         // RENDERING //
@@ -421,10 +463,14 @@ pub fn main() !void {
         if (maybe_unit_reference) |unit_reference| blk: {
             maybe_seleceted_unit_id = (world.units.derefToPtr(unit_reference) orelse break :blk).id;
         }
+
+        var view: ?*PlayerView = null;
+        if (maybe_player_view) |player_view| view = &world.players[player_view].view;
+
         graphics.renderWorld(
             &world,
             bounding_box,
-            &world.players[0].view,
+            view,
             camera.camera.zoom,
             maybe_seleceted_unit_id,
             texture_set,
@@ -493,6 +539,7 @@ pub fn main() !void {
             resource_window.renderUpdate();
 
             hex_info_window.renderUpdate();
+            view_window.renderUpdate();
         }
         raylib.EndDrawing();
 
