@@ -9,7 +9,9 @@ const Idx = Grid.Idx;
 
 const World = @import("../World.zig");
 const Unit = @import("../Unit.zig");
+const Units = @import("../Units.zig");
 const PlayerView = @import("../PlayerView.zig");
+const Player = @import("../Player.zig");
 
 const TextureSet = @import("TextureSet.zig");
 
@@ -24,11 +26,11 @@ const raylib = @cImport({
     @cInclude("raygui.h");
 });
 
-pub fn renderWorld(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderWorld(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, zoom: f32, maybe_selected_id: ?Unit.UnitID, ts: TextureSet) void {
     renderTerrainLayer(world, bbox, maybe_view, ts);
 
     renderCities(world, bbox, ts);
-    renderUnits(world, bbox, ts);
+    renderUnits(world, bbox, maybe_view, maybe_selected_id, zoom, ts);
     renderYields(world, bbox, maybe_view, ts);
 
     renderResources(world, bbox, maybe_view, ts);
@@ -224,47 +226,82 @@ pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
     }
 }
 
-pub fn renderUnits(world: *const World, bbox: BoundingBox, ts: TextureSet) void {
-    var iter = world.units.iterator();
-    while (iter.next()) |unit| {
-        const x = world.grid.xFromIdx(unit.idx);
-        const y = world.grid.yFromIdx(unit.idx);
-        if (!bbox.contains(x, y)) continue;
-        const icon = ts.unit_icons[@intFromEnum(unit.unit.type)];
-        render.renderTextureInHex(
-            unit.idx,
-            world.grid,
-            icon,
-            0.0,
-            0.0,
-            .{ .scale = 0.4 },
-            ts,
-        );
+pub fn renderUnits(world: *const World, bbox: BoundingBox, view: ?*const PlayerView, maybe_selected_id: ?Unit.UnitID, zoom: f32, ts: TextureSet) void {
+    var iter = world.units.refrenceIterator(world.grid.len);
+    var selected_entry: ?Units.RefrenceItem = null;
+    while (iter.next()) |entry| {
+        const in_view = if (view) |v| v.in_view.contains(entry.idx) else true;
+        if (!in_view) continue;
+        if (!bbox.containsIdx(entry.idx, world.grid)) continue;
 
-        render.renderFormatHexAuto(
-            unit.idx,
-            world.grid,
-            "{}hp",
-            .{unit.unit.hit_points},
-            0.0,
-            -0.3,
-            .{ .tint = raylib.YELLOW },
-            ts,
-        );
+        if (maybe_selected_id) |selected_id| if (entry.unit.id == selected_id) {
+            selected_entry = entry;
+            continue;
+        };
 
-        render.renderFormatHexAuto(
-            unit.idx,
-            world.grid,
-            "{d:.0}",
-            .{unit.unit.movement},
-            // TODO: FIX
-            // .{ unit.movement, unit.maxMovement() },
-            -0.2,
-            0.2,
-            .{ .tint = raylib.YELLOW, .font_size = 12 },
-            ts,
-        );
+        renderUnit(entry.idx, world.grid, entry.unit, .{
+            .slot = entry.slot,
+            .faction_id = entry.unit.faction_id,
+            .stack = entry.stack_depth,
+            .zoom = zoom,
+        }, ts);
     }
+
+    if (selected_entry) |entry| {
+        renderUnit(entry.idx, world.grid, entry.unit, .{
+            .slot = entry.slot,
+            .faction_id = entry.unit.faction_id,
+            .stack = entry.stack_depth,
+            .zoom = zoom,
+            .glow = true,
+        }, ts);
+    }
+}
+
+pub const RenderUnitContext = struct {
+    slot: Units.Slot,
+    faction_id: Player.FactionID,
+    stack: u8 = 0,
+    glow: bool = false,
+    exausted: bool = false,
+    zoom: f32 = 1.0,
+};
+
+const ZOOM_MAX_SCALE = 0.2;
+const ZOOM_MIN_SCALE = 0.1;
+const ZOOM_FACTOR = 0.2;
+pub fn renderUnit(idx: Idx, grid: Grid, unit: Unit, context: RenderUnitContext, ts: TextureSet) void {
+    const back_texture = ts.unit_slot_frame_back[@intFromEnum(context.slot)];
+    const line_texture = ts.unit_slot_frame_line[@intFromEnum(context.slot)];
+    const glow_texture = ts.unit_slot_frame_glow[@intFromEnum(context.slot)];
+    const unit_symbol = ts.unit_symbols[@intFromEnum(unit.type)];
+
+    var off_y: f32 = -0.1 * @as(f32, @floatFromInt(context.stack));
+    const off_x: f32 = 0.1 * @as(f32, @floatFromInt(context.stack));
+
+    switch (context.slot) {
+        .civilian_land, .civilian_sea => off_y -= 0.7,
+        .military_land, .military_sea => off_y -= 0.3,
+        .embarked => off_y -= 0.5,
+        .trade => off_y -= 1.0,
+    }
+
+    const bg_color: raylib.Color = ts.player_primary_color[context.faction_id];
+    const fg_color: raylib.Color = ts.player_secoundary_color[context.faction_id];
+    const glow_color = raylib.YELLOW;
+    const scale: f32 = @max(ZOOM_MIN_SCALE, @min(ZOOM_MAX_SCALE, ZOOM_FACTOR * 1 / context.zoom));
+    if (context.glow) render.renderTextureInHex(idx, grid, glow_texture, off_x, off_y, .{ .tint = glow_color, .scale = scale }, ts);
+    render.renderTextureInHex(idx, grid, back_texture, off_x, off_y, .{ .tint = bg_color, .scale = scale }, ts);
+    render.renderTextureInHex(idx, grid, line_texture, off_x, off_y, .{ .tint = fg_color, .scale = scale }, ts);
+    render.renderTextureInHex(idx, grid, unit_symbol, off_x, off_y, .{ .tint = fg_color, .scale = scale * 0.5 }, ts);
+
+    render.renderFormatHexAuto(idx, grid, "{d:.0}", .{
+        unit.hit_points,
+    }, off_x + 0.2, off_y - 0.1, .{ .tint = raylib.WHITE, .font_size = 8 }, ts);
+
+    render.renderFormatHexAuto(idx, grid, "{d:.0}", .{
+        unit.movement,
+    }, off_x + 0.2, off_y + 0.1, .{ .tint = raylib.WHITE, .font_size = 8 }, ts);
 }
 
 pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {

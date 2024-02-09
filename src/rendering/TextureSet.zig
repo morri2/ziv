@@ -30,7 +30,15 @@ city_textures: []const raylib.Texture2D,
 city_border_texture: raylib.Texture2D,
 smoke_texture: raylib.Texture2D,
 river_textures: []const raylib.Texture2D,
+
+unit_slot_frame_back: []const raylib.Texture2D,
+unit_slot_frame_line: []const raylib.Texture2D,
+unit_slot_frame_glow: []const raylib.Texture2D,
+unit_symbols: []const raylib.Texture2D,
 //hex_radius: f32,
+
+player_primary_color: []const raylib.Color,
+player_secoundary_color: []const raylib.Color,
 
 unit: f32, // the unit for rendering non hex elements, should be set as a function of hex size
 
@@ -53,6 +61,11 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
     const hex_width = @as(f32, @floatFromInt(universal_fallback.width)) - 0.02;
     const hex_height = @as(f32, @floatFromInt(universal_fallback.height));
     const unit = hex_height / 2;
+
+    const frame_shapes = &[_][]const u8{
+        "pin", "pin", "circle", "circle", "boxpin", "trade",
+    };
+
     return .{
         .allocator = allocator,
         .font = font,
@@ -63,11 +76,63 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             "textures/rastor/edge.png",
         }, universal_fallback, 3, allocator),
 
+        .unit_slot_frame_back = try loadTexturesTextList(
+            "textures/frames/{s}_inner.png",
+            universal_fallback,
+            frame_shapes,
+            6,
+            allocator,
+        ),
+
+        .unit_slot_frame_line = try loadTexturesTextList(
+            "textures/frames/{s}_line.png",
+            universal_fallback,
+            frame_shapes,
+            6,
+            allocator,
+        ),
+
+        .unit_slot_frame_glow = try loadTexturesTextList(
+            "textures/frames/{s}_blur.png",
+            universal_fallback,
+            frame_shapes,
+            6,
+            allocator,
+        ),
+
+        .unit_symbols = try loadTexturesEnum(
+            "textures/units/unit_{s}.png",
+            null,
+            Rules.UnitType,
+            rules,
+            rules.unit_type_count,
+            allocator,
+        ),
+
+        .player_primary_color = &[_]raylib.Color{
+            raylib.DARKPURPLE,
+            raylib.DARKBLUE,
+            raylib.ORANGE,
+            raylib.DARKGREEN,
+            raylib.DARKBROWN,
+            raylib.DARKGREEN,
+
+            raylib.DARKGRAY,
+        },
+        .player_secoundary_color = &[_]raylib.Color{
+            raylib.BEIGE,
+            raylib.BEIGE,
+            raylib.BEIGE,
+            raylib.BEIGE,
+            raylib.BEIGE,
+            raylib.BEIGE,
+        },
+
         .river_textures = try loadNumberedTextures("textures/rastor/river_{}.png", universal_fallback, 6, allocator),
 
         .city_textures = try loadNumberedTextures("textures/rastor/city_{}.png", universal_fallback, 6, allocator),
 
-        .base_textures = try loadTextures(
+        .base_textures = try loadTexturesEnum(
             "textures/{s}.png",
             universal_fallback,
             Rules.Terrain.Base,
@@ -75,7 +140,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.base_count,
             allocator,
         ),
-        .feature_textures = try loadTextures(
+        .feature_textures = try loadTexturesEnum(
             "textures/{s}.png",
             universal_fallback,
             Rules.Terrain.Feature,
@@ -83,7 +148,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.feature_count,
             allocator,
         ),
-        .vegetation_textures = try loadTextures(
+        .vegetation_textures = try loadTexturesEnum(
             "textures/{s}.png",
             universal_fallback,
             Rules.Terrain.Vegetation,
@@ -91,7 +156,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.vegetation_count,
             allocator,
         ),
-        .resource_icons = try loadTextures(
+        .resource_icons = try loadTexturesEnum(
             "textures/res_{s}.png",
             universal_fallback,
             Rules.Resource,
@@ -99,7 +164,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.resource_count,
             allocator,
         ),
-        .improvement_textures = try loadTextures(
+        .improvement_textures = try loadTexturesEnum(
             "textures/impr_{s}.png",
             universal_fallback,
             Rules.Building,
@@ -114,7 +179,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             allocator,
         ),
 
-        .unit_icons = try loadTextures(
+        .unit_icons = try loadTexturesEnum(
             "textures/unit_{s}.png",
             universal_fallback,
             Rules.UnitType,
@@ -147,6 +212,10 @@ pub fn deinit(self: *Self) void {
     for (self.terrain_textures) |texture| raylib.UnloadTexture(texture);
     for (self.city_textures) |texture| raylib.UnloadTexture(texture);
     for (self.river_textures) |texture| raylib.UnloadTexture(texture);
+    for (self.unit_slot_frame_back) |texture| raylib.UnloadTexture(texture);
+    for (self.unit_slot_frame_line) |texture| raylib.UnloadTexture(texture);
+    for (self.unit_slot_frame_glow) |texture| raylib.UnloadTexture(texture);
+    for (self.unit_symbols) |texture| raylib.UnloadTexture(texture);
 
     self.allocator.free(self.unit_icons);
     self.allocator.free(self.transport_textures);
@@ -159,6 +228,10 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.city_textures);
     self.allocator.free(self.terrain_textures);
     self.allocator.free(self.river_textures);
+    self.allocator.free(self.unit_slot_frame_back);
+    self.allocator.free(self.unit_slot_frame_line);
+    self.allocator.free(self.unit_slot_frame_glow);
+    self.allocator.free(self.unit_symbols);
 }
 
 /// For loading textures for full terrain, eg not components
@@ -227,7 +300,31 @@ pub fn loadTexturesList(
     return textures;
 }
 
-pub fn loadTextures(
+pub fn loadTexturesTextList(
+    comptime path_fmt: []const u8,
+    universal_fallback: ?raylib.Texture2D,
+    comptime text_strings: []const []const u8,
+    len: usize,
+    allocator: std.mem.Allocator,
+) ![]const raylib.Texture2D {
+    const textures = try allocator.alloc(raylib.Texture2D, len);
+    errdefer allocator.free(textures);
+
+    var fallback_path_buf: [256]u8 = undefined;
+    const fallback_path = std.fmt.bufPrintZ(&fallback_path_buf, path_fmt, .{"placeholder"}) catch unreachable;
+
+    const fallback_texture = loadTexture(fallback_path, universal_fallback);
+
+    for (0..len) |i| {
+        const name = text_strings[i];
+        var path_buf: [256]u8 = undefined;
+        const path = std.fmt.bufPrintZ(&path_buf, path_fmt, .{name}) catch unreachable;
+        textures[i] = loadTexture(path, fallback_texture);
+    }
+    return textures;
+}
+
+pub fn loadTexturesEnum(
     comptime path_fmt: []const u8,
     universal_fallback: ?raylib.Texture2D,
     comptime Enum: type,

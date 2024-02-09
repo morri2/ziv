@@ -5,7 +5,7 @@ const Grid = @import("Grid.zig");
 
 pub const FactionID = u8;
 
-id: u8,
+id: FactionID,
 view: PlayerView,
 allocator: std.mem.Allocator,
 

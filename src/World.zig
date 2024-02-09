@@ -52,6 +52,7 @@ players: []Player,
 player_count: u8,
 
 turn_counter: usize,
+unit_counter: u32 = 0,
 
 // Per tile data
 terrain: []Terrain,
@@ -122,6 +123,12 @@ pub fn recalculateWaterAccess(self: *Self) !void {
 pub fn addCity(self: *Self, idx: Idx) !void {
     const city = City.new(idx, 0, self);
     try self.cities.put(self.allocator, idx, city);
+}
+
+pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: Player.FactionID) !void {
+    const unit = Unit.new(unit_temp, self.unit_counter, faction, self.rules);
+    self.unit_counter += 1;
+    try self.units.putOrStackAutoSlot(idx, unit);
 }
 
 pub fn tileYield(self: *const Self, idx: Idx) Yield {

@@ -50,7 +50,7 @@ pub fn main() !void {
         WIDTH,
         HEIGHT,
         true,
-        1,
+        2,
         &rules,
     );
     defer world.deinit();
@@ -58,15 +58,13 @@ pub fn main() !void {
     try world.loadFromFile("maps/last_saved.map");
 
     // UNITS
-    const w1 = Unit.new(@enumFromInt(3), 0, &rules); // Warrior
-    const a1 = Unit.new(@enumFromInt(4), 0, &rules); // Archer
-    const b1 = Unit.new(@enumFromInt(7), 0, &rules); // Trireme
-    const s1 = Unit.new(@enumFromInt(5), 0, &rules); // Scout
+    try world.addUnit(1200, @enumFromInt(4), 0);
+    try world.addUnit(1201, @enumFromInt(2), 0);
+    try world.addUnit(1203, @enumFromInt(3), 0);
+    try world.addUnit(1204, @enumFromInt(7), 0);
 
-    try world.units.putNoStackAutoSlot(1200, w1);
-    try world.units.putNoStackAutoSlot(1201, a1);
-    try world.units.putNoStackAutoSlot(1203, b1);
-    try world.units.putNoStackAutoSlot(1198, s1);
+    try world.addUnit(1206, @enumFromInt(7), 1);
+    try world.addUnit(1139, @enumFromInt(3), 1);
 
     try world.addCity(1089);
 
@@ -376,9 +374,7 @@ pub fn main() !void {
                             }
                         }
 
-                        if (raylib.IsKeyDown(raylib.KEY_Q)) {
-                            // Unit.tryBattle(selected_idx.?, clicked_idx, &world);
-                        } else {
+                        if (raylib.IsKeyDown(raylib.KEY_Q)) {} else {
                             _ = try world.move(maybe_unit_reference.?, mouse_idx);
                         }
                         maybe_selected_idx = null;
@@ -420,7 +416,19 @@ pub fn main() !void {
         raylib.ClearBackground(raylib.BLACK);
 
         raylib.BeginMode2D(camera.camera);
-        graphics.renderWorld(&world, bounding_box, &world.players[0].view, texture_set);
+
+        var maybe_seleceted_unit_id: ?Unit.UnitID = null;
+        if (maybe_unit_reference) |unit_reference| blk: {
+            maybe_seleceted_unit_id = (world.units.derefToPtr(unit_reference) orelse break :blk).id;
+        }
+        graphics.renderWorld(
+            &world,
+            bounding_box,
+            &world.players[0].view,
+            camera.camera.zoom,
+            maybe_seleceted_unit_id,
+            texture_set,
+        );
         if (maybe_selected_idx) |selected_idx| {
             if (raylib.IsKeyDown(raylib.KEY_M)) {
                 for (bounding_box.x_min..bounding_box.x_max) |x| {
@@ -435,7 +443,7 @@ pub fn main() !void {
                 selected_idx,
                 world.grid,
                 texture_set.edge_textures[0],
-                .{ .tint = .{ .r = 0, .g = 250, .b = 150, .a = 100 } },
+                .{ .tint = .{ .r = 250, .g = 100, .b = 100, .a = 150 } },
                 texture_set,
             );
         }
@@ -466,23 +474,6 @@ pub fn main() !void {
                             world.players[0].view.in_view.hexes.get(index) orelse 0,
                         }, 0, 0.8, .{}, texture_set);
                     }
-                }
-
-                var spiral_iter = Grid.SpiralIterator.new(selected_idx, 12, world.grid);
-                //var ring_iter = Grid.RingIterator.new(maybe_selected_idx.?, 2, world.grid);
-                var j: u32 = 0;
-                while (spiral_iter.next(world.grid)) |idx| {
-                    render.renderFormatHexAuto(
-                        idx,
-                        world.grid,
-                        "spiral={}",
-                        .{j},
-                        -0.4,
-                        -0.6,
-                        .{ .font_size = 6 },
-                        texture_set,
-                    );
-                    j += 1;
                 }
             }
         }

@@ -22,6 +22,9 @@ pub const BoundingBox = struct {
     pub fn contains(self: BoundingBox, x: usize, y: usize) bool {
         return x >= self.x_min and y >= self.y_min and x <= self.x_max and y <= self.y_max;
     }
+    pub fn containsIdx(self: BoundingBox, idx: Idx, grid: Grid) bool {
+        return self.contains(grid.xFromIdx(idx), grid.yFromIdx(idx));
+    }
 };
 
 camera: raylib.Camera2D,

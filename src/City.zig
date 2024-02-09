@@ -371,10 +371,8 @@ pub fn checkProduction(self: *Self, world: *World) !ProductionResult {
 }
 
 pub fn createUnit(self: *Self, world: *World, unit_type: Rules.UnitType) !void {
-    const new_unit = Unit.new(unit_type, self.faction_id, world.rules);
-    try world.units.putOrStackAutoSlot(self.position, new_unit);
-    std.debug.print("UNIT CREATED \n", .{});
-    world.units.refresh();
+    try world.addUnit(self.position, unit_type, self.faction_id);
+    world.fullUpdateViews();
 }
 
 /// check if border expansion

@@ -95,49 +95,49 @@ pub fn renderTextureInHexSeries(tile_idx: Idx, grid: Grid, texture: raylib.Textu
 }
 
 /// Format print can do UP TO 31 characters
-pub fn renderFormatHexAuto(tile_idx: Idx, grid: Grid, comptime fmt: []const u8, fmt_args: anytype, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
+pub fn renderFormatHexAuto(idx: Idx, grid: Grid, comptime fmt: []const u8, fmt_args: anytype, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
     const l = fmt.len;
     blk: {
-        renderFormatHex(4 * l, tile_idx, grid, //
+        renderFormatHex(4 * l, idx, grid, //
             fmt, fmt_args, off_x, off_y, args, ts) catch break :blk;
         return;
     }
     blk: {
-        renderFormatHex(16 * l, tile_idx, grid, //
+        renderFormatHex(16 * l, idx, grid, //
             fmt, fmt_args, off_x, off_y, args, ts) catch break :blk;
         return;
     }
     blk: {
-        renderFormatHex(64 * l, tile_idx, grid, //
+        renderFormatHex(64 * l, idx, grid, //
             fmt, fmt_args, off_x, off_y, args, ts) catch break :blk;
         return;
     }
-    renderFormatHex(1 << 16, tile_idx, grid, //
+    renderFormatHex(1 << 16, idx, grid, //
         fmt, fmt_args, off_x, off_y, args, ts) catch
         @panic("Failed auto format.");
 }
 
-pub fn renderFormatHex(comptime buflen: comptime_int, tile_idx: Idx, grid: Grid, comptime fmt: []const u8, fmt_args: anytype, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) !void {
+pub fn renderFormatHex(comptime buflen: comptime_int, idx: Idx, grid: Grid, comptime fmt: []const u8, fmt_args: anytype, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) !void {
     var buf: [buflen]u8 = undefined;
     const text = try std.fmt.bufPrintZ(&buf, fmt, fmt_args);
-    renderTextInHex(tile_idx, grid, text, off_x, off_y, args, ts);
+    renderTextInHex(idx, grid, text, off_x, off_y, args, ts);
 }
 
 /// Render text in hex. Render text with a relative position form tile center (offset messured in hex radius)
-pub fn renderTextInHex(tile_idx: Idx, grid: Grid, text: []const u8, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
-    const pos = posInHex(tile_idx, grid, off_x, off_y, ts);
+pub fn renderTextInHex(idx: Idx, grid: Grid, text: []const u8, off_x: f32, off_y: f32, args: RenderTextArgs, ts: TextureSet) void {
+    const pos = posInHex(idx, grid, off_x, off_y, ts);
     renderText(text, args.font orelse ts.font, pos, args, ts);
 }
 
 /// Render texture
-pub fn renderTextureHex(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, args: RenderTextureArgs, ts: TextureSet) void {
-    const pos = posInHex(tile_idx, grid, 0, 0, ts);
+pub fn renderTextureHex(idx: Idx, grid: Grid, texture: raylib.Texture2D, args: RenderTextureArgs, ts: TextureSet) void {
+    const pos = posInHex(idx, grid, 0, 0, ts);
     renderTexture(texture, pos, args);
 }
 
 /// Render texture in hex . Render text with a relative position form tile center (offset messured in hex radius)
-pub fn renderTextureInHex(tile_idx: Idx, grid: Grid, texture: raylib.Texture2D, off_x: f32, off_y: f32, args: RenderTextureArgs, ts: TextureSet) void {
-    const pos = posInHex(tile_idx, grid, off_x, off_y, ts);
+pub fn renderTextureInHex(idx: Idx, grid: Grid, texture: raylib.Texture2D, off_x: f32, off_y: f32, args: RenderTextureArgs, ts: TextureSet) void {
+    const pos = posInHex(idx, grid, off_x, off_y, ts);
     renderTexture(texture, pos, args);
 }
 

@@ -238,6 +238,38 @@ pub fn nextReference(self: *const Self, reference: Reference) ?Reference {
     }
 }
 
+pub fn nextReferenceNoneLooping(self: *const Self, reference: Reference) ?Reference {
+    blk: {
+        if (reference.stacked != .none) {
+            const stacked = self.stacked.get(reference.stacked) orelse break :blk;
+            if (stacked.idx != reference.idx) break :blk;
+            if (stacked.slot != reference.slot) break :blk;
+
+            if (stacked.storage.stacked != .none) return .{
+                .idx = reference.idx,
+                .slot = reference.slot,
+                .stacked = stacked.storage.stacked,
+            };
+        } else if (self.maps[@intFromEnum(reference.slot)].get(reference.idx)) |storage| {
+            if (storage.stacked != .none) return .{
+                .idx = reference.idx,
+                .slot = reference.slot,
+                .stacked = storage.stacked,
+            };
+        }
+    }
+
+    var slot = reference.slot;
+    _ = slot.next();
+    while (true) {
+        if (self.maps[@intFromEnum(slot)].contains(reference.idx)) return .{
+            .idx = reference.idx,
+            .slot = slot,
+        };
+        if (!slot.next()) return null;
+    }
+}
+
 pub fn deref(self: *const Self, reference: Reference) ?Unit {
     if (reference.stacked != .none) {
         const stacked = self.stacked.get(reference.stacked) orelse return null;
@@ -283,18 +315,19 @@ pub fn refresh(self: *Self) void {
         }
     }
 }
-
+pub const UnitItem = struct {
+    slot: Slot,
+    unit: Unit,
+    idx: Idx,
+};
 pub fn iterator(self: *const Self) struct {
     const Iterator = @This();
     units: *const Self,
     slot: Slot = Slot.first(),
     index: usize = 0,
+    stack_depth: u8 = 0,
 
-    pub fn next(iter: *Iterator) ?struct {
-        slot: Slot,
-        unit: Unit,
-        idx: Idx,
-    } {
+    pub fn next(iter: *Iterator) ?UnitItem {
         if (iter.index >= iter.units.maps[@intFromEnum(iter.slot)].count()) {
             while (iter.slot.next()) {
                 if (iter.units.maps[@intFromEnum(iter.slot)].count() != 0) break;
@@ -306,6 +339,7 @@ pub fn iterator(self: *const Self) struct {
         const unit = map.values()[iter.index].unit;
         const idx = map.keys()[iter.index];
         iter.index += 1;
+
         return .{
             .slot = iter.slot,
             .unit = unit,
@@ -314,6 +348,58 @@ pub fn iterator(self: *const Self) struct {
     }
 } {
     return .{ .units = self };
+}
+
+pub const RefrenceItem = struct {
+    slot: Slot,
+    unit: Unit,
+    idx: Idx,
+    stack_depth: u8,
+    refrence: Reference,
+};
+pub fn refrenceIterator(self: *const Self, max_idx: Idx) struct {
+    const Iterator = @This();
+    units: *const Self,
+    refrence: ?Reference = null,
+    slot: Slot = Slot.first(),
+    next_idx: Idx = 0,
+    stack_depth: u8 = 0,
+    max_idx: Idx,
+
+    pub fn next(iter: *Iterator) ?RefrenceItem {
+        if (iter.refrence) |last_ref| {
+            const maybe_next_ref = iter.units.nextReferenceNoneLooping(last_ref);
+            if (maybe_next_ref) |next_ref| {
+                if (last_ref.slot == next_ref.slot)
+                    iter.stack_depth += 1
+                else
+                    iter.stack_depth = 0;
+            }
+            iter.refrence = maybe_next_ref;
+        }
+
+        while (iter.refrence == null) {
+            if (iter.next_idx >= iter.max_idx) return null;
+            iter.refrence = iter.units.firstReference(iter.next_idx);
+            iter.next_idx += 1;
+            iter.stack_depth = 0;
+        }
+
+        return .{
+            .slot = iter.refrence.?.slot,
+            .stack_depth = iter.stack_depth,
+            .idx = iter.refrence.?.idx,
+            .unit = iter.units.deref(iter.refrence.?).?,
+            .refrence = iter.refrence.?,
+        };
+    }
+} {
+    return .{ .units = self, .max_idx = max_idx };
+}
+
+fn hasStacked(self: *const Self, ref: Reference) bool {
+    self.nextReference(ref);
+    return ref.stacked != .none;
 }
 
 fn nextStackedKey(self: *Self) Stacked.Key {
