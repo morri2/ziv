@@ -257,6 +257,8 @@ fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
             if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, self.world.rules)) return false;
 
             if (!try self.world.settleCity(settler_ref)) return false;
+
+            view_update = true;
         },
     }
 
