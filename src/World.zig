@@ -202,15 +202,14 @@ pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: FactionID) bool {
     return true;
 }
 
-pub fn settleCity(self: *Self, idx: Idx, refrence: Units.Reference) !bool {
-    const unit = self.units.deref(refrence) orelse return false;
-    if (!self.canSettleCityAt(idx, unit.faction_id)) return false;
+pub fn settleCity(self: *Self, reference: Units.Reference) !bool {
+    const unit = self.units.deref(reference) orelse return false;
+    if (!self.canSettleCityAt(reference.idx, unit.faction_id)) return false;
     if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, self.rules)) return false;
-    if (refrence.idx != idx) return false;
     if (unit.movement <= 0) return false;
 
-    try self.addCity(idx, unit.faction_id);
-    self.units.removeReference(refrence); // will this fuck up the refrence held by controll?
+    try self.addCity(reference.idx, unit.faction_id);
+    self.units.removeReference(reference); // will this fuck up the refrence held by controll?
 
     return true;
 }

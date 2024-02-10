@@ -416,13 +416,11 @@ pub fn main() !void {
         // SETTLE CITY
         if (raylib.IsKeyPressed(raylib.KEY_B)) {
             if (maybe_unit_reference) |unit_ref| {
-                if (maybe_selected_idx) |sel_idx| {
-                    if (try game.world.settleCity(sel_idx, unit_ref)) {
-                        std.debug.print("Settled city!\n", .{});
-                        //maybe_unit_reference = null;
-                    } else {
-                        std.debug.print("failed to settle city\n", .{});
-                    }
+                if (try game.world.settleCity(unit_ref)) {
+                    std.debug.print("Settled city!\n", .{});
+                    //maybe_unit_reference = null;
+                } else {
+                    std.debug.print("failed to settle city\n", .{});
                 }
             }
         }
