@@ -459,11 +459,6 @@ pub fn main() !void {
 
         raylib.BeginMode2D(camera.camera);
 
-        var maybe_seleceted_unit_id: ?Unit.UnitID = null;
-        if (maybe_unit_reference) |unit_reference| blk: {
-            maybe_seleceted_unit_id = (world.units.derefToPtr(unit_reference) orelse break :blk).id;
-        }
-
         var view: ?*PlayerView = null;
         if (maybe_player_view) |player_view| view = &world.players[player_view].view;
 
@@ -472,7 +467,7 @@ pub fn main() !void {
             bounding_box,
             view,
             camera.camera.zoom,
-            maybe_seleceted_unit_id,
+            maybe_unit_reference,
             texture_set,
         );
         if (maybe_selected_idx) |selected_idx| {

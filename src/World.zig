@@ -52,7 +52,6 @@ players: []Player,
 player_count: u8,
 
 turn_counter: usize,
-unit_counter: u32 = 0,
 
 // Per tile data
 terrain: []Terrain,
@@ -131,8 +130,7 @@ pub fn addCity(self: *Self, idx: Idx, faction_id: Player.FactionID) !void {
 }
 
 pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: Player.FactionID) !void {
-    const unit = Unit.new(unit_temp, self.unit_counter, faction, self.rules);
-    self.unit_counter += 1;
+    const unit = Unit.new(unit_temp, faction, self.rules);
     try self.units.putOrStackAutoSlot(idx, unit);
 }
 
