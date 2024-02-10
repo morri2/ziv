@@ -11,8 +11,7 @@ const Improvements = Rules.Improvements;
 
 const City = @import("City.zig");
 const HexSet = @import("HexSet.zig");
-const PlayerView = @import("PlayerView.zig");
-const Player = @import("Player.zig");
+const View = @import("View.zig");
 
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
@@ -22,6 +21,26 @@ const Dir = Grid.Dir;
 const Units = @import("Units.zig");
 
 const Unit = @import("Unit.zig");
+
+pub const FactionID = enum(u8) {
+    civilization_0 = 0,
+    city_state_0 = 32,
+    barbarian = 255,
+    _,
+
+    pub fn toCivilizationID(self: FactionID) ?CivilizationID {
+        if (@intFromEnum(self) >= @intFromEnum(FactionID.city_state_0)) return null;
+        return @enumFromInt(@intFromEnum(self));
+    }
+};
+
+pub const CivilizationID = enum(u5) {
+    _,
+
+    pub fn toFactionID(self: CivilizationID) FactionID {
+        return @enumFromInt(@intFromEnum(self));
+    }
+};
 
 /// The lowest index is always in low :))
 pub const WorkInProgress = struct {
@@ -48,8 +67,7 @@ rules: *const Rules,
 
 grid: Grid,
 
-players: []Player,
-player_count: u8,
+views: []View,
 
 turn: u32,
 
@@ -73,10 +91,10 @@ pub fn init(
     width: u32,
     height: u32,
     wrap_around: bool,
-    player_count: u8,
+    civ_count: u8,
     rules: *const Rules,
 ) !Self {
-    std.debug.assert(player_count >= 1);
+    std.debug.assert(civ_count >= 1);
     const grid = Grid.init(width, height, wrap_around);
 
     const terrain = try allocator.alloc(Terrain, grid.len);
@@ -87,13 +105,12 @@ pub fn init(
     errdefer allocator.free(improvements);
     @memset(improvements, std.mem.zeroes(Improvements));
 
-    const players = try allocator.alloc(Player, player_count);
-    errdefer allocator.free(players);
-    for (0..players.len) |i| players[i] = try Player.init(allocator, @as(u8, @intCast(i)), &grid);
+    const views = try allocator.alloc(View, civ_count);
+    errdefer allocator.free(views);
+    for (views) |*view| view.* = try View.init(allocator, &grid);
 
     return Self{
-        .player_count = player_count,
-        .players = players,
+        .views = views,
         .allocator = allocator,
         .grid = grid,
         .terrain = terrain,
@@ -119,9 +136,9 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.terrain);
 
     for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
-    for (0..self.players.len) |i| self.players[i].deinit();
+    for (self.views) |*view| view.deinit();
 
-    self.allocator.free(self.players);
+    self.allocator.free(self.views);
     self.cities.deinit(self.allocator);
 }
 
@@ -154,12 +171,12 @@ pub fn nextTurn(self: *Self) !void {
     self.turn += 1;
 }
 
-pub fn addCity(self: *Self, idx: Idx, faction_id: Player.FactionID) !void {
+pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
     const city = City.new(idx, faction_id, self);
     try self.cities.put(self.allocator, idx, city);
 }
 
-pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: Player.FactionID) !void {
+pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID) !void {
     const unit = Unit.new(unit_temp, faction, self.rules);
     try self.units.putOrStackAutoSlot(idx, unit);
 }
@@ -169,12 +186,12 @@ pub fn claimed(self: *const Self, idx: Idx) bool {
     return false;
 }
 
-pub fn claimedFaction(self: *const Self, idx: Idx) ?Player.FactionID {
+pub fn claimedFaction(self: *const Self, idx: Idx) ?FactionID {
     for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
     return null;
 }
 
-pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: Player.FactionID) bool {
+pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: FactionID) bool {
     if (self.claimedFaction(idx)) |claimed_by| {
         if (claimed_by != faction) return false;
     }
@@ -470,16 +487,17 @@ pub fn fullUpdateViews(self: *Self) void {
     var iter //
         = self.units.iterator();
 
-    for (self.players, 0..) |_, i| {
-        self.players[i].view.unsetAllVisable(self);
+    for (self.views) |*view| {
+        view.unsetAllVisable(self);
     }
 
     while (iter.next()) |item| {
         var vision = self.unitFOV(&item.unit, item.idx);
         defer vision.deinit();
-        const player_id = item.unit.faction_id;
 
-        self.players[player_id].view.addVisionSet(vision);
+        if (item.unit.faction_id.toCivilizationID()) |civ_id| {
+            self.views[@intFromEnum(civ_id)].addVisionSet(vision);
+        }
     }
 
     for (self.cities.values()) |city| {
@@ -489,8 +507,9 @@ pub fn fullUpdateViews(self: *Self) void {
         vision.addOther(&city.claimed);
         vision.addOther(&city.adjacent);
 
-        const player_id = city.faction_id;
-        self.players[player_id].view.addVisionSet(vision);
+        if (city.faction_id.toCivilizationID()) |civ_id| {
+            self.views[@intFromEnum(civ_id)].addVisionSet(vision);
+        }
     }
 }
 

@@ -8,14 +8,12 @@ const World = @import("World.zig");
 const Unit = @import("Unit.zig");
 const Units = @import("Units.zig");
 const City = @import("City.zig");
-const PlayerView = @import("PlayerView.zig");
+const View = @import("View.zig");
 
 const Camera = @import("rendering/Camera.zig");
 const TextureSet = @import("rendering/TextureSet.zig");
 const render = @import("rendering/render_util.zig");
 const graphics = @import("rendering/graphics.zig");
-
-const Player = @import("Player.zig");
 
 const gui = @import("rendering/gui.zig");
 
@@ -60,19 +58,18 @@ pub fn main() !void {
     try world.loadFromFile("maps/last_saved.map");
 
     // UNITS
-    try world.addUnit(1200, @enumFromInt(4), 0);
-    try world.addUnit(1202, @enumFromInt(2), 0);
-    try world.addUnit(1205, @enumFromInt(3), 0);
-    try world.addUnit(1203, @enumFromInt(7), 0);
+    try world.addUnit(1200, @enumFromInt(4), @enumFromInt(0));
+    try world.addUnit(1202, @enumFromInt(2), @enumFromInt(0));
+    try world.addUnit(1205, @enumFromInt(3), @enumFromInt(0));
+    try world.addUnit(1203, @enumFromInt(7), @enumFromInt(0));
 
-    try world.addUnit(1150, @enumFromInt(7), 1);
-    try world.addUnit(1139, @enumFromInt(3), 1);
+    try world.addUnit(1150, @enumFromInt(7), @enumFromInt(1));
+    try world.addUnit(1139, @enumFromInt(3), @enumFromInt(1));
 
-    try world.addCity(1089, 0);
-    try world.addCity(485, 1);
+    try world.addCity(1089, @enumFromInt(0));
+    try world.addCity(485, @enumFromInt(1));
 
-    var maybe_player_view: ?Player.FactionID = 0;
-    maybe_player_view = 0;
+    var civ_id: World.CivilizationID = @enumFromInt(0);
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -118,7 +115,7 @@ pub fn main() !void {
     edit_window.addItem(.rivers, "River");
     edit_window.addItem(.resource, "Resource");
 
-    const ViewWindow = gui.SelectWindow(Player.FactionID, .{
+    const ViewWindow = gui.SelectWindow(World.CivilizationID, .{
         .WIDTH = 200,
         .COLUMNS = 4,
         .ENTRY_HEIGHT = 30,
@@ -129,8 +126,8 @@ pub fn main() !void {
     var view_window = ViewWindow.newEmpty();
     view_window.setName("SELECT VIEW");
 
-    for (0..world.player_count) |i| {
-        view_window.addItem(@intCast(i), "X");
+    for (0..world.views.len) |i| {
+        view_window.addItem(@enumFromInt(i), "X");
     }
 
     view_window.bounds.x += 300;
@@ -278,7 +275,7 @@ pub fn main() !void {
 
                 // view shit
 
-                _ = view_window.fetchSelectedNull(&maybe_player_view);
+                _ = view_window.fetchSelected(&civ_id);
 
                 // Set edit brush
 
@@ -442,8 +439,7 @@ pub fn main() !void {
 
         raylib.BeginMode2D(camera.camera);
 
-        var view: ?*PlayerView = null;
-        if (maybe_player_view) |player_view| view = &world.players[player_view].view;
+        const view = &world.views[@intFromEnum(civ_id)];
 
         graphics.renderWorld(
             &world,
@@ -495,7 +491,7 @@ pub fn main() !void {
                         if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
 
                         render.renderFormatHexAuto(index, world.grid, "view: {}", .{
-                            world.players[0].view.in_view.hexes.get(index) orelse 0,
+                            view.in_view.hexes.get(index) orelse 0,
                         }, 0, 0.8, .{}, texture_set);
                     }
                 }

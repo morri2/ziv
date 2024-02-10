@@ -7,7 +7,7 @@ const Transport = Rules.Transport;
 const Promotion = Rules.Promotion;
 const UnitType = Rules.UnitType;
 const UnitEffect = Rules.UnitEffect;
-const Player = @import("Player.zig");
+const World = @import("World.zig");
 
 const Self = @This();
 
@@ -55,10 +55,10 @@ hit_points: u8 = 100, // All units have 100 HP
 prepared: bool = false, // catapults etc
 fortified: bool = false,
 promotions: Promotion.Set = Promotion.Set.initEmpty(),
-faction_id: Player.FactionID,
+faction_id: World.FactionID,
 movement: f32 = 0,
 
-pub fn new(unit_type: UnitType, player_id: Player.FactionID, rules: *const Rules) Self {
+pub fn new(unit_type: UnitType, player_id: World.FactionID, rules: *const Rules) Self {
     var unit = Self{
         .faction_id = player_id,
         .type = unit_type,

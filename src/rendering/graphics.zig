@@ -10,8 +10,7 @@ const Idx = Grid.Idx;
 const World = @import("../World.zig");
 const Unit = @import("../Unit.zig");
 const Units = @import("../Units.zig");
-const PlayerView = @import("../PlayerView.zig");
-const Player = @import("../Player.zig");
+const View = @import("../View.zig");
 
 const TextureSet = @import("TextureSet.zig");
 
@@ -29,7 +28,7 @@ const raylib = @cImport({
 pub fn renderWorld(
     world: *const World,
     bbox: BoundingBox,
-    maybe_view: ?*const PlayerView,
+    maybe_view: ?*const View,
     zoom: f32,
     maybe_unit_reference: ?Units.Reference,
     ts: TextureSet,
@@ -44,7 +43,7 @@ pub fn renderWorld(
     renderTerraIncognita(world.grid, bbox, maybe_view, ts);
 }
 
-pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
     if (maybe_view == null) return;
 
     const fow_color = .{ .a = 90, .r = 150, .g = 150, .b = 150 };
@@ -61,7 +60,7 @@ pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const P
 }
 
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
-pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
     const outline_color = .{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
     for (bbox.y_min..bbox.y_max) |y| {
         for (bbox.x_min..bbox.x_max) |x| {
@@ -106,7 +105,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
 
         for (city.claimed.slice()) |claimed| {
             render.renderTextureInHex(claimed, world.grid, ts.city_border_texture, 0, 0, .{
-                .tint = ts.player_primary_color[city.faction_id],
+                .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
                 .scale = 0.95,
             }, ts);
 
@@ -118,7 +117,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
         }
 
         render.renderTextureInHex(idx, world.grid, ts.city_border_texture, 0, 0, .{
-            .tint = ts.player_primary_color[city.faction_id],
+            .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
             .scale = 0.95,
         }, ts);
 
@@ -214,7 +213,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
     }
 }
 
-pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
             const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
@@ -236,7 +235,7 @@ pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
 pub fn renderUnits(
     world: *const World,
     bbox: BoundingBox,
-    view: ?*const PlayerView,
+    view: ?*const View,
     maybe_unit_reference: ?Units.Reference,
     zoom: f32,
     ts: TextureSet,
@@ -266,7 +265,7 @@ pub fn renderUnits(
 
 pub const RenderUnitContext = struct {
     slot: Units.Slot,
-    faction_id: Player.FactionID,
+    faction_id: World.FactionID,
     stack: u8 = 0,
     glow: bool = false,
     exausted: bool = false,
@@ -292,8 +291,8 @@ pub fn renderUnit(idx: Idx, grid: Grid, unit: Unit, context: RenderUnitContext, 
         .trade => off_y -= 1.0,
     }
 
-    const bg_color: raylib.Color = ts.player_primary_color[context.faction_id];
-    const fg_color: raylib.Color = ts.player_secoundary_color[context.faction_id];
+    const bg_color: raylib.Color = ts.player_primary_color[@intFromEnum(context.faction_id)];
+    const fg_color: raylib.Color = ts.player_secoundary_color[@intFromEnum(context.faction_id)];
     const glow_color = raylib.YELLOW;
     const scale: f32 = @max(ZOOM_MIN_SCALE, @min(ZOOM_MAX_SCALE, ZOOM_FACTOR * 1 / context.zoom));
     if (context.glow) render.renderTextureInHex(idx, grid, glow_texture, off_x, off_y, .{ .tint = glow_color, .scale = scale }, ts);
@@ -310,7 +309,7 @@ pub fn renderUnit(idx: Idx, grid: Grid, unit: Unit, context: RenderUnitContext, 
     }, off_x + 0.2, off_y + 0.1, .{ .tint = raylib.WHITE, .font_size = 8 }, ts);
 }
 
-pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, ts: TextureSet) void {
+pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
     for (world.resources.keys(), world.resources.values()) |idx, res| {
         const x = world.grid.xFromIdx(idx);
         const y = world.grid.yFromIdx(idx);

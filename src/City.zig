@@ -3,7 +3,6 @@ const World = @import("World.zig");
 const Idx = @import("Grid.zig").Idx;
 const HexSet = @import("HexSet.zig");
 const Unit = @import("Unit.zig");
-const Player = @import("Player.zig");
 
 const Rules = @import("Rules.zig");
 const Yield = Rules.Yield;
@@ -63,7 +62,7 @@ const WorkInProgressProductionProject = struct {
 
 //buildings: // bitfield for all buildings in the game?
 
-faction_id: Player.FactionID,
+faction_id: World.FactionID,
 
 name: []const u8 = "shithole",
 city_id: usize,
@@ -97,7 +96,7 @@ halted_production_projects: []WorkInProgressProductionProject = &.{},
 
 allocator: std.mem.Allocator,
 
-pub fn new(position: Idx, player_id: Player.FactionID, world: *const World) Self {
+pub fn new(position: Idx, player_id: World.FactionID, world: *const World) Self {
     var claimed = HexSet.init(world.allocator);
     claimed.add(position);
     claimed.addAdjacent(&world.grid);
