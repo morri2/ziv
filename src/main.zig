@@ -222,7 +222,7 @@ pub fn main() !void {
 
     for (0..rules.unit_type_count) |uti| {
         const ut: Rules.UnitType = @enumFromInt(uti);
-        const pt = City.ProductionTarget{ .UnitType = ut };
+        const pt = City.ProductionTarget{ .unit = ut };
         var buf: [255]u8 = undefined;
         const label = try std.fmt.bufPrint(&buf, "Build unit: {s}", .{ut.name(world.rules)});
         city_construction_window.addItem(pt, label);

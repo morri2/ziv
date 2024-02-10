@@ -126,15 +126,27 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn nextTurn(self: *Self) !void {
-    for (self.cities.values()) |*city| {
+    for (self.cities.keys(), self.cities.values()) |idx, *city| {
         const ya = city.getWorkedTileYields(self);
 
         _ = city.processYields(&ya);
         const growth_res = city.checkGrowth(self);
         _ = growth_res;
 
-        _ = city.checkExpansion();
-        _ = try city.checkProduction(self);
+        var update_view = city.checkExpansion();
+        const production_result = try city.checkProduction();
+        switch (production_result) {
+            .done => |project| switch (project) {
+                .unit => |unit_type| {
+                    try self.addUnit(idx, unit_type, city.faction_id);
+                    update_view = true;
+                },
+                else => unreachable, // TODO
+            },
+            else => {},
+        }
+
+        if (update_view) self.fullUpdateViews();
     }
 
     self.units.refresh();
