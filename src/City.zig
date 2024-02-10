@@ -34,13 +34,18 @@ const GrowthResult = enum {
     starvation,
 };
 
-pub const ProductionTarget = union(enum) {
+pub const ProductionTarget = union(Type) {
     building: Rules.Building,
     unit: Rules.UnitType,
-    perpetual: union(enum) {
-        money_making,
-        research,
-    },
+    perpetual_money: void,
+    perpetual_research: void,
+
+    pub const Type = enum(u8) {
+        building = 0,
+        unit = 1,
+        perpetual_money = 2,
+        perpetual_research = 3,
+    };
 };
 
 const ProductionResult = union(enum) {
@@ -192,10 +197,8 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumulator) YieldAcc
     // Continual production - should this be modified by production or gold modifier?
     if (self.current_production_project) |work| {
         switch (work.project) {
-            .perpetual => |perp_proj| switch (perp_proj) {
-                .money_making => gold += production / 2.0,
-                .research => science += production / 2.0,
-            },
+            .perpetual_money => gold += production / 2.0,
+            .perpetual_research => science += production / 2.0,
             else => {},
         }
     }
@@ -383,7 +386,7 @@ pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
 pub fn checkProduction(self: *Self) !ProductionResult {
     if (self.current_production_project == null) return .none_selected;
     const work = self.current_production_project.?;
-    if (work.project == .perpetual) return .perpetual;
+    if (work.project == .perpetual_money or work.project == .perpetual_research) return .perpetual;
 
     if (work.progress >= work.production_needed) {
         // save overproduction :)

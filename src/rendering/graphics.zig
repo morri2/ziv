@@ -186,8 +186,9 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
             //TODO fix Perpetual icons and Building
             const icon = switch (project.project) {
                 .unit => |unit_type| ts.unit_symbols[@intFromEnum(unit_type)],
-                .perpetual => unreachable,
                 .building => unreachable,
+                .perpetual_money => unreachable,
+                .perpetual_research => unreachable,
             };
 
             render.renderChargeCircleInHex(
