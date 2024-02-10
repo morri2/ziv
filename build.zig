@@ -28,6 +28,8 @@ pub fn build(b: *std.Build) void {
     raygui_lib.addIncludePath(raygui_dep.path("src"));
     raygui_lib.linkLibC();
 
+    const zig_clap_dep = b.dependency("zig-clap", .{});
+
     const exe = b.addExecutable(.{
         .name = "ziv",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -39,6 +41,7 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(raygui_lib);
     exe.addIncludePath(raylib_dep.path("src"));
     exe.addIncludePath(raygui_dep.path("src"));
+    exe.root_module.addImport("clap", zig_clap_dep.module("clap"));
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
