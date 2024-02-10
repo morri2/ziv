@@ -135,7 +135,10 @@ pub fn setBlocking(self: Self, blocking: bool) !void {
             }
             _ = try std.os.fcntl(self.socket, std.os.F.SETFL, flags);
         },
-        .windows => {},
+        .windows => {
+            const mode: i32 = if (blocking) 0 else 1;
+            _ = std.os.windows.ws2_32.ioctlsocket(self.socket, std.os.windows.ws2_32.FIONBIO, &mode);
+        },
         else => unreachable,
     }
 }
