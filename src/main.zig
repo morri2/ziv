@@ -61,11 +61,11 @@ pub fn main() !void {
 
     // UNITS
     try world.addUnit(1200, @enumFromInt(4), 0);
-    try world.addUnit(1201, @enumFromInt(2), 0);
-    try world.addUnit(1203, @enumFromInt(3), 0);
-    try world.addUnit(1204, @enumFromInt(7), 0);
+    try world.addUnit(1202, @enumFromInt(2), 0);
+    try world.addUnit(1205, @enumFromInt(3), 0);
+    try world.addUnit(1203, @enumFromInt(7), 0);
 
-    try world.addUnit(1206, @enumFromInt(7), 1);
+    try world.addUnit(1150, @enumFromInt(7), 1);
     try world.addUnit(1139, @enumFromInt(3), 1);
 
     try world.addCity(1089, 0);
