@@ -222,7 +222,7 @@ pub fn main() !void {
 
     for (0..rules.unit_type_count) |uti| {
         const ut: Rules.UnitType = @enumFromInt(uti);
-        const pt = City.ProductionTarget{ .UnitType = ut };
+        const pt = City.ProductionTarget{ .unit = ut };
         var buf: [255]u8 = undefined;
         const label = try std.fmt.bufPrint(&buf, "Build unit: {s}", .{ut.name(world.rules)});
         city_construction_window.addItem(pt, label);
@@ -365,24 +365,7 @@ pub fn main() !void {
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
-                for (world.cities.keys()) |city_key| {
-                    var city = world.cities.getPtr(city_key) orelse continue;
-                    const ya = city.getWorkedTileYields(&world);
-
-                    _ = city.processYields(&ya);
-                    const growth_res = city.checkGrowth(&world);
-                    _ = city.checkExpansion();
-                    _ = try city.checkProduction(&world);
-
-                    switch (growth_res) {
-                        .growth => std.debug.print("TOWN HAS GROWN! \n", .{}),
-                        else => {},
-                    }
-                }
-
-                world.units.refresh();
-            }
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) try world.nextTurn();
 
             // SELECTION
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
@@ -459,11 +442,6 @@ pub fn main() !void {
 
         raylib.BeginMode2D(camera.camera);
 
-        var maybe_seleceted_unit_id: ?Unit.UnitID = null;
-        if (maybe_unit_reference) |unit_reference| blk: {
-            maybe_seleceted_unit_id = (world.units.derefToPtr(unit_reference) orelse break :blk).id;
-        }
-
         var view: ?*PlayerView = null;
         if (maybe_player_view) |player_view| view = &world.players[player_view].view;
 
@@ -472,7 +450,7 @@ pub fn main() !void {
             bounding_box,
             view,
             camera.camera.zoom,
-            maybe_seleceted_unit_id,
+            maybe_unit_reference,
             texture_set,
         );
         if (maybe_selected_idx) |selected_idx| {

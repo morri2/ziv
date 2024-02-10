@@ -51,8 +51,7 @@ grid: Grid,
 players: []Player,
 player_count: u8,
 
-turn_counter: usize,
-unit_counter: u32 = 0,
+turn: u32,
 
 // Per tile data
 terrain: []Terrain,
@@ -69,6 +68,102 @@ units: Units,
 
 cities: std.AutoArrayHashMapUnmanaged(Idx, City),
 
+pub fn init(
+    allocator: std.mem.Allocator,
+    width: u32,
+    height: u32,
+    wrap_around: bool,
+    player_count: u8,
+    rules: *const Rules,
+) !Self {
+    std.debug.assert(player_count >= 1);
+    const grid = Grid.init(width, height, wrap_around);
+
+    const terrain = try allocator.alloc(Terrain, grid.len);
+    errdefer allocator.free(terrain);
+    @memset(terrain, std.mem.zeroes(Terrain));
+
+    const improvements = try allocator.alloc(Improvements, grid.len);
+    errdefer allocator.free(improvements);
+    @memset(improvements, std.mem.zeroes(Improvements));
+
+    const players = try allocator.alloc(Player, player_count);
+    errdefer allocator.free(players);
+    for (0..players.len) |i| players[i] = try Player.init(allocator, @as(u8, @intCast(i)), &grid);
+
+    return Self{
+        .player_count = player_count,
+        .players = players,
+        .allocator = allocator,
+        .grid = grid,
+        .terrain = terrain,
+        .improvements = improvements,
+        .resources = .{},
+        .work_in_progress = .{},
+        .rivers = .{},
+        .turn = 1,
+        .cities = .{},
+        .rules = rules,
+        .units = Units.init(rules, allocator),
+    };
+}
+
+pub fn deinit(self: *Self) void {
+    self.rivers.deinit(self.allocator);
+    self.work_in_progress.deinit(self.allocator);
+    self.resources.deinit(self.allocator);
+
+    self.units.deinit(self.allocator);
+
+    self.allocator.free(self.improvements);
+    self.allocator.free(self.terrain);
+
+    for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
+    for (0..self.players.len) |i| self.players[i].deinit();
+
+    self.allocator.free(self.players);
+    self.cities.deinit(self.allocator);
+}
+
+pub fn nextTurn(self: *Self) !void {
+    for (self.cities.keys(), self.cities.values()) |idx, *city| {
+        const ya = city.getWorkedTileYields(self);
+
+        _ = city.processYields(&ya);
+        const growth_res = city.checkGrowth(self);
+        _ = growth_res;
+
+        var update_view = city.checkExpansion();
+        const production_result = try city.checkProduction();
+        switch (production_result) {
+            .done => |project| switch (project) {
+                .unit => |unit_type| {
+                    try self.addUnit(idx, unit_type, city.faction_id);
+                    update_view = true;
+                },
+                else => unreachable, // TODO
+            },
+            else => {},
+        }
+
+        if (update_view) self.fullUpdateViews();
+    }
+
+    self.units.refresh();
+
+    self.turn += 1;
+}
+
+pub fn addCity(self: *Self, idx: Idx, faction_id: Player.FactionID) !void {
+    const city = City.new(idx, faction_id, self);
+    try self.cities.put(self.allocator, idx, city);
+}
+
+pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: Player.FactionID) !void {
+    const unit = Unit.new(unit_temp, faction, self.rules);
+    try self.units.putOrStackAutoSlot(idx, unit);
+}
+
 pub fn claimed(self: *const Self, idx: Idx) bool {
     for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
     return false;
@@ -77,6 +172,30 @@ pub fn claimed(self: *const Self, idx: Idx) bool {
 pub fn claimedFaction(self: *const Self, idx: Idx) ?Player.FactionID {
     for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
     return null;
+}
+
+pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: Player.FactionID) bool {
+    if (self.claimedFaction(idx)) |claimed_by| {
+        if (claimed_by != faction) return false;
+    }
+    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
+    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
+    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(self.rules).is_water) return false;
+    return true;
+}
+
+pub fn settleCity(self: *Self, idx: Idx, refrence: Units.Reference) !bool {
+    const unit = self.units.deref(refrence) orelse return false;
+    if (!self.canSettleCityAt(idx, unit.faction_id)) return false;
+    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, self.rules)) return false;
+    if (refrence.idx != idx) return false;
+    if (unit.movement <= 0) return false;
+
+    try self.addCity(idx, unit.faction_id);
+    self.units.removeReference(refrence); // will this fuck up the refrence held by controll?
+
+    return true;
 }
 
 pub fn recalculateWaterAccess(self: *Self) !void {
@@ -125,17 +244,6 @@ pub fn recalculateWaterAccess(self: *Self) !void {
         std.debug.panic("Failed to pack tile", .{});
 }
 
-pub fn addCity(self: *Self, idx: Idx, faction_id: Player.FactionID) !void {
-    const city = City.new(idx, faction_id, self);
-    try self.cities.put(self.allocator, idx, city);
-}
-
-pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: Player.FactionID) !void {
-    const unit = Unit.new(unit_temp, self.unit_counter, faction, self.rules);
-    self.unit_counter += 1;
-    try self.units.putOrStackAutoSlot(idx, unit);
-}
-
 pub fn tileYield(self: *const Self, idx: Idx) Yield {
     const terrain = self.terrain[idx];
     const resource = self.resources.get(idx);
@@ -153,63 +261,6 @@ pub fn tileYield(self: *const Self, idx: Idx) Yield {
     }
 
     return yield;
-}
-
-pub fn init(
-    allocator: std.mem.Allocator,
-    width: u32,
-    height: u32,
-    wrap_around: bool,
-    player_count: u8,
-    rules: *const Rules,
-) !Self {
-    std.debug.assert(player_count >= 1);
-    const grid = Grid.init(width, height, wrap_around);
-
-    const terrain = try allocator.alloc(Terrain, grid.len);
-    errdefer allocator.free(terrain);
-    @memset(terrain, std.mem.zeroes(Terrain));
-
-    const improvements = try allocator.alloc(Improvements, grid.len);
-    errdefer allocator.free(improvements);
-    @memset(improvements, std.mem.zeroes(Improvements));
-
-    const players = try allocator.alloc(Player, player_count);
-    errdefer allocator.free(players);
-    for (0..players.len) |i| players[i] = try Player.init(allocator, @as(u8, @intCast(i)), &grid);
-
-    return Self{
-        .player_count = player_count,
-        .players = players,
-        .allocator = allocator,
-        .grid = grid,
-        .terrain = terrain,
-        .improvements = improvements,
-        .resources = .{},
-        .work_in_progress = .{},
-        .rivers = .{},
-        .turn_counter = 1,
-        .cities = .{},
-        .rules = rules,
-        .units = Units.init(rules, allocator),
-    };
-}
-
-pub fn deinit(self: *Self) void {
-    self.rivers.deinit(self.allocator);
-    self.work_in_progress.deinit(self.allocator);
-    self.resources.deinit(self.allocator);
-
-    self.units.deinit(self.allocator);
-
-    self.allocator.free(self.improvements);
-    self.allocator.free(self.terrain);
-
-    for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
-    for (0..self.players.len) |i| self.players[i].deinit();
-
-    self.allocator.free(self.players);
-    self.cities.deinit(self.allocator);
 }
 
 pub fn moveCost(
@@ -248,30 +299,6 @@ pub fn moveCost(
         .embarked = reference.slot == .embarked,
         .city = self.cities.contains(to),
     }, self.rules);
-}
-
-pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: Player.FactionID) bool {
-    if (self.claimedFaction(idx)) |claimed_by| {
-        if (claimed_by != faction) return false;
-    }
-    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
-    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
-    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
-    if (self.terrain[idx].attributes(self.rules).is_water) return false;
-    return true;
-}
-
-pub fn settleCity(self: *Self, idx: Idx, refrence: Units.Reference) !bool {
-    const unit = self.units.deref(refrence) orelse return false;
-    if (!self.canSettleCityAt(idx, unit.faction_id)) return false;
-    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, self.rules)) return false;
-    if (refrence.idx != idx) return false;
-    if (unit.movement <= 0) return false;
-
-    try self.addCity(idx, unit.faction_id);
-    self.units.removeReference(refrence); // will this fuck up the refrence held by controll?
-
-    return true;
 }
 
 pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {

@@ -26,11 +26,18 @@ const raylib = @cImport({
     @cInclude("raygui.h");
 });
 
-pub fn renderWorld(world: *const World, bbox: BoundingBox, maybe_view: ?*const PlayerView, zoom: f32, maybe_selected_id: ?Unit.UnitID, ts: TextureSet) void {
+pub fn renderWorld(
+    world: *const World,
+    bbox: BoundingBox,
+    maybe_view: ?*const PlayerView,
+    zoom: f32,
+    maybe_unit_reference: ?Units.Reference,
+    ts: TextureSet,
+) void {
     renderTerrainLayer(world, bbox, maybe_view, ts);
 
     renderCities(world, bbox, ts);
-    renderUnits(world, bbox, maybe_view, maybe_selected_id, zoom, ts);
+    renderUnits(world, bbox, maybe_view, maybe_unit_reference, zoom, ts);
     renderYields(world, bbox, maybe_view, ts);
 
     renderResources(world, bbox, maybe_view, ts);
@@ -179,9 +186,9 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
 
             //TODO fix Perpetual icons and Building
             const icon = switch (project.project) {
-                .UnitType => ts.unit_symbols[@intFromEnum(project.project.UnitType)],
-                .Perpetual => unreachable,
-                .Building => unreachable,
+                .unit => |unit_type| ts.unit_symbols[@intFromEnum(unit_type)],
+                .perpetual => unreachable,
+                .building => unreachable,
             };
 
             render.renderChargeCircleInHex(
@@ -226,34 +233,33 @@ pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
     }
 }
 
-pub fn renderUnits(world: *const World, bbox: BoundingBox, view: ?*const PlayerView, maybe_selected_id: ?Unit.UnitID, zoom: f32, ts: TextureSet) void {
-    var iter = world.units.refrenceIterator(world.grid.len);
-    var selected_entry: ?Units.RefrenceItem = null;
+pub fn renderUnits(
+    world: *const World,
+    bbox: BoundingBox,
+    view: ?*const PlayerView,
+    maybe_unit_reference: ?Units.Reference,
+    zoom: f32,
+    ts: TextureSet,
+) void {
+    var iter = world.units.iterator();
     while (iter.next()) |entry| {
         const in_view = if (view) |v| v.in_view.contains(entry.idx) else true;
         if (!in_view) continue;
         if (!bbox.containsIdx(entry.idx, world.grid)) continue;
 
-        if (maybe_selected_id) |selected_id| if (entry.unit.id == selected_id) {
-            selected_entry = entry;
-            continue;
-        };
+        const is_selected = if (maybe_unit_reference) |reference|
+            reference.idx == entry.idx and
+                reference.slot == entry.slot and
+                reference.stacked == entry.stacked
+        else
+            false;
 
         renderUnit(entry.idx, world.grid, entry.unit, .{
             .slot = entry.slot,
             .faction_id = entry.unit.faction_id,
-            .stack = entry.stack_depth,
+            .stack = entry.depth,
             .zoom = zoom,
-        }, ts);
-    }
-
-    if (selected_entry) |entry| {
-        renderUnit(entry.idx, world.grid, entry.unit, .{
-            .slot = entry.slot,
-            .faction_id = entry.unit.faction_id,
-            .stack = entry.stack_depth,
-            .zoom = zoom,
-            .glow = true,
+            .glow = is_selected,
         }, ts);
     }
 }

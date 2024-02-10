@@ -50,9 +50,6 @@ pub const MoveCost = union(enum) {
     }
 };
 
-pub const UnitID = u32;
-
-id: UnitID,
 type: UnitType,
 hit_points: u8 = 100, // All units have 100 HP
 prepared: bool = false, // catapults etc
@@ -61,8 +58,11 @@ promotions: Promotion.Set = Promotion.Set.initEmpty(),
 faction_id: Player.FactionID,
 movement: f32 = 0,
 
-pub fn new(unit_type: UnitType, id: UnitID, player_id: Player.FactionID, rules: *const Rules) Self {
-    var unit = Self{ .faction_id = player_id, .type = unit_type, .id = id };
+pub fn new(unit_type: UnitType, player_id: Player.FactionID, rules: *const Rules) Self {
+    var unit = Self{
+        .faction_id = player_id,
+        .type = unit_type,
+    };
     unit.promotions = unit_type.stats(rules).promotions;
     unit.movement = unit.maxMovement(rules);
     return unit;

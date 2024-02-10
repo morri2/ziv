@@ -28,6 +28,39 @@ pub const YieldAccumulator = struct {
     }
 };
 
+/// Result of checking if a city is growing
+const GrowthResult = enum {
+    no_change,
+    growth,
+    starvation,
+};
+
+pub const ProductionTarget = union(enum) {
+    building: Rules.Building,
+    unit: Rules.UnitType,
+    perpetual: union(enum) {
+        money_making,
+        research,
+    },
+};
+
+const ProductionResult = union(enum) {
+    done: ProductionTarget,
+    not_done: void,
+    perpetual: void,
+    none_selected: void,
+    // add stuff for perpetual, requierments no longer fullfilled etc.
+};
+
+const WorkInProgressProductionProject = struct {
+    progress: f32,
+    production_needed: f32,
+    project: ProductionTarget,
+};
+
+// TODO
+// Add build queue with saved progress
+
 //buildings: // bitfield for all buildings in the game?
 
 faction_id: Player.FactionID,
@@ -84,7 +117,7 @@ pub fn new(position: Idx, player_id: Player.FactionID, world: *const World) Self
 
     const out: Self = .{
         .faction_id = player_id,
-        .city_id = (world.turn_counter << 16) & (position & 0xffff), // id will be unique, use for loging etc
+        .city_id = (world.turn << 16) & (position & 0xffff), // id will be unique, use for loging etc
         .name = "Goteborg",
         .position = position,
         .max_expansion = max_expansion,
@@ -158,9 +191,9 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumulator) YieldAcc
     faith *= self.faith_mult;
 
     // Continual production - should this be modified by production or gold modifier?
-    if (self.current_production_project != null) {
-        switch (self.current_production_project.?.project) {
-            .Perpetual => |perp_proj| switch (perp_proj) {
+    if (self.current_production_project) |work| {
+        switch (work.project) {
+            .perpetual => |perp_proj| switch (perp_proj) {
                 .money_making => gold += production / 2.0,
                 .research => science += production / 2.0,
             },
@@ -175,10 +208,10 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumulator) YieldAcc
     // apply to stuff
     self.food_stockpile += food;
 
-    if (self.current_production_project != null) {
-        self.current_production_project.?.progress += production;
+    if (self.current_production_project) |*work| {
+        work.progress += production;
         // spend unspent production
-        self.current_production_project.?.progress += self.unspent_production;
+        work.progress += self.unspent_production;
         self.unspent_production = 0.0;
     } else {
         // would be nice to allow some part of production to be held over if no project is set.
@@ -280,6 +313,7 @@ pub fn foodConsumption(self: *const Self) f32 {
     // consumption - CAN BE MODIFIED (rationalism etc) TODO! fix
     return @as(f32, @floatFromInt(self.population)) * 2.0;
 }
+
 /// equals number of labourers :)
 pub fn unassignedPopulation(self: *const Self) u8 {
     return self.population -| @as(u8, @intCast(self.worked.count())); // should not underflow, but seems to when pop starves, TODO: investigate
@@ -347,32 +381,20 @@ pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
 }
 
 /// check if production project is done
-pub fn checkProduction(self: *Self, world: *World) !ProductionResult {
+pub fn checkProduction(self: *Self) !ProductionResult {
     if (self.current_production_project == null) return .none_selected;
     const work = self.current_production_project.?;
-    if (work.project == .Perpetual) return .perpetual;
+    if (work.project == .perpetual) return .perpetual;
 
     if (work.progress >= work.production_needed) {
-        // If its a new unit, can we place it?
-        switch (work.project) {
-            .UnitType => |ty| try self.createUnit(world, ty),
-            .Building => unreachable,
-            .Perpetual => unreachable,
-        }
-
         // save overproduction :)
-        self.unspent_production = self.current_production_project.?.progress - self.current_production_project.?.production_needed;
-        const completed_project = self.current_production_project.?.project;
+        self.unspent_production = work.progress - work.production_needed;
+        const completed_project = work.project;
         self.current_production_project = null;
 
         return .{ .done = completed_project };
     }
     return .not_done;
-}
-
-pub fn createUnit(self: *Self, world: *World, unit_type: Rules.UnitType) !void {
-    try world.addUnit(self.position, unit_type, self.faction_id);
-    world.fullUpdateViews();
 }
 
 /// check if border expansion
@@ -388,59 +410,21 @@ pub fn checkExpansion(self: *Self) bool {
 }
 
 // TODO
-// Add build queue with saved progress
-
-pub const ProductionTarget = union(enum) {
-    Building: Rules.Building,
-    UnitType: Rules.UnitType,
-    Perpetual: union(enum) {
-        money_making,
-        research,
-    },
-};
-
-// TODO
 // Add pass through from player/civ to check resources
 pub fn startConstruction(self: *Self, construction_target: ProductionTarget, rules: *const Rules) bool {
     if (self.current_production_project) |project| {
         if (@intFromEnum(project.project) == @intFromEnum(construction_target)) return true;
     }
-    var production_needed: u16 = 0;
-    if (construction_target == .UnitType) {
-        const stats = construction_target.UnitType.stats(rules);
-        // Check Resource requirement
-        //for (stats.resource_cost) |resource| {
-        //
-        //}
-        production_needed = stats.production;
-    } else if (construction_target == .Building) {}
+    const production_required = switch (construction_target) {
+        .unit => |unit_type| unit_type.stats(rules).production,
+        else => unreachable, // TODO
+    };
 
     // Add or overwrite current project
     self.current_production_project = WorkInProgressProductionProject{
         .progress = self.unspent_production,
-        .production_needed = @floatFromInt(production_needed),
+        .production_needed = @floatFromInt(production_required),
         .project = construction_target,
     };
     return false;
 }
-
-/// Result of checking if a city is growing
-const GrowthResult = enum {
-    no_change,
-    growth,
-    starvation,
-};
-
-const ProductionResult = union(enum) {
-    done: ProductionTarget,
-    not_done: void,
-    perpetual: void,
-    none_selected: void,
-    // add stuff for perpetual, requierments no longer fullfilled etc.
-};
-
-const WorkInProgressProductionProject = struct {
-    progress: f32,
-    production_needed: f32,
-    project: ProductionTarget,
-};
