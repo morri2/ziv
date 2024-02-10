@@ -68,91 +68,6 @@ units: Units,
 
 cities: std.AutoArrayHashMapUnmanaged(Idx, City),
 
-pub fn claimed(self: *const Self, idx: Idx) bool {
-    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
-    return false;
-}
-
-pub fn claimedFaction(self: *const Self, idx: Idx) ?Player.FactionID {
-    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
-    return null;
-}
-
-pub fn recalculateWaterAccess(self: *Self) !void {
-    var new_terrain = try self.allocator.alloc(Rules.Terrain.Unpacked, self.grid.len);
-    defer self.allocator.free(new_terrain);
-
-    for (0..self.grid.len) |idx| {
-        const terrain = self.terrain[idx];
-        new_terrain[idx] = .{
-            .base = terrain.base(self.rules),
-            .feature = terrain.feature(self.rules),
-            .vegetation = terrain.vegetation(self.rules),
-            .has_freshwater = false,
-            .has_river = false,
-        };
-    }
-
-    for (0..self.grid.len) |idx_us| {
-        const idx: u32 = @intCast(idx_us);
-
-        const terrain = self.terrain[idx];
-        if (terrain.attributes(self.rules).is_freshwater) {
-            new_terrain[idx].has_freshwater = true;
-            for (self.grid.neighbours(idx)) |maybe_n_idx|
-                if (maybe_n_idx) |n_idx| {
-                    new_terrain[n_idx].has_freshwater = true;
-                };
-        }
-    }
-
-    for (self.rivers.keys()) |edge| {
-        new_terrain[edge.low].has_freshwater = true;
-        new_terrain[edge.high].has_freshwater = true;
-        new_terrain[edge.low].has_river = true;
-        new_terrain[edge.high].has_river = true;
-    }
-
-    for (0..self.grid.len) |idx_us| {
-        const idx: u32 = @intCast(idx_us);
-        if (self.terrain[idx].attributes(self.rules).is_water) {
-            new_terrain[idx].has_freshwater = false;
-        }
-    }
-
-    for (0..self.grid.len) |idx| self.terrain[idx] = new_terrain[idx].pack(self.rules) orelse
-        std.debug.panic("Failed to pack tile", .{});
-}
-
-pub fn addCity(self: *Self, idx: Idx, faction_id: Player.FactionID) !void {
-    const city = City.new(idx, faction_id, self);
-    try self.cities.put(self.allocator, idx, city);
-}
-
-pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: Player.FactionID) !void {
-    const unit = Unit.new(unit_temp, faction, self.rules);
-    try self.units.putOrStackAutoSlot(idx, unit);
-}
-
-pub fn tileYield(self: *const Self, idx: Idx) Yield {
-    const terrain = self.terrain[idx];
-    const resource = self.resources.get(idx);
-
-    var yield = terrain.yield(self.rules);
-
-    if (resource != null) {
-        yield = yield.add(resource.?.type.yield(self.rules));
-    }
-
-    // city yeilds
-    if (self.cities.contains(idx)) {
-        yield.production = @max(yield.production, 1);
-        yield.food = @max(yield.food, 2);
-    }
-
-    return yield;
-}
-
 pub fn init(
     allocator: std.mem.Allocator,
     width: u32,
@@ -227,6 +142,115 @@ pub fn nextTurn(self: *Self) !void {
     self.turn += 1;
 }
 
+pub fn addCity(self: *Self, idx: Idx, faction_id: Player.FactionID) !void {
+    const city = City.new(idx, faction_id, self);
+    try self.cities.put(self.allocator, idx, city);
+}
+
+pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: Player.FactionID) !void {
+    const unit = Unit.new(unit_temp, faction, self.rules);
+    try self.units.putOrStackAutoSlot(idx, unit);
+}
+
+pub fn claimed(self: *const Self, idx: Idx) bool {
+    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
+    return false;
+}
+
+pub fn claimedFaction(self: *const Self, idx: Idx) ?Player.FactionID {
+    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
+    return null;
+}
+
+pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: Player.FactionID) bool {
+    if (self.claimedFaction(idx)) |claimed_by| {
+        if (claimed_by != faction) return false;
+    }
+    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
+    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
+    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(self.rules).is_water) return false;
+    return true;
+}
+
+pub fn settleCity(self: *Self, idx: Idx, refrence: Units.Reference) !bool {
+    const unit = self.units.deref(refrence) orelse return false;
+    if (!self.canSettleCityAt(idx, unit.faction_id)) return false;
+    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, self.rules)) return false;
+    if (refrence.idx != idx) return false;
+    if (unit.movement <= 0) return false;
+
+    try self.addCity(idx, unit.faction_id);
+    self.units.removeReference(refrence); // will this fuck up the refrence held by controll?
+
+    return true;
+}
+
+pub fn recalculateWaterAccess(self: *Self) !void {
+    var new_terrain = try self.allocator.alloc(Rules.Terrain.Unpacked, self.grid.len);
+    defer self.allocator.free(new_terrain);
+
+    for (0..self.grid.len) |idx| {
+        const terrain = self.terrain[idx];
+        new_terrain[idx] = .{
+            .base = terrain.base(self.rules),
+            .feature = terrain.feature(self.rules),
+            .vegetation = terrain.vegetation(self.rules),
+            .has_freshwater = false,
+            .has_river = false,
+        };
+    }
+
+    for (0..self.grid.len) |idx_us| {
+        const idx: u32 = @intCast(idx_us);
+
+        const terrain = self.terrain[idx];
+        if (terrain.attributes(self.rules).is_freshwater) {
+            new_terrain[idx].has_freshwater = true;
+            for (self.grid.neighbours(idx)) |maybe_n_idx|
+                if (maybe_n_idx) |n_idx| {
+                    new_terrain[n_idx].has_freshwater = true;
+                };
+        }
+    }
+
+    for (self.rivers.keys()) |edge| {
+        new_terrain[edge.low].has_freshwater = true;
+        new_terrain[edge.high].has_freshwater = true;
+        new_terrain[edge.low].has_river = true;
+        new_terrain[edge.high].has_river = true;
+    }
+
+    for (0..self.grid.len) |idx_us| {
+        const idx: u32 = @intCast(idx_us);
+        if (self.terrain[idx].attributes(self.rules).is_water) {
+            new_terrain[idx].has_freshwater = false;
+        }
+    }
+
+    for (0..self.grid.len) |idx| self.terrain[idx] = new_terrain[idx].pack(self.rules) orelse
+        std.debug.panic("Failed to pack tile", .{});
+}
+
+pub fn tileYield(self: *const Self, idx: Idx) Yield {
+    const terrain = self.terrain[idx];
+    const resource = self.resources.get(idx);
+
+    var yield = terrain.yield(self.rules);
+
+    if (resource != null) {
+        yield = yield.add(resource.?.type.yield(self.rules));
+    }
+
+    // city yeilds
+    if (self.cities.contains(idx)) {
+        yield.production = @max(yield.production, 1);
+        yield.food = @max(yield.food, 2);
+    }
+
+    return yield;
+}
+
 pub fn moveCost(
     self: *const Self,
     reference: Units.Reference,
@@ -263,30 +287,6 @@ pub fn moveCost(
         .embarked = reference.slot == .embarked,
         .city = self.cities.contains(to),
     }, self.rules);
-}
-
-pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: Player.FactionID) bool {
-    if (self.claimedFaction(idx)) |claimed_by| {
-        if (claimed_by != faction) return false;
-    }
-    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
-    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
-    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
-    if (self.terrain[idx].attributes(self.rules).is_water) return false;
-    return true;
-}
-
-pub fn settleCity(self: *Self, idx: Idx, refrence: Units.Reference) !bool {
-    const unit = self.units.deref(refrence) orelse return false;
-    if (!self.canSettleCityAt(idx, unit.faction_id)) return false;
-    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, self.rules)) return false;
-    if (refrence.idx != idx) return false;
-    if (unit.movement <= 0) return false;
-
-    try self.addCity(idx, unit.faction_id);
-    self.units.removeReference(refrence); // will this fuck up the refrence held by controll?
-
-    return true;
 }
 
 pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
