@@ -179,7 +179,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
 
             //TODO fix Perpetual icons and Building
             const icon = switch (project.project) {
-                .UnitType => ts.unit_icons[@intFromEnum(project.project.UnitType)],
+                .UnitType => ts.unit_symbols[@intFromEnum(project.project.UnitType)],
                 .Perpetual => unreachable,
                 .Building => unreachable,
             };
@@ -200,7 +200,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
                 icon,
                 0.5,
                 -0.6,
-                .{ .scale = 0.15 },
+                .{ .scale = 0.05 },
                 ts,
             );
         }
