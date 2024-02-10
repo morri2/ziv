@@ -51,7 +51,7 @@ grid: Grid,
 players: []Player,
 player_count: u8,
 
-turn_counter: usize,
+turn: u32,
 
 // Per tile data
 terrain: []Terrain,
@@ -186,7 +186,7 @@ pub fn init(
         .resources = .{},
         .work_in_progress = .{},
         .rivers = .{},
-        .turn_counter = 1,
+        .turn = 1,
         .cities = .{},
         .rules = rules,
         .units = Units.init(rules, allocator),

@@ -84,7 +84,7 @@ pub fn new(position: Idx, player_id: Player.FactionID, world: *const World) Self
 
     const out: Self = .{
         .faction_id = player_id,
-        .city_id = (world.turn_counter << 16) & (position & 0xffff), // id will be unique, use for loging etc
+        .city_id = (world.turn << 16) & (position & 0xffff), // id will be unique, use for loging etc
         .name = "Goteborg",
         .position = position,
         .max_expansion = max_expansion,
