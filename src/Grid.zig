@@ -202,15 +202,15 @@ pub fn isNeighbour(self: Self, src: Idx, dest: Idx) bool {
     return distance(self, src, dest) == 1;
 }
 
-pub const Direction = enum {
+pub const Direction = enum(u3) {
     pub const directions: [6]@This() = [_]@This(){ .East, .NorthEast, .NorthWest, .West, .SouthWest, .SouthEast };
 
-    East,
-    NorthEast,
-    NorthWest,
-    West,
-    SouthWest,
-    SouthEast,
+    East = 0,
+    NorthEast = 1,
+    NorthWest = 2,
+    West = 3,
+    SouthWest = 4,
+    SouthEast = 5,
 
     pub fn rotateCC(self: @This(), n: u8) @This() {
         var next: u8 = @intFromEnum(self) + n;
