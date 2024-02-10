@@ -365,24 +365,7 @@ pub fn main() !void {
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
-                for (world.cities.keys()) |city_key| {
-                    var city = world.cities.getPtr(city_key) orelse continue;
-                    const ya = city.getWorkedTileYields(&world);
-
-                    _ = city.processYields(&ya);
-                    const growth_res = city.checkGrowth(&world);
-                    _ = city.checkExpansion();
-                    _ = try city.checkProduction(&world);
-
-                    switch (growth_res) {
-                        .growth => std.debug.print("TOWN HAS GROWN! \n", .{}),
-                        else => {},
-                    }
-                }
-
-                world.units.refresh();
-            }
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) try world.nextTurn();
 
             // SELECTION
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {

@@ -210,6 +210,23 @@ pub fn deinit(self: *Self) void {
     self.cities.deinit(self.allocator);
 }
 
+pub fn nextTurn(self: *Self) !void {
+    for (self.cities.values()) |*city| {
+        const ya = city.getWorkedTileYields(self);
+
+        _ = city.processYields(&ya);
+        const growth_res = city.checkGrowth(self);
+        _ = growth_res;
+
+        _ = city.checkExpansion();
+        _ = try city.checkProduction(self);
+    }
+
+    self.units.refresh();
+
+    self.turn += 1;
+}
+
 pub fn moveCost(
     self: *const Self,
     reference: Units.Reference,
