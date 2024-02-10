@@ -28,6 +28,14 @@ pub const Action = union(Type) {
         production: City.ProductionTarget,
     },
     settle_city: Units.Reference,
+    unset_worked: struct {
+        city_idx: Idx,
+        idx: Idx,
+    },
+    set_worked: struct {
+        city_idx: Idx,
+        idx: Idx,
+    },
 
     pub const Type = enum(u8) {
         // Zero is reserved for ping packet
@@ -36,6 +44,8 @@ pub const Action = union(Type) {
         attack = 3,
         set_city_production = 4,
         settle_city = 5,
+        unset_worked = 6,
+        set_worked = 7,
     };
 };
 
@@ -186,6 +196,24 @@ pub fn settleCity(self: *Self, settler_reference: Units.Reference) !bool {
     return try self.performAction(.{ .settle_city = settler_reference });
 }
 
+pub fn unsetWorked(self: *Self, city_idx: Idx, idx: Idx) !bool {
+    return try self.performAction(.{
+        .unset_worked = .{
+            .city_idx = city_idx,
+            .idx = idx,
+        },
+    });
+}
+
+pub fn setWorked(self: *Self, city_idx: Idx, idx: Idx) !bool {
+    return try self.performAction(.{
+        .set_worked = .{
+            .city_idx = city_idx,
+            .idx = idx,
+        },
+    });
+}
+
 pub fn canPerformAction(self: *const Self, action: Action) bool {
     switch (action) {
         .next_turn => {},
@@ -215,6 +243,19 @@ pub fn canPerformAction(self: *const Self, action: Action) bool {
             if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, self.world.rules)) return false;
 
             if (!self.world.canSettleCityAt(settler_ref.idx, self.civ_id.toFactionID())) return false;
+        },
+        .unset_worked => |info| {
+            const city = self.world.cities.get(info.city_idx) orelse return false;
+            if (!city.worked.contains(info.idx)) return false;
+        },
+        .set_worked => |info| {
+            const city = self.world.cities.get(info.city_idx) orelse return false;
+
+            if (city.unassignedPopulation() == 0) return false;
+
+            if (!city.claimed.contains(info.idx)) return false;
+
+            if (city.worked.contains(info.idx)) return false;
         },
     }
 
@@ -259,6 +300,20 @@ fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
             if (!try self.world.settleCity(settler_ref)) return false;
 
             view_update = true;
+        },
+        .unset_worked => |info| {
+            const city = self.world.cities.getPtr(info.city_idx) orelse return false;
+
+            if (!city.unsetWorked(info.idx)) return false;
+        },
+        .set_worked => |info| {
+            const city = self.world.cities.getPtr(info.city_idx) orelse return false;
+
+            if (city.unassignedPopulation() == 0) return false;
+
+            if (!city.claimed.contains(info.idx)) return false;
+
+            if (!city.setWorkedWithAutoReassign(info.idx, &self.world)) return false;
         },
     }
 
@@ -354,6 +409,16 @@ fn sendAction(writer: Socket.Writer, action: Action) !void {
             try writer.writeByte(@intFromEnum(settler_ref.slot));
             try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(settler_ref.stacked), .little);
         },
+        .unset_worked => |info| {
+            try writer.writeByte(@intFromEnum(Action.Type.unset_worked));
+            try writer.writeInt(Idx, info.city_idx, .little);
+            try writer.writeInt(Idx, info.idx, .little);
+        },
+        .set_worked => |info| {
+            try writer.writeByte(@intFromEnum(Action.Type.set_worked));
+            try writer.writeInt(Idx, info.city_idx, .little);
+            try writer.writeInt(Idx, info.idx, .little);
+        },
     }
 }
 
@@ -432,6 +497,28 @@ fn recieveAction(reader: Socket.Reader) !Action {
                     .idx = idx,
                     .slot = slot,
                     .stacked = stacked,
+                },
+            };
+        },
+        .unset_worked => {
+            const city_idx = try reader.readInt(Idx, .little);
+            const idx = try reader.readInt(Idx, .little);
+
+            return .{
+                .unset_worked = .{
+                    .city_idx = city_idx,
+                    .idx = idx,
+                },
+            };
+        },
+        .set_worked => {
+            const city_idx = try reader.readInt(Idx, .little);
+            const idx = try reader.readInt(Idx, .little);
+
+            return .{
+                .set_worked = .{
+                    .city_idx = city_idx,
+                    .idx = idx,
                 },
             };
         },

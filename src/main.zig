@@ -434,15 +434,11 @@ pub fn main() !void {
                     texture_set,
                 );
 
-                for (game.world.cities.keys()) |city_key| {
-                    var city = game.world.cities.getPtr(city_key) orelse continue;
+                for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
+                    if (city_idx == clicked_tile) _ = city.expandBorder(&game.world);
 
-                    if (city_key == clicked_tile) _ = city.expandBorder(&game.world);
-
-                    if (city.claimed.contains(clicked_tile)) {
-                        if (city.unsetWorked(clicked_tile)) break;
-                        if (city.setWorkedWithAutoReassign(clicked_tile, &game.world)) break;
-                    }
+                    if (try game.unsetWorked(city_idx, clicked_tile)) break;
+                    if (try game.setWorked(city_idx, clicked_tile)) break;
                 }
             }
         }
