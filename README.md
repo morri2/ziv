@@ -8,3 +8,8 @@ Civ 5 with the brave new world expansion pack.
 
 https://game-icons.net/ <-- very cool cc icons
 
+Used:
+caro-asercion
+delapouite
+lorc
+
