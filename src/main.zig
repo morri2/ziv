@@ -4,11 +4,11 @@ const Rules = @import("Rules.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
 
+const Game = @import("Game.zig");
 const World = @import("World.zig");
 const Unit = @import("Unit.zig");
 const Units = @import("Units.zig");
 const City = @import("City.zig");
-const View = @import("View.zig");
 
 const Camera = @import("rendering/Camera.zig");
 const TextureSet = @import("rendering/TextureSet.zig");
@@ -43,33 +43,31 @@ pub fn main() !void {
     };
     defer rules.deinit();
 
-    const WIDTH = 56;
-    const HEIGHT = 36;
-    var world = try World.init(
-        gpa.allocator(),
-        WIDTH,
-        HEIGHT,
+    var game = try Game.host(
+        56,
+        36,
         true,
-        2,
+        3,
         &rules,
+        gpa.allocator(),
     );
-    defer world.deinit();
+    defer game.deinit();
 
-    try world.loadFromFile("maps/last_saved.map");
+    try game.world.loadFromFile("maps/last_saved.map");
 
     // UNITS
-    try world.addUnit(1200, @enumFromInt(4), @enumFromInt(0));
-    try world.addUnit(1202, @enumFromInt(2), @enumFromInt(0));
-    try world.addUnit(1205, @enumFromInt(3), @enumFromInt(0));
-    try world.addUnit(1203, @enumFromInt(7), @enumFromInt(0));
+    try game.world.addUnit(1200, @enumFromInt(4), @enumFromInt(0));
+    try game.world.addUnit(1202, @enumFromInt(2), @enumFromInt(0));
+    try game.world.addUnit(1205, @enumFromInt(3), @enumFromInt(0));
+    try game.world.addUnit(1203, @enumFromInt(7), @enumFromInt(0));
 
-    try world.addUnit(1150, @enumFromInt(7), @enumFromInt(1));
-    try world.addUnit(1139, @enumFromInt(3), @enumFromInt(1));
+    try game.world.addUnit(1150, @enumFromInt(7), @enumFromInt(1));
+    try game.world.addUnit(1139, @enumFromInt(3), @enumFromInt(1));
 
-    try world.addCity(1089, @enumFromInt(0));
-    try world.addCity(485, @enumFromInt(1));
+    try game.world.addCity(1089, @enumFromInt(0));
+    try game.world.addCity(485, @enumFromInt(1));
 
-    var civ_id: World.CivilizationID = @enumFromInt(0);
+    game.world.fullUpdateViews();
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -114,23 +112,6 @@ pub fn main() !void {
     edit_window.addItem(.draw, "Draw");
     edit_window.addItem(.rivers, "River");
     edit_window.addItem(.resource, "Resource");
-
-    const ViewWindow = gui.SelectWindow(World.CivilizationID, .{
-        .WIDTH = 200,
-        .COLUMNS = 4,
-        .ENTRY_HEIGHT = 30,
-        .SPACEING = 4,
-        .NULL_OPTION = true,
-    });
-
-    var view_window = ViewWindow.newEmpty();
-    view_window.setName("SELECT VIEW");
-
-    for (0..world.views.len) |i| {
-        view_window.addItem(@enumFromInt(i), "X");
-    }
-
-    view_window.bounds.x += 300;
 
     const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
@@ -221,7 +202,7 @@ pub fn main() !void {
         const ut: Rules.UnitType = @enumFromInt(uti);
         const pt = City.ProductionTarget{ .unit = ut };
         var buf: [255]u8 = undefined;
-        const label = try std.fmt.bufPrint(&buf, "Build unit: {s}", .{ut.name(world.rules)});
+        const label = try std.fmt.bufPrint(&buf, "Build unit: {s}", .{ut.name(game.world.rules)});
         city_construction_window.addItem(pt, label);
     }
 
@@ -229,11 +210,9 @@ pub fn main() !void {
 
     // MAIN GAME LOOP
     while (!raylib.WindowShouldClose()) {
-        world.fullUpdateViews();
-
         const bounding_box = camera.boundingBox(
-            world.grid.width,
-            world.grid.height,
+            game.world.grid.width,
+            game.world.grid.height,
             screen_width,
             screen_height,
             texture_set,
@@ -243,8 +222,10 @@ pub fn main() !void {
         // CONTROLL STUFF //
         // ////////////// //
         control_blk: {
-            if (raylib.IsKeyPressed(raylib.KEY_R)) try world.recalculateWaterAccess();
+            if (raylib.IsKeyPressed(raylib.KEY_R)) try game.world.recalculateWaterAccess();
             if (raylib.IsKeyPressed(raylib.KEY_H)) hide_gui = !hide_gui;
+
+            if (raylib.IsKeyPressed(raylib.KEY_P)) game.nextPlayer();
 
             // GUI STUFF
 
@@ -257,7 +238,7 @@ pub fn main() !void {
                 // Set unit promotions
                 if (set_promotion) |promotion|
                     if (maybe_unit_reference) |unit_ref|
-                        if (world.units.derefToPtr(unit_ref)) |unit|
+                        if (game.world.units.derefToPtr(unit_ref)) |unit|
                             unit.promotions.set(@intFromEnum(promotion));
                 set_promotion = null;
 
@@ -267,15 +248,11 @@ pub fn main() !void {
                 // Set construction
                 if (set_production_target) |production_target|
                     if (maybe_selected_idx) |idx| {
-                        if (world.cities.getPtr(idx)) |city| {
-                            _ = city.startConstruction(production_target, world.rules);
+                        if (game.world.cities.getPtr(idx)) |city| {
+                            _ = city.startConstruction(production_target, game.world.rules);
                         }
                     };
                 set_production_target = null;
-
-                // view shit
-
-                _ = view_window.fetchSelected(&civ_id);
 
                 // Set edit brush
 
@@ -285,24 +262,24 @@ pub fn main() !void {
 
                 // UPDATE UNIT INFO
                 if (maybe_unit_reference) |ref| {
-                    if (world.units.derefToPtr(ref)) |unit| {
+                    if (game.world.units.derefToPtr(ref)) |unit| {
                         unit_info_window.clear();
 
                         unit_info_window.addCategoryHeader("General");
 
                         unit_info_window.addLineFormat("HP: {}", .{unit.hit_points}, false);
-                        unit_info_window.addLineFormat("Move: {d:.1}/{d:.1}", .{ unit.movement, unit.maxMovement(world.rules) }, false);
+                        unit_info_window.addLineFormat("Move: {d:.1}/{d:.1}", .{ unit.movement, unit.maxMovement(game.world.rules) }, false);
                         unit_info_window.addLineFormat("Faction id: {}", .{unit.faction_id}, false);
                         unit_info_window.addLineFormat("Fortified: {}", .{unit.fortified}, false);
                         unit_info_window.addLineFormat("Prepared: {}", .{unit.prepared}, false);
 
                         unit_info_window.addCategoryHeader("Promotions");
                         for (0..rules.promotion_count) |pi| {
-                            unit_info_window.setName(unit.type.name(world.rules));
+                            unit_info_window.setName(unit.type.name(game.world.rules));
                             const p: Rules.Promotion = @enumFromInt(pi);
 
                             if (unit.promotions.isSet(pi)) {
-                                unit_info_window.addLineFormat("{s}", .{p.name(world.rules)}, false);
+                                unit_info_window.addLineFormat("{s}", .{p.name(game.world.rules)}, false);
                             }
                         }
                     }
@@ -310,7 +287,7 @@ pub fn main() !void {
 
                 // UPDATE UNIT INFO
                 if (maybe_selected_idx) |idx| {
-                    const terrain = world.terrain[idx];
+                    const terrain = game.world.terrain[idx];
                     const attributes = terrain.attributes(&rules);
                     hex_info_window.clear();
 
@@ -327,30 +304,29 @@ pub fn main() !void {
                 if (city_construction_window.checkMouseCapture()) break :control_blk;
                 if (edit_window.checkMouseCapture()) break :control_blk;
                 if (resource_window.checkMouseCapture()) break :control_blk;
-                if (view_window.checkMouseCapture()) break :control_blk;
             }
 
             // OLD SCHOOL CONTROL STUFF
             {
                 // EDIT MAP STUFF
-                const mouse_tile = camera.getMouseTile(world.grid, bounding_box, texture_set);
+                const mouse_tile = camera.getMouseTile(game.world.grid, bounding_box, texture_set);
                 if (raylib.IsKeyPressed(raylib.KEY_T)) {
-                    const res = try world.resources.getOrPut(world.allocator, mouse_tile);
+                    const res = try game.world.resources.getOrPut(game.world.allocator, mouse_tile);
                     if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
                 }
 
                 if (edit_mode == .draw and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and terrain_brush != null) {
-                    world.terrain[mouse_tile] = terrain_brush.?;
+                    game.world.terrain[mouse_tile] = terrain_brush.?;
                 }
                 if (edit_mode == .resource and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    if (resource_brush != null) try world.resources.put(world.allocator, mouse_tile, .{ .type = resource_brush.? }) else _ = world.resources.swapRemove(mouse_tile);
+                    if (resource_brush != null) try game.world.resources.put(game.world.allocator, mouse_tile, .{ .type = resource_brush.? }) else _ = game.world.resources.swapRemove(mouse_tile);
                 }
                 if (edit_mode == .rivers and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    if (camera.getMouseEdge(world.grid, bounding_box, texture_set)) |e| {
-                        if (world.rivers.contains(e)) {
-                            _ = world.rivers.swapRemove(e);
+                    if (camera.getMouseEdge(game.world.grid, bounding_box, texture_set)) |e| {
+                        if (game.world.rivers.contains(e)) {
+                            _ = game.world.rivers.swapRemove(e);
                         } else {
-                            world.rivers.put(world.allocator, e, {}) catch unreachable;
+                            game.world.rivers.put(game.world.allocator, e, {}) catch unreachable;
                         }
                     }
                 }
@@ -358,16 +334,16 @@ pub fn main() !void {
 
             // SAVE MAP
             if (raylib.IsKeyPressed(raylib.KEY_C)) {
-                try world.saveToFile("maps/last_saved.map");
+                try game.world.saveToFile("maps/last_saved.map");
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) try world.nextTurn();
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) try game.world.nextTurn();
 
             // SELECTION
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
                 const mouse_idx = camera.getMouseTile(
-                    world.grid,
+                    game.world.grid,
                     bounding_box,
                     texture_set,
                 );
@@ -375,44 +351,64 @@ pub fn main() !void {
                 if (maybe_selected_idx) |selected_idx| {
                     if (selected_idx != mouse_idx) blk: {
                         if (maybe_unit_reference == null) {
-                            maybe_unit_reference = world.units.firstReference(selected_idx);
+                            maybe_unit_reference = game.world.units.firstReference(selected_idx);
                             if (maybe_unit_reference == null) {
                                 maybe_selected_idx = mouse_idx;
-                                maybe_unit_reference = world.units.firstReference(mouse_idx);
+                                maybe_unit_reference = game.world.units.firstReference(mouse_idx);
                                 break :blk;
                             }
                         }
 
-                        if (raylib.IsKeyDown(raylib.KEY_Q)) {} else {
-                            _ = try world.move(maybe_unit_reference.?, mouse_idx);
+                        var attacked: bool = false;
+                        if (game.world.units.firstReference(mouse_idx)) |ref| {
+                            const unit = game.world.units.deref(ref) orelse unreachable;
+                            if (unit.faction_id != game.civ_id.toFactionID()) {
+                                _ = try game.performAction(.{
+                                    .attack = .{
+                                        .attacker = maybe_unit_reference.?,
+                                        .to = mouse_idx,
+                                    },
+                                });
+                                attacked = true;
+                            }
                         }
+
+                        if (!attacked) {
+                            _ = try game.performAction(.{
+                                .move_unit = .{
+                                    .ref = maybe_unit_reference.?,
+                                    .to = mouse_idx,
+                                },
+                            });
+                        }
+
                         maybe_selected_idx = null;
                     } else if (maybe_unit_reference) |ref| {
-                        maybe_unit_reference = world.units.nextReference(ref);
+                        maybe_unit_reference = game.world.units.nextReference(ref);
                     } else {
-                        maybe_unit_reference = world.units.firstReference(selected_idx);
+                        maybe_unit_reference = game.world.units.firstReference(selected_idx);
                     }
                 } else {
                     maybe_selected_idx = mouse_idx;
-                    maybe_unit_reference = world.units.firstReference(mouse_idx);
+                    maybe_unit_reference = game.world.units.firstReference(mouse_idx);
                 }
             }
 
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
                 const clicked_tile = camera.getMouseTile(
-                    world.grid,
+                    game.world.grid,
                     bounding_box,
                     texture_set,
                 );
 
-                for (world.cities.keys()) |city_key| {
-                    var city = world.cities.getPtr(city_key) orelse continue;
+                for (game.world.cities.keys()) |city_key| {
+                    var city = game.world.cities.getPtr(city_key) orelse continue;
 
-                    if (city_key == clicked_tile) _ = city.expandBorder(&world);
+                    if (city_key == clicked_tile) _ = city.expandBorder(&game.world);
 
                     if (city.claimed.contains(clicked_tile)) {
                         if (city.unsetWorked(clicked_tile)) break;
-                        if (city.setWorkedWithAutoReassign(clicked_tile, &world)) break;
+                        if (city.setWorkedWithAutoReassign(clicked_tile, &game.world)) break;
                     }
                 }
             }
@@ -421,7 +417,7 @@ pub fn main() !void {
         if (raylib.IsKeyPressed(raylib.KEY_B)) {
             if (maybe_unit_reference) |unit_ref| {
                 if (maybe_selected_idx) |sel_idx| {
-                    if (try world.settleCity(sel_idx, unit_ref)) {
+                    if (try game.world.settleCity(sel_idx, unit_ref)) {
                         std.debug.print("Settled city!\n", .{});
                         //maybe_unit_reference = null;
                     } else {
@@ -439,12 +435,10 @@ pub fn main() !void {
 
         raylib.BeginMode2D(camera.camera);
 
-        const view = &world.views[@intFromEnum(civ_id)];
-
         graphics.renderWorld(
-            &world,
+            &game.world,
             bounding_box,
-            view,
+            game.getView(),
             camera.camera.zoom,
             maybe_unit_reference,
             texture_set,
@@ -453,15 +447,15 @@ pub fn main() !void {
             if (raylib.IsKeyDown(raylib.KEY_M)) {
                 for (bounding_box.x_min..bounding_box.x_max) |x| {
                     for (bounding_box.y_min..bounding_box.y_max) |y| {
-                        const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
-                        render.renderFormatHexAuto(idx, world.grid, "{}", .{world.grid.distance(selected_idx, idx)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
+                        const idx = game.world.grid.idxFromCoords(@intCast(x), @intCast(y));
+                        render.renderFormatHexAuto(idx, game.world.grid, "{}", .{game.world.grid.distance(selected_idx, idx)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
                     }
                 }
             }
 
             render.renderTextureHex(
                 selected_idx,
-                world.grid,
+                game.world.grid,
                 texture_set.edge_textures[0],
                 .{ .tint = .{ .r = 250, .g = 100, .b = 100, .a = 150 } },
                 texture_set,
@@ -469,28 +463,30 @@ pub fn main() !void {
         }
         if (maybe_selected_idx) |selected_idx| {
             if (raylib.IsKeyDown(raylib.KEY_X)) {
-                var vision_set = world.fov(3, selected_idx);
+                var vision_set = game.world.fov(3, selected_idx);
                 defer vision_set.deinit();
 
                 for (vision_set.slice()) |index| {
-                    render.renderTextureHex(index, world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } }, texture_set);
-                    if (world.terrain[index].attributes(world.rules).is_obscuring)
-                        render.renderTextureHex(index, world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } }, texture_set);
+                    render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } }, texture_set);
+                    if (game.world.terrain[index].attributes(game.world.rules).is_obscuring)
+                        render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } }, texture_set);
                 }
             }
             if (raylib.IsKeyDown(raylib.KEY_Z)) {
                 for (bounding_box.x_min..bounding_box.x_max) |x| {
                     for (bounding_box.y_min..bounding_box.y_max) |y| {
-                        const index = world.grid.idxFromCoords(@intCast(x), @intCast(y));
-                        const xy = Grid.CoordXY.fromIdx(index, world.grid);
-                        const qrs = Grid.CoordQRS.fromIdx(index, world.grid);
+                        const index = game.world.grid.idxFromCoords(@intCast(x), @intCast(y));
+                        const xy = Grid.CoordXY.fromIdx(index, game.world.grid);
+                        const qrs = Grid.CoordQRS.fromIdx(index, game.world.grid);
 
-                        render.renderFormatHexAuto(index, world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
-                        render.renderFormatHexAuto(index, world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
-                        render.renderFormatHexAuto(index, world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
-                        if (maybe_selected_idx != null) render.renderFormatHexAuto(index, world.grid, "D:{}", .{world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
+                        render.renderFormatHexAuto(index, game.world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
+                        render.renderFormatHexAuto(index, game.world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(game.world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
+                        render.renderFormatHexAuto(index, game.world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(game.world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
+                        if (maybe_selected_idx != null) render.renderFormatHexAuto(index, game.world.grid, "D:{}", .{game.world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
 
-                        render.renderFormatHexAuto(index, world.grid, "view: {}", .{
+                        const view = game.getView();
+
+                        render.renderFormatHexAuto(index, game.world.grid, "view: {}", .{
                             view.in_view.hexes.get(index) orelse 0,
                         }, 0, 0.8, .{}, texture_set);
                     }
@@ -513,7 +509,6 @@ pub fn main() !void {
             resource_window.renderUpdate();
 
             hex_info_window.renderUpdate();
-            view_window.renderUpdate();
         }
         raylib.EndDrawing();
 
