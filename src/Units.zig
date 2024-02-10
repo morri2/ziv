@@ -16,10 +16,10 @@ const Unit = @import("Unit.zig");
 const Self = @This();
 
 pub const Slot = enum(u3) {
-    civilian_land = 0,
-    civilian_sea = 1,
-    military_land = 2,
-    military_sea = 3,
+    military_land = 0,
+    military_sea = 1,
+    civilian_land = 2,
+    civilian_sea = 3,
     embarked = 4,
     trade = 5,
 
