@@ -292,12 +292,7 @@ pub fn main() !void {
                     if (maybe_selected_idx) |idx| {
                         if (game.world.cities.get(idx)) |city| {
                             if (city.faction_id == game.civ_id.toFactionID()) {
-                                _ = try game.performAction(.{
-                                    .set_city_production = .{
-                                        .city_idx = idx,
-                                        .production = production_target,
-                                    },
-                                });
+                                _ = try game.setCityProduction(idx, production_target);
                             }
                         }
                     }
@@ -388,7 +383,7 @@ pub fn main() !void {
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) _ = try game.performAction(.next_turn);
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) _ = try game.nextTurn();
 
             // SELECTION
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
@@ -413,24 +408,12 @@ pub fn main() !void {
                         if (game.world.units.firstReference(mouse_idx)) |ref| {
                             const unit = game.world.units.deref(ref) orelse unreachable;
                             if (unit.faction_id != game.civ_id.toFactionID()) {
-                                _ = try game.performAction(.{
-                                    .attack = .{
-                                        .attacker = maybe_unit_reference.?,
-                                        .to = mouse_idx,
-                                    },
-                                });
+                                _ = try game.attack(maybe_unit_reference.?, mouse_idx);
                                 attacked = true;
                             }
                         }
 
-                        if (!attacked) {
-                            _ = try game.performAction(.{
-                                .move_unit = .{
-                                    .ref = maybe_unit_reference.?,
-                                    .to = mouse_idx,
-                                },
-                            });
-                        }
+                        if (!attacked) _ = try game.move(maybe_unit_reference.?, mouse_idx);
 
                         maybe_selected_idx = null;
                     } else if (maybe_unit_reference) |ref| {
@@ -466,9 +449,7 @@ pub fn main() !void {
         // SETTLE CITY
         if (raylib.IsKeyPressed(raylib.KEY_B)) {
             if (maybe_unit_reference) |unit_ref| {
-                _ = try game.performAction(.{
-                    .settle_city = unit_ref,
-                });
+                _ = try game.settleCity(unit_ref);
             }
         }
 

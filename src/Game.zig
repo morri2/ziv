@@ -151,6 +151,41 @@ pub fn nextPlayer(self: *Self) void {
     self.civ_id = if (next_int_id == self.world.views.len) @enumFromInt(0) else @enumFromInt(next_int_id);
 }
 
+pub fn nextTurn(self: *Self) !bool {
+    return try self.performAction(.next_turn);
+}
+
+pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
+    return try self.performAction(.{
+        .move_unit = .{
+            .ref = reference,
+            .to = to,
+        },
+    });
+}
+
+pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
+    return try self.performAction(.{
+        .attack = .{
+            .attacker = attacker,
+            .to = to,
+        },
+    });
+}
+
+pub fn setCityProduction(self: *Self, city_idx: Idx, production: City.ProductionTarget) !bool {
+    return try self.performAction(.{
+        .set_city_production = .{
+            .city_idx = city_idx,
+            .production = production,
+        },
+    });
+}
+
+pub fn settleCity(self: *Self, settler_reference: Units.Reference) !bool {
+    return try self.performAction(.{ .settle_city = settler_reference });
+}
+
 pub fn canPerformAction(self: *const Self, action: Action) bool {
     switch (action) {
         .next_turn => {},
