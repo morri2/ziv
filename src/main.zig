@@ -17,11 +17,15 @@ const graphics = @import("rendering/graphics.zig");
 
 const gui = @import("rendering/gui.zig");
 
+const Socket = @import("Socket.zig");
+
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("raygui.h");
 });
+
+const clap = @import("clap");
 
 pub const std_options = struct {
     pub const log_scope_levels = &[_]std.log.ScopeLevel{
@@ -36,21 +40,59 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
+    const clap_params = comptime clap.parseParamsComptime(
+        \\-h, --help          Display this help and exit.
+        \\-r, --rules <str>   Path to rules directory.
+        \\-c, --client        Start as client.
+        \\-h, --host <u8>  Start as host with x number of slots.
+        \\
+    );
+
+    var clap_res = try clap.parse(clap.Help, &clap_params, clap.parsers.default, .{
+        .allocator = gpa.allocator(),
+    });
+    defer clap_res.deinit();
+
+    if (clap_res.args.help != 0) {
+        return clap.help(std.io.getStdErr().writer(), clap.Help, &clap_params, .{});
+    }
+
     var rules = blk: {
-        var rules_dir = try std.fs.cwd().openDir("base_rules", .{});
+        var rules_dir = try std.fs.cwd().openDir(clap_res.args.rules orelse "base_rules", .{});
         defer rules_dir.close();
         break :blk try Rules.parse(rules_dir, gpa.allocator());
     };
     defer rules.deinit();
 
-    var game = try Game.host(
-        56,
-        36,
-        true,
-        3,
-        &rules,
-        gpa.allocator(),
-    );
+    var game = if (clap_res.args.client != 0) blk: {
+        const socket = try Socket.connect(try std.net.Ip4Address.parse("127.0.0.1", 2000));
+        errdefer socket.close();
+        break :blk try Game.connect(
+            socket,
+            &rules,
+            gpa.allocator(),
+        );
+    } else blk: {
+        const connections = clap_res.args.host orelse 0;
+        const socket = try Socket.create(2000);
+        defer socket.close();
+        const players = try gpa.allocator().alloc(Game.Player, connections);
+        errdefer gpa.allocator().free(players);
+        for (players, 1..) |*player, i| {
+            player.socket = try socket.listenForConnection();
+            player.civ_id = @enumFromInt(i);
+        }
+        break :blk try Game.host(
+            56,
+            36,
+            true,
+            @enumFromInt(0),
+            2,
+            players,
+            &rules,
+            gpa.allocator(),
+        );
+    };
     defer game.deinit();
 
     try game.world.loadFromFile("maps/last_saved.map");
@@ -246,12 +288,20 @@ pub fn main() !void {
 
                 _ = city_construction_window.fetchSelectedNull(&set_production_target);
                 // Set construction
-                if (set_production_target) |production_target|
+                if (set_production_target) |production_target| {
                     if (maybe_selected_idx) |idx| {
-                        if (game.world.cities.getPtr(idx)) |city| {
-                            _ = city.startConstruction(production_target, game.world.rules);
+                        if (game.world.cities.get(idx)) |city| {
+                            if (city.faction_id == game.civ_id.toFactionID()) {
+                                _ = try game.performAction(.{
+                                    .set_city_production = .{
+                                        .city_idx = idx,
+                                        .production = production_target,
+                                    },
+                                });
+                            }
                         }
-                    };
+                    }
+                }
                 set_production_target = null;
 
                 // Set edit brush
@@ -338,7 +388,7 @@ pub fn main() !void {
                 std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
             }
 
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) try game.world.nextTurn();
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) _ = try game.performAction(.next_turn);
 
             // SELECTION
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
@@ -416,12 +466,9 @@ pub fn main() !void {
         // SETTLE CITY
         if (raylib.IsKeyPressed(raylib.KEY_B)) {
             if (maybe_unit_reference) |unit_ref| {
-                if (try game.world.settleCity(unit_ref)) {
-                    std.debug.print("Settled city!\n", .{});
-                    //maybe_unit_reference = null;
-                } else {
-                    std.debug.print("failed to settle city\n", .{});
-                }
+                _ = try game.performAction(.{
+                    .settle_city = unit_ref,
+                });
             }
         }
 
@@ -509,6 +556,8 @@ pub fn main() !void {
             hex_info_window.renderUpdate();
         }
         raylib.EndDrawing();
+
+        try game.update();
 
         _ = camera.update(16.0);
     }
