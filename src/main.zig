@@ -155,6 +155,18 @@ pub fn main() !void {
     edit_window.addItem(.rivers, "River");
     edit_window.addItem(.resource, "Resource");
 
+    const ImprovementWindow = gui.SelectWindow(World.TileWork, .{
+        .WIDTH = 600,
+        .COLUMNS = 4,
+        .NULL_OPTION = true,
+        .ENTRY_HEIGHT = 50,
+        .SPACEING = 2,
+        .TEXTURE_ENTRY_FRACTION = 0.0,
+    });
+
+    var improvement_window: ImprovementWindow = ImprovementWindow.newEmpty();
+    improvement_window.setName("Build improvement");
+
     const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
         .COLUMNS = 5,
@@ -264,6 +276,14 @@ pub fn main() !void {
         // CONTROLL STUFF //
         // ////////////// //
         control_blk: {
+            // SAVE MAP
+            if (raylib.IsKeyPressed(raylib.KEY_C)) {
+                try game.world.saveToFile("maps/last_saved.map");
+                std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
+            }
+
+            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) _ = try game.nextTurn();
+
             if (raylib.IsKeyPressed(raylib.KEY_R)) try game.world.recalculateWaterAccess();
             if (raylib.IsKeyPressed(raylib.KEY_H)) hide_gui = !hide_gui;
 
@@ -326,6 +346,15 @@ pub fn main() !void {
                             }
                         }
                     }
+
+                    // TODO when new selection
+
+                    var maybe_work: ?World.TileWork = null;
+                    if (improvement_window.fetchSelectedNull(&maybe_work)) {
+                        if (maybe_work) |work| {
+                            _ = try game.performAction(.{ .tile_work = .{ .unit = ref, .work = work } });
+                        }
+                    }
                 }
 
                 // UPDATE UNIT INFO
@@ -347,6 +376,7 @@ pub fn main() !void {
                 if (city_construction_window.checkMouseCapture()) break :control_blk;
                 if (edit_window.checkMouseCapture()) break :control_blk;
                 if (resource_window.checkMouseCapture()) break :control_blk;
+                if (improvement_window.checkMouseCapture()) break :control_blk;
             }
 
             // OLD SCHOOL CONTROL STUFF
@@ -374,14 +404,6 @@ pub fn main() !void {
                     }
                 }
             }
-
-            // SAVE MAP
-            if (raylib.IsKeyPressed(raylib.KEY_C)) {
-                try game.world.saveToFile("maps/last_saved.map");
-                std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
-            }
-
-            if (raylib.IsKeyPressed(raylib.KEY_SPACE)) _ = try game.nextTurn();
 
             // SELECTION
             if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
@@ -422,6 +444,27 @@ pub fn main() !void {
                 } else {
                     maybe_selected_idx = mouse_idx;
                     maybe_unit_reference = game.world.units.firstReference(mouse_idx);
+                }
+
+                // BUILD IMPROVEMENTS MENU!
+                if (maybe_unit_reference) |ref| {
+                    improvement_window.clearItems();
+                    if (game.world.canDoImprovementWork(ref, .remove_vegetation)) {
+                        improvement_window.addItem(.remove_vegetation, "Clear Vegetation");
+                    }
+                    for (0..rules.building_count) |bi| {
+                        const b: Rules.Building = @enumFromInt(bi);
+
+                        if (game.world.canDoImprovementWork(ref, .{ .building = b })) {
+                            var buf: [255]u8 = undefined;
+                            const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&rules)});
+                            improvement_window.addItem(.{ .building = b }, label);
+                        } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b })) {
+                            var buf: [255]u8 = undefined;
+                            const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&rules)});
+                            improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
+                        }
+                    }
                 }
             }
 
@@ -529,6 +572,8 @@ pub fn main() !void {
             resource_window.renderUpdate();
 
             hex_info_window.renderUpdate();
+
+            improvement_window.renderUpdate();
         }
         raylib.EndDrawing();
 

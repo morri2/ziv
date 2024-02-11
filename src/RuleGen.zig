@@ -663,6 +663,7 @@ fn parseImprovements(
             const terrain: Terrain = @enumFromInt(terrain_index);
 
             const tag: Building.Allowed = if (veg_flags.isSet(@intFromEnum(tile.unpacked.vegetation))) .allowed else .allowed_after_clear;
+            _ = tag; // autofix
 
             for (building.allow_on.bases) |base| {
                 const base_enum: Terrain.Base = @enumFromInt(
@@ -677,7 +678,7 @@ fn parseImprovements(
                 try allowed_on_map.put(allocator, .{
                     .building = building_enum,
                     .terrain = terrain,
-                }, tag);
+                }, if (tile.unpacked.vegetation == .none) .allowed else .allowed_after_clear);
 
                 continue :terrain_loop;
             }
@@ -695,7 +696,7 @@ fn parseImprovements(
                 try allowed_on_map.put(allocator, .{
                     .building = building_enum,
                     .terrain = terrain,
-                }, tag);
+                }, if (tile.unpacked.vegetation == .none) .allowed else .allowed_after_clear);
                 continue :terrain_loop;
             }
 
@@ -716,16 +717,30 @@ fn parseImprovements(
                 continue :terrain_loop;
             }
 
-            if (tile.unpacked.vegetation != .none and building.allow_on.resources.len != 0) {
-                try allowed_on_map.put(allocator, .{
-                    .building = building_enum,
-                    .terrain = terrain,
-                }, switch (tag) {
-                    .allowed => .allowed_if_resource,
-                    .allowed_after_clear => .allowed_after_clear_if_resource,
-                    else => unreachable,
-                });
+            if (building.allow_on.resources.len != 0) {
+                if (tile.unpacked.vegetation == .none) {
+                    try allowed_on_map.put(allocator, .{
+                        .building = building_enum,
+                        .terrain = terrain,
+                    }, .allowed_if_resource);
+                } else {
+                    try allowed_on_map.put(allocator, .{
+                        .building = building_enum,
+                        .terrain = terrain,
+                    }, .allowed_after_clear_if_resource);
+                }
             }
+
+            // if (tile.unpacked.vegetation != .none and building.allow_on.resources.len != 0) {
+            //     try allowed_on_map.put(allocator, .{
+            //         .building = building_enum,
+            //         .terrain = terrain,
+            //     }, switch (tag) {
+            //         .allowed => .allowed_if_resource,
+            //         .allowed_after_clear => .allowed_after_clear_if_resource,
+            //         else => unreachable,
+            //     });
+            // }
         }
     }
 

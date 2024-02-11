@@ -88,6 +88,11 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
                 outline_color,
                 ts,
             );
+
+            if (world.work_in_progress.get(idx)) |wip| {
+                const progress: f32 = @as(f32, @floatFromInt(wip.progress)) / 3.0;
+                render.renderChargeCircleInHex(idx, world.grid, progress, 0.0, 0.6, .{ .bar_color = raylib.BLUE, .radius = 0.1 }, ts);
+            }
         }
     }
     for (world.rivers.keys()) |edge| {

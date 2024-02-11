@@ -42,6 +42,11 @@ pub const Action = union(Type) {
         promotion: Rules.Promotion,
     },
 
+    tile_work: struct {
+        unit: Units.Reference,
+        work: World.TileWork,
+    },
+
     pub const Type = enum(u8) {
         // Zero is reserved for ping packet
         next_turn = 1,
@@ -52,6 +57,7 @@ pub const Action = union(Type) {
         unset_worked = 6,
         set_worked = 7,
         promote_unit = 8,
+        tile_work = 9,
     };
 };
 
@@ -270,6 +276,9 @@ pub fn canPerformAction(self: *const Self, action: Action) bool {
         .promote_unit => |info| {
             _ = self.world.units.deref(info.unit) orelse return false;
         },
+        .tile_work => |info| {
+            return self.world.canDoImprovementWork(info.unit, info.work);
+        },
     }
 
     return true;
@@ -331,6 +340,11 @@ fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
         .promote_unit => |info| {
             var unit = self.world.units.derefToPtr(info.unit) orelse return false;
             unit.promotions.set(@intFromEnum(info.promotion));
+
+            view_update = true;
+        },
+        .tile_work => |info| {
+            if (!self.world.doImprovementWork(info.unit, info.work)) return false;
 
             view_update = true;
         },
@@ -444,6 +458,18 @@ fn sendAction(writer: Socket.Writer, action: Action) !void {
             try writer.writeByte(@intFromEnum(info.unit.slot));
             try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.unit.stacked), .little);
             try writer.writeByte(@intFromEnum(info.promotion));
+        },
+        .tile_work => |info| {
+            try writer.writeByte(@intFromEnum(Action.Type.tile_work));
+            try writer.writeInt(Idx, info.unit.idx, .little);
+            try writer.writeByte(@intFromEnum(info.unit.slot));
+            try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.unit.stacked), .little);
+            try writer.writeByte(@intFromEnum(std.meta.activeTag(info.work)));
+            switch (info.work) {
+                .building, .remove_vegetation_building => |building| try writer.writeInt(std.meta.Tag(Rules.Building), @intFromEnum(building), .little),
+                .remove_vegetation => {},
+                else => unreachable, // TODO!
+            }
         },
     }
 }
@@ -562,6 +588,39 @@ fn recieveAction(reader: Socket.Reader) !Action {
                 },
                 .promotion = promotion,
             } };
+        },
+
+        .tile_work => {
+            const idx = try reader.readInt(Idx, .little);
+            const slot: Units.Slot = @enumFromInt(try reader.readByte());
+            const stacked = try reader.readEnum(Units.Stacked.Key, .little);
+
+            const work_type: World.TileWork.TileWorkType = @enumFromInt(try reader.readInt(std.meta.Tag(World.TileWork.TileWorkType), .little));
+
+            return .{
+                .tile_work = .{
+                    .unit = .{
+                        .idx = idx,
+                        .slot = slot,
+                        .stacked = stacked,
+                    },
+                    .work = blk: {
+                        switch (work_type) {
+                            .building => {
+                                const building: Rules.Building = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.Building), .little));
+                                break :blk .{ .building = building };
+                            },
+
+                            .remove_vegetation_building => {
+                                const building: Rules.Building = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.Building), .little));
+                                break :blk .{ .remove_vegetation_building = building };
+                            },
+                            .remove_vegetation => break :blk .remove_vegetation,
+                            else => std.debug.panic("Tile work is not implemented for networking :(", .{}),
+                        }
+                    },
+                },
+            };
         },
     }
 }

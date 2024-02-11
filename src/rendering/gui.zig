@@ -237,6 +237,10 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
             } else std.debug.panic("GUI LIST IS FULL!", .{});
         }
 
+        pub fn clearItems(self: *Self) void {
+            self.len = 0;
+        }
+
         pub fn addItemTexture(self: *Self, value: R, label: []const u8, texture: ?raylib.Texture2D) void {
             self.addItem(value, label);
             if (texture) |t| {

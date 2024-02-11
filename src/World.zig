@@ -44,17 +44,113 @@ pub const CivilizationID = enum(u5) {
 
 /// The lowest index is always in low :))
 pub const WorkInProgress = struct {
-    work_type: union(enum) {
-        building: Building,
-        remove_vegetation_building: Building,
-        transport: Transport,
-        remove_fallout,
-        repair,
-        remove_vegetation,
-    },
-
+    work_type: TileWork,
     progress: u8,
 };
+pub const TileWork = union(TileWorkType) {
+    building: Building,
+    remove_vegetation_building: Building,
+    transport: Transport,
+    remove_fallout,
+    repair,
+    remove_vegetation,
+
+    pub const TileWorkType = enum(u8) {
+        building = 0,
+        remove_vegetation_building = 1,
+        transport = 2,
+        remove_fallout = 3,
+        repair = 4,
+        remove_vegetation = 5,
+    };
+};
+
+pub fn workAllowedOn(self: *const Self, idx: Idx, work: TileWork) bool {
+    if (self.cities.contains(idx)) return false;
+    switch (work) {
+        .building => |b| {
+            const a = Rules.Building.allowedOn(b, self.terrain[idx], self.rules);
+            switch (a) {
+                .allowed_if_resource => {
+                    return b.connectsResource((self.resources.get(idx) orelse return false).type, self.rules);
+                },
+                .allowed => return true,
+                else => return false,
+            }
+        },
+        .remove_vegetation_building => |b| {
+            if (!self.workAllowedOn(idx, .remove_vegetation)) return false;
+            switch (Rules.Building.allowedOn(b, self.terrain[idx], self.rules)) {
+                .allowed_after_clear_if_resource => {
+                    return b.connectsResource((self.resources.get(idx) orelse return false).type, self.rules);
+                },
+                .allowed_after_clear => return true,
+                else => return false,
+            }
+        },
+        .transport => |_| {
+            return !self.terrain[idx].attributes(self.rules).is_water;
+        },
+        .remove_vegetation => {
+            if (self.terrain[idx].vegetation(self.rules) == .none) return false;
+            return true;
+        },
+
+        else => return false,
+    }
+}
+
+pub fn canDoImprovementWork(self: *const Self, unit_ref: Units.Reference, work: TileWork) bool {
+    if (!self.workAllowedOn(unit_ref.idx, work)) return false;
+
+    const unit = self.units.deref(unit_ref) orelse return false;
+    if (unit.movement <= 0) return false;
+
+    switch (work) {
+        .building,
+        .remove_vegetation_building,
+        .remove_vegetation,
+        => if (!Rules.Promotion.Effect.in(.build_improvement, unit.promotions, self.rules)) return false,
+        .transport => if (!Rules.Promotion.Effect.in(.build_roads, unit.promotions, self.rules)) return false, // TODO check the
+        else => return false, // TODO
+    }
+    return true;
+}
+
+pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork) bool {
+    if (!self.canDoImprovementWork(unit_ref, work)) return false;
+
+    progress_blk: {
+        if (self.work_in_progress.getPtr(unit_ref.idx)) |wip| {
+            if (@intFromEnum(wip.work_type) == @intFromEnum(wip.work_type)) {
+                wip.progress += 1;
+                break :progress_blk;
+            }
+        }
+
+        self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = work, .progress = 1 }) catch undefined;
+    }
+    if (self.work_in_progress.get(unit_ref.idx)) |wip| {
+        if (wip.progress >= 3) // TODO progress needed should be dependent on project
+        {
+            _ = self.work_in_progress.swapRemove(unit_ref.idx);
+            switch (wip.work_type) {
+                .building => |b| self.improvements[unit_ref.idx].building = b,
+                .remove_vegetation => self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(self.rules),
+                .remove_vegetation_building => |b| {
+                    self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(self.rules);
+                    self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = .{ .building = b }, .progress = 0 }) catch unreachable;
+                },
+                .transport => |t| self.improvements[unit_ref.idx].transport = t,
+                else => {
+                    std.debug.print("UNIMPLEMENTED!\n", .{});
+                },
+            }
+        }
+    } else unreachable;
+    self.units.derefToPtr(unit_ref).?.movement = 0;
+    return true;
+}
 
 pub const ResourceAndAmount = packed struct {
     type: Resource,
