@@ -28,7 +28,10 @@ terrain_names: []const u16,
 resource_count: u32,
 resource_kinds: []const Resource.Kind,
 resource_yields: []const Yield,
-resource_connectors: []const Building,
+resource_connectors: std.AutoHashMapUnmanaged(struct {
+    building: Building,
+    resource: Resource,
+}, void),
 resource_names: []const u16,
 resource_strings: []const u8,
 
@@ -226,10 +229,6 @@ pub const Resource = enum(u6) {
         return rules.resource_yields[@intFromEnum(self)];
     }
 
-    pub fn connectedBy(self: Resource, rules: *const Rules) Building {
-        return rules.resource_connectors[@intFromEnum(self)];
-    }
-
     pub fn name(self: Resource, rules: *const Rules) []const u8 {
         const start = rules.resource_names[@intFromEnum(self)];
         const end = rules.resource_names[@intFromEnum(self) + 1];
@@ -262,6 +261,13 @@ pub const Building = enum(u8) {
             .terrain = terrain,
             .building = self,
         }) orelse .not_allowed;
+    }
+
+    pub fn connectsResource(self: Building, resource: Resource, rules: *const Rules) bool {
+        return rules.resource_connectors.contains(.{
+            .building = self,
+            .resource = resource,
+        });
     }
 
     pub fn name(self: Building, rules: *const Rules) []const u8 {

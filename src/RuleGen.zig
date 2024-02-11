@@ -608,7 +608,7 @@ fn parseImprovements(
     std.debug.assert(strings_len <= std.math.maxInt(u16));
     const building_strings = try arena_allocator.alloc(u8, strings_len);
 
-    const resource_connectors = try arena_allocator.alloc(Building, rules.resource_count);
+    var num_resource_connectors: u32 = 0;
     {
         var string_index: usize = 0;
         building_names[0] = @truncate(string_index);
@@ -623,13 +623,21 @@ fn parseImprovements(
 
             building_yields[building_index] = building.yield;
 
-            // TODO: Make sure each resource only has one connector building
-            for (building.allow_on.resources) |resource_name| {
-                const resource = resource_map.get(resource_name) orelse return error.UnknownResource;
-                resource_connectors[@intFromEnum(resource)] = @enumFromInt(building_index);
-            }
+            num_resource_connectors += @intCast(building.allow_on.resources.len);
         }
         building_names[building_names.len - 1] = @truncate(string_index);
+    }
+
+    var resource_connectors: @TypeOf(rules.resource_connectors) = .{};
+    try resource_connectors.ensureUnusedCapacity(arena_allocator, num_resource_connectors);
+    for (buildings, 1..) |building, building_index| {
+        for (building.allow_on.resources) |resource_name| {
+            const resource = resource_map.get(resource_name) orelse return error.UnknownResource;
+            resource_connectors.putAssumeCapacity(.{
+                .building = @enumFromInt(building_index),
+                .resource = resource,
+            }, {});
+        }
     }
 
     rules.building_strings = building_strings;
