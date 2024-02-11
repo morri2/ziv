@@ -628,7 +628,7 @@ fn parseImprovements(
         building_names[building_names.len - 1] = @truncate(string_index);
     }
 
-    var resource_connectors: @TypeOf(rules.resource_connectors) = .{};
+    var resource_connectors: @TypeOf(rules.building_resource_connectors) = .{};
     try resource_connectors.ensureUnusedCapacity(arena_allocator, num_resource_connectors);
     for (buildings, 1..) |building, building_index| {
         for (building.allow_on.resources) |resource_name| {
@@ -643,7 +643,7 @@ fn parseImprovements(
     rules.building_strings = building_strings;
     rules.building_yields = building_yields;
     rules.building_names = building_names;
-    rules.resource_connectors = resource_connectors;
+    rules.building_resource_connectors = resource_connectors;
 
     var allowed_on_map: @TypeOf(rules.building_allowed_map) = .{};
     defer allowed_on_map.deinit(allocator);
