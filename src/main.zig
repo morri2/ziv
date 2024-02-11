@@ -100,6 +100,7 @@ pub fn main() !void {
     // UNITS
     try game.world.addUnit(1200, @enumFromInt(4), @enumFromInt(0));
     try game.world.addUnit(1202, @enumFromInt(2), @enumFromInt(0));
+    try game.world.addUnit(1089, @enumFromInt(0), @enumFromInt(0));
     try game.world.addUnit(1205, @enumFromInt(3), @enumFromInt(0));
     try game.world.addUnit(1203, @enumFromInt(7), @enumFromInt(0));
 
@@ -158,7 +159,6 @@ pub fn main() !void {
     const ImprovementWindow = gui.SelectWindow(World.TileWork, .{
         .WIDTH = 600,
         .COLUMNS = 4,
-        .NULL_OPTION = true,
         .ENTRY_HEIGHT = 50,
         .SPACEING = 2,
         .TEXTURE_ENTRY_FRACTION = 0.0,
@@ -166,6 +166,8 @@ pub fn main() !void {
 
     var improvement_window: ImprovementWindow = ImprovementWindow.newEmpty();
     improvement_window.setName("Build improvement");
+
+    improvement_window.bounds.y += 800;
 
     const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
         .WIDTH = 400,
@@ -465,6 +467,10 @@ pub fn main() !void {
                             improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
                         }
                     }
+                    if (game.world.canDoImprovementWork(ref, .{ .transport = .road }))
+                        improvement_window.addItem(.{ .transport = .road }, "Transport: \n Road");
+                    if (game.world.canDoImprovementWork(ref, .{ .transport = .rail }))
+                        improvement_window.addItem(.{ .transport = .rail }, "Transport: \n Rail");
                 }
             }
 

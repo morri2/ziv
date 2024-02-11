@@ -78,6 +78,28 @@
 			]
 		},
 		{
+			"name": "BuildRoads",
+			"requires": [
+				"BuildRoads"
+			],
+			"effects": [
+				{
+					"effect": "build_roads"
+				}
+			]
+		},
+		{
+			"name": "BuildRail",
+			"requires": [
+				"BuildRail"
+			],
+			"effects": [
+				{
+					"effect": "build_rail"
+				}
+			]
+		},
+		{
 			"name": "ShockI",
 			"effects": [
 				{

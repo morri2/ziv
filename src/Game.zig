@@ -466,8 +466,11 @@ fn sendAction(writer: Socket.Writer, action: Action) !void {
             try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.unit.stacked), .little);
             try writer.writeByte(@intFromEnum(std.meta.activeTag(info.work)));
             switch (info.work) {
-                .building, .remove_vegetation_building => |building| try writer.writeInt(std.meta.Tag(Rules.Building), @intFromEnum(building), .little),
-                .remove_vegetation => {},
+                .building,
+                .remove_vegetation_building,
+                => |building| try writer.writeInt(std.meta.Tag(Rules.Building), @intFromEnum(building), .little),
+                .transport => |transport| try writer.writeInt(u8, @intFromEnum(transport), .little),
+                .remove_vegetation, .repair => {},
                 else => unreachable, // TODO!
             }
         },
@@ -610,12 +613,16 @@ fn recieveAction(reader: Socket.Reader) !Action {
                                 const building: Rules.Building = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.Building), .little));
                                 break :blk .{ .building = building };
                             },
-
                             .remove_vegetation_building => {
                                 const building: Rules.Building = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.Building), .little));
                                 break :blk .{ .remove_vegetation_building = building };
                             },
                             .remove_vegetation => break :blk .remove_vegetation,
+                            .repair => break :blk .repair,
+                            .transport => {
+                                const transport: Rules.Transport = @enumFromInt(try reader.readInt(u8, .little));
+                                break :blk .{ .transport = transport };
+                            },
                             else => std.debug.panic("Tile work is not implemented for networking :(", .{}),
                         }
                     },

@@ -8,7 +8,8 @@
 			"domain": "land",
 			"starting_promotions": [
 				"CannotMelee",
-				"BuildImprovements"
+				"BuildImprovements",
+				"BuildRoads"
 			]
 		},
 		{

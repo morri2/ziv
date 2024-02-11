@@ -67,6 +67,9 @@ pub const TileWork = union(TileWorkType) {
 
 pub fn workAllowedOn(self: *const Self, idx: Idx, work: TileWork) bool {
     if (self.cities.contains(idx)) return false;
+    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
+
     switch (work) {
         .building => |b| {
             const a = Rules.Building.allowedOn(b, self.terrain[idx], self.rules);
@@ -111,7 +114,10 @@ pub fn canDoImprovementWork(self: *const Self, unit_ref: Units.Reference, work: 
         .remove_vegetation_building,
         .remove_vegetation,
         => if (!Rules.Promotion.Effect.in(.build_improvement, unit.promotions, self.rules)) return false,
-        .transport => if (!Rules.Promotion.Effect.in(.build_roads, unit.promotions, self.rules)) return false, // TODO check the
+        .transport => |t| {
+            if (t == .road and !Rules.Promotion.Effect.in(.build_roads, unit.promotions, self.rules)) return false;
+            if (t == .rail and !Rules.Promotion.Effect.in(.build_rail, unit.promotions, self.rules)) return false;
+        },
         else => return false, // TODO
     }
     return true;
