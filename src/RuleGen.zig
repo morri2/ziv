@@ -173,9 +173,9 @@ fn parseTerrain(
 
     const arena_allocator = rules.arena.allocator();
 
-    rules.base_count = terrain.bases.len;
-    rules.feature_count = terrain.features.len + 1; // +1 = none
-    rules.vegetation_count = terrain.vegetation.len + 1; // +1 = none
+    rules.base_count = @intCast(terrain.bases.len);
+    rules.feature_count = @intCast(terrain.features.len + 1); // +1 = none
+    rules.vegetation_count = @intCast(terrain.vegetation.len + 1); // +1 = none
 
     var terrain_strings = std.ArrayListUnmanaged(u8){};
     defer terrain_strings.deinit(allocator);
@@ -205,9 +205,9 @@ fn parseTerrain(
         vegetation_names[vegetation_names.len - 1] = @truncate(terrain_strings.items.len);
     }
 
-    rules.base_names = base_names.ptr;
-    rules.feature_names = feature_names.ptr;
-    rules.vegetation_names = vegetation_names.ptr;
+    rules.base_names = base_names;
+    rules.feature_names = feature_names;
+    rules.vegetation_names = vegetation_names;
 
     var tiles = std.ArrayListUnmanaged(Tile){};
     errdefer tiles.deinit(allocator);
@@ -368,7 +368,7 @@ fn parseTerrain(
 
     std.debug.assert(tiles.items.len <= 256);
 
-    rules.terrain_count = tiles.items.len;
+    rules.terrain_count = @intCast(tiles.items.len);
     const terrain_bases = try arena_allocator.alloc(Terrain.Base, tiles.items.len);
     const terrain_features = try arena_allocator.alloc(Terrain.Feature, tiles.items.len);
     const terrain_vegetation = try arena_allocator.alloc(Terrain.Vegetation, tiles.items.len);
@@ -406,15 +406,15 @@ fn parseTerrain(
         }
     }
 
-    rules.terrain_bases = terrain_bases.ptr;
-    rules.terrain_features = terrain_features.ptr;
-    rules.terrain_vegetation = terrain_vegetation.ptr;
-    rules.terrain_yields = terrain_yields.ptr;
-    rules.terrain_attributes = terrain_attributes.ptr;
-    rules.terrain_happiness = terrain_happiness.ptr;
-    rules.terrain_combat_bonus = terrain_combat_bonus.ptr;
-    rules.terrain_no_vegetation = terrain_no_vegetation.ptr;
-    rules.terrain_names = terrain_names.ptr;
+    rules.terrain_bases = terrain_bases;
+    rules.terrain_features = terrain_features;
+    rules.terrain_vegetation = terrain_vegetation;
+    rules.terrain_yields = terrain_yields;
+    rules.terrain_attributes = terrain_attributes;
+    rules.terrain_happiness = terrain_happiness;
+    rules.terrain_combat_bonus = terrain_combat_bonus;
+    rules.terrain_no_vegetation = terrain_no_vegetation;
+    rules.terrain_names = terrain_names;
     rules.terrain_unpacked_map = terrain_unpacked_map;
     rules.terrain_strings = try arena_allocator.dupe(u8, terrain_strings.items);
 
@@ -451,10 +451,9 @@ fn parseResources(
 
     const arena_allocator = rules.arena.allocator();
 
-    rules.resource_count =
-        resources.bonus.len +
+    rules.resource_count = @intCast(resources.bonus.len +
         resources.strategic.len +
-        resources.luxury.len;
+        resources.luxury.len);
 
     std.debug.assert(rules.resource_count <= 256);
 
@@ -541,9 +540,9 @@ fn parseResources(
         resource_names[resource_names.len - 1] = @truncate(string_index);
     }
 
-    rules.resource_kinds = resource_kinds.ptr;
-    rules.resource_yields = resource_yields.ptr;
-    rules.resource_names = resource_names.ptr;
+    rules.resource_kinds = resource_kinds;
+    rules.resource_yields = resource_yields;
+    rules.resource_names = resource_names;
     rules.resource_strings = resource_strings;
 
     return resource_map;
@@ -593,7 +592,7 @@ fn parseImprovements(
 
     std.debug.assert(buildings.len <= 256);
 
-    rules.building_count = buildings.len + 1;
+    rules.building_count = @intCast(buildings.len + 1);
 
     const building_yields = try arena_allocator.alloc(Yield, rules.building_count);
     const building_names = try arena_allocator.alloc(u16, rules.building_count + 1);
@@ -634,9 +633,9 @@ fn parseImprovements(
     }
 
     rules.building_strings = building_strings;
-    rules.building_yields = building_yields.ptr;
-    rules.building_names = building_names.ptr;
-    rules.resource_connectors = resource_connectors.ptr;
+    rules.building_yields = building_yields;
+    rules.building_names = building_names;
+    rules.resource_connectors = resource_connectors;
 
     var allowed_on_map: @TypeOf(rules.building_allowed_map) = .{};
     defer allowed_on_map.deinit(allocator);
@@ -751,7 +750,7 @@ fn parsePromotions(
 
     const promotions = parsed.value.promotions;
 
-    rules.promotion_count = promotions.len;
+    rules.promotion_count = @intCast(promotions.len);
 
     std.debug.assert(rules.promotion_count <= 256);
 
@@ -811,8 +810,8 @@ fn parsePromotions(
         }
         promotion_prerequisites[promotion_prerequisites.len - 1] = @truncate(promotion_storage_index);
 
-        rules.promotion_prerequisites = promotion_prerequisites.ptr;
-        rules.promotion_storage = promotion_storage.ptr;
+        rules.promotion_prerequisites = promotion_prerequisites;
+        rules.promotion_storage = promotion_storage;
     }
 
     {
@@ -857,11 +856,11 @@ fn parsePromotions(
         }
         rules.effects[rules.effects.len - 1] = @truncate(storage_index);
 
-        rules.effect_values = effect_values.ptr;
-        rules.effect_promotions = effect_promotions.ptr;
+        rules.effect_values = effect_values;
+        rules.effect_promotions = effect_promotions;
     }
 
-    rules.promotion_names = promotion_names.ptr;
+    rules.promotion_names = promotion_names;
     rules.promotion_strings = promotion_strings;
 
     return promotion_map;
@@ -903,7 +902,7 @@ fn parseUnits(
 
     const units = parsed.value;
 
-    rules.unit_type_count = units.civilian.len + units.military.len;
+    rules.unit_type_count = @intCast(units.civilian.len + units.military.len);
 
     std.debug.assert(rules.unit_type_count <= 256);
 
@@ -965,8 +964,8 @@ fn parseUnits(
         unit_names[unit_names.len - 1] = @truncate(string_index);
     }
 
-    rules.unit_type_stats = unit_stats.ptr;
+    rules.unit_type_stats = unit_stats;
     rules.unit_type_is_military = unit_is_military;
-    rules.unit_type_names = unit_names.ptr;
+    rules.unit_type_names = unit_names;
     rules.unit_type_strings = unit_strings;
 }
