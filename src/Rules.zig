@@ -5,58 +5,61 @@ const Rules = @This();
 
 arena: std.heap.ArenaAllocator,
 
-base_count: usize,
-feature_count: usize,
-vegetation_count: usize,
-base_names: [*]const u16,
-feature_names: [*]const u16,
-vegetation_names: [*]const u16,
+base_count: u32,
+feature_count: u32,
+vegetation_count: u32,
+base_names: []const u16,
+feature_names: []const u16,
+vegetation_names: []const u16,
 terrain_strings: []const u8,
 
-terrain_count: usize,
-terrain_bases: [*]const Terrain.Base,
-terrain_features: [*]const Terrain.Feature,
-terrain_vegetation: [*]const Terrain.Vegetation,
-terrain_attributes: [*]const Terrain.Attributes,
-terrain_yields: [*]const Yield,
-terrain_happiness: [*]const u8,
-terrain_combat_bonus: [*]const i8,
-terrain_no_vegetation: [*]const Terrain,
+terrain_count: u32,
+terrain_bases: []const Terrain.Base,
+terrain_features: []const Terrain.Feature,
+terrain_vegetation: []const Terrain.Vegetation,
+terrain_attributes: []const Terrain.Attributes,
+terrain_yields: []const Yield,
+terrain_happiness: []const u8,
+terrain_combat_bonus: []const i8,
+terrain_no_vegetation: []const Terrain,
 terrain_unpacked_map: std.AutoHashMapUnmanaged(Terrain.Unpacked, Terrain),
-terrain_names: [*]const u16,
+terrain_names: []const u16,
 
-resource_count: usize,
-resource_kinds: [*]const Resource.Kind,
-resource_yields: [*]const Yield,
-resource_connectors: [*]const Building,
-resource_names: [*]const u16,
+resource_count: u32,
+resource_kinds: []const Resource.Kind,
+resource_yields: []const Yield,
+resource_names: []const u16,
 resource_strings: []const u8,
 
-building_count: usize,
-building_yields: [*]const Yield,
+building_count: u32,
+building_yields: []const Yield,
 building_allowed_map: std.AutoHashMapUnmanaged(struct {
     building: Building,
     terrain: Terrain,
 }, Building.Allowed),
-building_names: [*]const u16,
+building_resource_connectors: std.AutoHashMapUnmanaged(struct {
+    building: Building,
+    resource: Resource,
+}, void),
+building_names: []const u16,
 building_strings: []const u8,
 
-promotion_count: usize,
-promotion_prerequisites: [*]const u16,
-promotion_storage: [*]const Promotion,
+promotion_count: u32,
+promotion_prerequisites: []const u16,
+promotion_storage: []const Promotion,
 
-promotion_names: [*]const u16,
+promotion_names: []const u16,
 promotion_strings: []const u8,
 
 effects: [std.meta.fields(Promotion.Effect).len + 1]u16,
-effect_promotions: [*]const Promotion.Set, // TODO: compress bit field
-effect_values: [*]const u32,
+effect_promotions: []const Promotion.Set, // TODO: compress bit field
+effect_values: []const u32,
 
-unit_type_count: usize,
-unit_type_stats: [*]const UnitType.Stats,
+unit_type_count: u32,
+unit_type_stats: []const UnitType.Stats,
 unit_type_is_military: std.DynamicBitSetUnmanaged,
 
-unit_type_names: [*]const u16,
+unit_type_names: []const u16,
 unit_type_strings: []const u8,
 
 pub const parse = @import("RuleGen.zig").parse;
@@ -226,10 +229,6 @@ pub const Resource = enum(u6) {
         return rules.resource_yields[@intFromEnum(self)];
     }
 
-    pub fn connectedBy(self: Resource, rules: *const Rules) Building {
-        return rules.resource_connectors[@intFromEnum(self)];
-    }
-
     pub fn name(self: Resource, rules: *const Rules) []const u8 {
         const start = rules.resource_names[@intFromEnum(self)];
         const end = rules.resource_names[@intFromEnum(self) + 1];
@@ -262,6 +261,13 @@ pub const Building = enum(u8) {
             .terrain = terrain,
             .building = self,
         }) orelse .not_allowed;
+    }
+
+    pub fn connectsResource(self: Building, resource: Resource, rules: *const Rules) bool {
+        return rules.building_resource_connectors.contains(.{
+            .building = self,
+            .resource = resource,
+        });
     }
 
     pub fn name(self: Building, rules: *const Rules) []const u8 {
