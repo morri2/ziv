@@ -37,6 +37,11 @@ pub const Action = union(Type) {
         idx: Idx,
     },
 
+    promote_unit: struct {
+        unit: Units.Reference,
+        promotion: Rules.Promotion,
+    },
+
     pub const Type = enum(u8) {
         // Zero is reserved for ping packet
         next_turn = 1,
@@ -46,6 +51,7 @@ pub const Action = union(Type) {
         settle_city = 5,
         unset_worked = 6,
         set_worked = 7,
+        promote_unit = 8,
     };
 };
 
@@ -214,6 +220,10 @@ pub fn setWorked(self: *Self, city_idx: Idx, idx: Idx) !bool {
     });
 }
 
+pub fn promoteUnit(self: *Self, unit_ref: Units.Reference, promotion: Rules.Promotion) !bool {
+    return try self.performAction(.{ .promote_unit = .{ .unit = unit_ref, .promotion = promotion } });
+}
+
 pub fn canPerformAction(self: *const Self, action: Action) bool {
     switch (action) {
         .next_turn => {},
@@ -256,6 +266,9 @@ pub fn canPerformAction(self: *const Self, action: Action) bool {
             if (!city.claimed.contains(info.idx)) return false;
 
             if (city.worked.contains(info.idx)) return false;
+        },
+        .promote_unit => |info| {
+            _ = self.world.units.deref(info.unit) orelse return false;
         },
     }
 
@@ -314,6 +327,12 @@ fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
             if (!city.claimed.contains(info.idx)) return false;
 
             if (!city.setWorkedWithAutoReassign(info.idx, &self.world)) return false;
+        },
+        .promote_unit => |info| {
+            var unit = self.world.units.derefToPtr(info.unit) orelse return false;
+            unit.promotions.set(@intFromEnum(info.promotion));
+
+            view_update = true;
         },
     }
 
@@ -419,6 +438,13 @@ fn sendAction(writer: Socket.Writer, action: Action) !void {
             try writer.writeInt(Idx, info.city_idx, .little);
             try writer.writeInt(Idx, info.idx, .little);
         },
+        .promote_unit => |info| {
+            try writer.writeByte(@intFromEnum(Action.Type.promote_unit));
+            try writer.writeInt(Idx, info.unit.idx, .little);
+            try writer.writeByte(@intFromEnum(info.unit.slot));
+            try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.unit.stacked), .little);
+            try writer.writeByte(@intFromEnum(info.promotion));
+        },
     }
 }
 
@@ -521,6 +547,21 @@ fn recieveAction(reader: Socket.Reader) !Action {
                     .idx = idx,
                 },
             };
+        },
+        .promote_unit => {
+            const idx = try reader.readInt(Idx, .little);
+            const slot: Units.Slot = @enumFromInt(try reader.readByte());
+            const stacked = try reader.readEnum(Units.Stacked.Key, .little);
+            const promotion: Rules.Promotion = @enumFromInt(try reader.readByte());
+
+            return .{ .promote_unit = .{
+                .unit = .{
+                    .idx = idx,
+                    .slot = slot,
+                    .stacked = stacked,
+                },
+                .promotion = promotion,
+            } };
         },
     }
 }

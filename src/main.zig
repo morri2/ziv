@@ -276,14 +276,12 @@ pub fn main() !void {
                 if (edit_mode != .draw) palet_window.hidden = true else palet_window.hidden = false;
                 if (edit_mode != .resource) resource_window.hidden = true else resource_window.hidden = false;
 
-                _ = promotion_window.fetchSelectedNull(&set_promotion);
                 // Set unit promotions
-                if (set_promotion) |promotion|
-                    if (maybe_unit_reference) |unit_ref|
-                        if (game.world.units.derefToPtr(unit_ref)) |unit|
-                            unit.promotions.set(@intFromEnum(promotion));
-                set_promotion = null;
-
+                if (promotion_window.fetchSelectedNull(&set_promotion)) {
+                    if (set_promotion) |promotion| if (maybe_unit_reference) |unit_ref| {
+                        _ = try game.promoteUnit(unit_ref, promotion);
+                    };
+                }
                 _ = palet_window.fetchSelectedNull(&terrain_brush);
 
                 _ = city_construction_window.fetchSelectedNull(&set_production_target);
