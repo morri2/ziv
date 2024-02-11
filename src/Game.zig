@@ -420,6 +420,7 @@ fn recieveAction(reader: Socket.Reader) !Action {
 fn serialize(writer: Socket.Writer, value: anytype) !void {
     const Value = @TypeOf(value);
     switch (@typeInfo(Value)) {
+        .Void => {},
         .Bool => try writer.writeByte(@intFromBool(value)),
         .Int => try writer.writeInt(getAlignedInt(Value), value, .little),
         .Enum => |info| try writer.writeInt(getAlignedInt(info.tag_type), @intFromEnum(value), .little),
@@ -445,12 +446,13 @@ fn serialize(writer: Socket.Writer, value: anytype) !void {
                 }
             }
         },
-        else => unreachable,
+        else => @compileError("Unimplemented serialization type: " ++ @typeName(Value)),
     }
 }
 
 fn deserialize(reader: Socket.Reader, comptime Value: type) !Value {
     return switch (@typeInfo(Value)) {
+        .Void => {},
         .Bool => blk: {
             const bool_int: u1 = @intCast(try reader.readByte());
             break :blk @bitCast(bool_int);
@@ -481,7 +483,7 @@ fn deserialize(reader: Socket.Reader, comptime Value: type) !Value {
                 break :blk value;
             }
         },
-        else => unreachable,
+        else => @compileError("Unimplemented deserialization type: " ++ @typeName(Value)),
     };
 }
 
