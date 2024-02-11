@@ -410,224 +410,84 @@ fn clientUpdate(self: *Self) !void {
 }
 
 fn sendAction(writer: Socket.Writer, action: Action) !void {
-    switch (action) {
-        .next_turn => try writer.writeByte(@intFromEnum(Action.Type.next_turn)),
-        .move_unit => |info| {
-            try writer.writeByte(@intFromEnum(Action.Type.move_unit));
-            try writer.writeInt(Idx, info.ref.idx, .little);
-            try writer.writeByte(@intFromEnum(info.ref.slot));
-            try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.ref.stacked), .little);
-            try writer.writeInt(Idx, info.to, .little);
-        },
-        .attack => |info| {
-            try writer.writeByte(@intFromEnum(Action.Type.attack));
-            try writer.writeInt(Idx, info.attacker.idx, .little);
-            try writer.writeByte(@intFromEnum(info.attacker.slot));
-            try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.attacker.stacked), .little);
-            try writer.writeInt(Idx, info.to, .little);
-        },
-        .set_city_production => |info| {
-            try writer.writeByte(@intFromEnum(Action.Type.set_city_production));
-            try writer.writeInt(Idx, info.city_idx, .little);
-            try writer.writeByte(@intFromEnum(std.meta.activeTag(info.production)));
-            switch (info.production) {
-                .building => |building| try writer.writeInt(std.meta.Tag(Rules.Building), @intFromEnum(building), .little),
-                .unit => |unit_type| try writer.writeInt(std.meta.Tag(Rules.UnitType), @intFromEnum(unit_type), .little),
-                .perpetual_money, .perpetual_research => {},
-            }
-        },
-        .settle_city => |settler_ref| {
-            try writer.writeByte(@intFromEnum(Action.Type.settle_city));
-            try writer.writeInt(Idx, settler_ref.idx, .little);
-            try writer.writeByte(@intFromEnum(settler_ref.slot));
-            try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(settler_ref.stacked), .little);
-        },
-        .unset_worked => |info| {
-            try writer.writeByte(@intFromEnum(Action.Type.unset_worked));
-            try writer.writeInt(Idx, info.city_idx, .little);
-            try writer.writeInt(Idx, info.idx, .little);
-        },
-        .set_worked => |info| {
-            try writer.writeByte(@intFromEnum(Action.Type.set_worked));
-            try writer.writeInt(Idx, info.city_idx, .little);
-            try writer.writeInt(Idx, info.idx, .little);
-        },
-        .promote_unit => |info| {
-            try writer.writeByte(@intFromEnum(Action.Type.promote_unit));
-            try writer.writeInt(Idx, info.unit.idx, .little);
-            try writer.writeByte(@intFromEnum(info.unit.slot));
-            try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.unit.stacked), .little);
-            try writer.writeByte(@intFromEnum(info.promotion));
-        },
-        .tile_work => |info| {
-            try writer.writeByte(@intFromEnum(Action.Type.tile_work));
-            try writer.writeInt(Idx, info.unit.idx, .little);
-            try writer.writeByte(@intFromEnum(info.unit.slot));
-            try writer.writeInt(std.meta.Tag(Units.Stacked.Key), @intFromEnum(info.unit.stacked), .little);
-            try writer.writeByte(@intFromEnum(std.meta.activeTag(info.work)));
-            switch (info.work) {
-                .building,
-                .remove_vegetation_building,
-                => |building| try writer.writeInt(std.meta.Tag(Rules.Building), @intFromEnum(building), .little),
-                .transport => |transport| try writer.writeInt(u8, @intFromEnum(transport), .little),
-                .remove_vegetation, .repair => {},
-                else => unreachable, // TODO!
-            }
-        },
-    }
+    try serialize(writer, action);
 }
 
 fn recieveAction(reader: Socket.Reader) !Action {
-    const action_type: Action.Type = @enumFromInt(try reader.readByte());
+    return try deserialize(reader, Action);
+}
 
-    switch (action_type) {
-        .next_turn => return .next_turn,
-        .move_unit => {
-            const idx = try reader.readInt(Idx, .little);
-            const slot: Units.Slot = @enumFromInt(try reader.readByte());
-            const stacked = try reader.readEnum(Units.Stacked.Key, .little);
-
-            const to = try reader.readInt(Idx, .little);
-            return .{
-                .move_unit = .{
-                    .ref = .{
-                        .idx = idx,
-                        .slot = slot,
-                        .stacked = stacked,
-                    },
-                    .to = to,
-                },
-            };
-        },
-        .attack => {
-            const idx = try reader.readInt(Idx, .little);
-            const slot: Units.Slot = @enumFromInt(try reader.readByte());
-            const stacked = try reader.readEnum(Units.Stacked.Key, .little);
-
-            const to = try reader.readInt(Idx, .little);
-            return .{
-                .attack = .{
-                    .attacker = .{
-                        .idx = idx,
-                        .slot = slot,
-                        .stacked = stacked,
-                    },
-                    .to = to,
-                },
-            };
-        },
-        .set_city_production => {
-            const idx = try reader.readInt(Idx, .little);
-            const tag: City.ProductionTarget.Type = @enumFromInt(try reader.readByte());
-            switch (tag) {
-                .building => {
-                    const building: Rules.Building = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.Building), .little));
-                    return .{
-                        .set_city_production = .{
-                            .city_idx = idx,
-                            .production = .{ .building = building },
-                        },
-                    };
-                },
-                .unit => {
-                    const unit_type: Rules.UnitType = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.UnitType), .little));
-                    return .{
-                        .set_city_production = .{
-                            .city_idx = idx,
-                            .production = .{ .unit = unit_type },
-                        },
-                    };
-                },
-                .perpetual_money => return .{ .set_city_production = .{ .city_idx = idx, .production = .perpetual_money } },
-                .perpetual_research => return .{ .set_city_production = .{ .city_idx = idx, .production = .perpetual_research } },
+fn serialize(writer: Socket.Writer, value: anytype) !void {
+    const Value = @TypeOf(value);
+    switch (@typeInfo(Value)) {
+        .Bool => try writer.writeByte(@intFromBool(value)),
+        .Int => try writer.writeInt(getAlignedInt(Value), value, .little),
+        .Enum => |info| try writer.writeInt(getAlignedInt(info.tag_type), @intFromEnum(value), .little),
+        .Union => |info| {
+            const TagType = info.tag_type orelse unreachable;
+            try writer.writeInt(
+                getAlignedInt(std.meta.Tag(TagType)),
+                @intFromEnum(std.meta.activeTag(value)),
+                .little,
+            );
+            inline for (info.fields) |field| {
+                if (value == @field(TagType, field.name)) try serialize(writer, @field(value, field.name));
             }
         },
-        .settle_city => {
-            const idx = try reader.readInt(Idx, .little);
-            const slot: Units.Slot = @enumFromInt(try reader.readByte());
-            const stacked = try reader.readEnum(Units.Stacked.Key, .little);
-
-            return .{
-                .settle_city = .{
-                    .idx = idx,
-                    .slot = slot,
-                    .stacked = stacked,
-                },
-            };
+        .Struct => |info| {
+            if (info.backing_integer) |backing_integer| {
+                const Int = getAlignedInt(backing_integer);
+                const struct_int: Int = @bitCast(value);
+                try writer.writeInt(Int, struct_int, .little);
+            } else {
+                inline for (info.fields) |field| {
+                    try serialize(writer, @field(value, field.name));
+                }
+            }
         },
-        .unset_worked => {
-            const city_idx = try reader.readInt(Idx, .little);
-            const idx = try reader.readInt(Idx, .little);
-
-            return .{
-                .unset_worked = .{
-                    .city_idx = city_idx,
-                    .idx = idx,
-                },
-            };
-        },
-        .set_worked => {
-            const city_idx = try reader.readInt(Idx, .little);
-            const idx = try reader.readInt(Idx, .little);
-
-            return .{
-                .set_worked = .{
-                    .city_idx = city_idx,
-                    .idx = idx,
-                },
-            };
-        },
-        .promote_unit => {
-            const idx = try reader.readInt(Idx, .little);
-            const slot: Units.Slot = @enumFromInt(try reader.readByte());
-            const stacked = try reader.readEnum(Units.Stacked.Key, .little);
-            const promotion: Rules.Promotion = @enumFromInt(try reader.readByte());
-
-            return .{ .promote_unit = .{
-                .unit = .{
-                    .idx = idx,
-                    .slot = slot,
-                    .stacked = stacked,
-                },
-                .promotion = promotion,
-            } };
-        },
-
-        .tile_work => {
-            const idx = try reader.readInt(Idx, .little);
-            const slot: Units.Slot = @enumFromInt(try reader.readByte());
-            const stacked = try reader.readEnum(Units.Stacked.Key, .little);
-
-            const work_type: World.TileWork.TileWorkType = @enumFromInt(try reader.readInt(std.meta.Tag(World.TileWork.TileWorkType), .little));
-
-            return .{
-                .tile_work = .{
-                    .unit = .{
-                        .idx = idx,
-                        .slot = slot,
-                        .stacked = stacked,
-                    },
-                    .work = blk: {
-                        switch (work_type) {
-                            .building => {
-                                const building: Rules.Building = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.Building), .little));
-                                break :blk .{ .building = building };
-                            },
-                            .remove_vegetation_building => {
-                                const building: Rules.Building = @enumFromInt(try reader.readInt(std.meta.Tag(Rules.Building), .little));
-                                break :blk .{ .remove_vegetation_building = building };
-                            },
-                            .remove_vegetation => break :blk .remove_vegetation,
-                            .repair => break :blk .repair,
-                            .transport => {
-                                const transport: Rules.Transport = @enumFromInt(try reader.readInt(u8, .little));
-                                break :blk .{ .transport = transport };
-                            },
-                            else => std.debug.panic("Tile work is not implemented for networking :(", .{}),
-                        }
-                    },
-                },
-            };
-        },
+        else => unreachable,
     }
+}
+
+fn deserialize(reader: Socket.Reader, comptime Value: type) !Value {
+    return switch (@typeInfo(Value)) {
+        .Bool => blk: {
+            const bool_int: u1 = @intCast(try reader.readByte());
+            break :blk @bitCast(bool_int);
+        },
+        .Int => @intCast(try reader.readInt(getAlignedInt(Value), .little)),
+        .Enum => |info| @enumFromInt(try reader.readInt(getAlignedInt(info.tag_type), .little)),
+        .Union => |info| blk: {
+            const TagType = info.tag_type orelse unreachable;
+            const tag: TagType = @enumFromInt(try reader.readInt(
+                getAlignedInt(std.meta.Tag(TagType)),
+                .little,
+            ));
+            inline for (info.fields) |field| {
+                if (@field(TagType, field.name) == tag) break :blk @unionInit(Value, field.name, try deserialize(reader, field.type));
+            }
+            unreachable;
+        },
+        .Struct => |info| blk: {
+            if (info.backing_integer) |backing_integer| {
+                const Int = getAlignedInt(backing_integer);
+                const struct_int: backing_integer = @intCast(try reader.readInt(Int, .little));
+                break :blk @bitCast(struct_int);
+            } else {
+                var value: Value = undefined;
+                inline for (info.fields) |field| {
+                    @field(value, field.name) = try deserialize(reader, field.type);
+                }
+                break :blk value;
+            }
+        },
+        else => unreachable,
+    };
+}
+
+fn getAlignedInt(comptime Int: type) type {
+    return switch (@typeInfo(Int)) {
+        .Int => |info| std.meta.Int(info.signedness, std.mem.alignForward(u16, info.bits, 8)),
+        else => unreachable,
+    };
 }
