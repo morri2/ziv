@@ -79,12 +79,18 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
             renderTerrain(terrain, idx, world.grid, ts, world.rules);
             renderImprovements(improvement, idx, world.grid, ts);
 
-            if (improvement.transport != .none)
+            if (improvement.transport != .none) {
+                var flag = false;
                 for (world.grid.neighbours(idx), 0..) |maybe_n_idx, i| if (maybe_n_idx) |n_idx| {
                     if (world.improvements[n_idx].transport != .none or world.cities.contains(n_idx)) {
                         render.renderTextureInHex(idx, world.grid, ts.road_textures[i], 0, 0, .{}, ts);
+                        flag = true;
                     }
                 };
+                if (!flag) {
+                    render.renderTextureInHex(idx, world.grid, ts.road_textures[6], 0, 0, .{}, ts);
+                }
+            }
 
             render.renderTextureInHex(
                 idx,

@@ -129,9 +129,9 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             raylib.BEIGE,
         },
 
-        .road_textures = try loadNumberedTextures("textures/rastor/road_{}.png", universal_fallback, 6, allocator),
+        .road_textures = try loadNumberedTextures("textures/rastor/road_{}.png", universal_fallback, 7, allocator),
 
-        .rail_textures = try loadNumberedTextures("textures/rastor/road_{}.png", universal_fallback, 6, allocator),
+        .rail_textures = try loadNumberedTextures("textures/rastor/road_{}.png", universal_fallback, 7, allocator),
 
         .river_textures = try loadNumberedTextures("textures/rastor/river_{}.png", universal_fallback, 6, allocator),
 
