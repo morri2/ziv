@@ -230,35 +230,35 @@ pub fn promoteUnit(self: *Self, unit_ref: Units.Reference, promotion: Rules.Prom
     return try self.performAction(.{ .promote_unit = .{ .unit = unit_ref, .promotion = promotion } });
 }
 
-pub fn canPerformAction(self: *const Self, action: Action) bool {
+fn canPerformAction(self: *const Self, faction_id: World.FactionID, action: Action) bool {
     switch (action) {
         .next_turn => {},
         .move_unit => |info| {
             const unit = self.world.units.deref(info.ref) orelse return false;
 
-            if (unit.faction_id != self.civ_id.toFactionID()) return false;
+            if (unit.faction_id != faction_id) return false;
 
             if (self.world.moveCost(info.ref, info.to) == .disallowed) return false;
         },
         .attack => |info| {
             const unit = self.world.units.deref(info.attacker) orelse return false;
 
-            if (unit.faction_id != self.civ_id.toFactionID()) return false;
+            if (unit.faction_id != faction_id) return false;
 
             if (!try self.world.canAttack(info.attacker, info.to)) return false;
         },
         .set_city_production => |info| {
             const city = self.world.cities.get(info.city_idx) orelse return false;
-            if (city.faction_id != self.civ_id.toFactionID()) return false;
+            if (city.faction_id != faction_id) return false;
         },
         .settle_city => |settler_ref| {
             const unit = self.world.units.deref(settler_ref) orelse return false;
 
-            if (unit.faction_id != self.civ_id.toFactionID()) return false;
+            if (unit.faction_id != faction_id) return false;
 
             if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, self.world.rules)) return false;
 
-            if (!self.world.canSettleCityAt(settler_ref.idx, self.civ_id.toFactionID())) return false;
+            if (!self.world.canSettleCityAt(settler_ref.idx, faction_id)) return false;
         },
         .unset_worked => |info| {
             const city = self.world.cities.get(info.city_idx) orelse return false;
@@ -285,66 +285,49 @@ pub fn canPerformAction(self: *const Self, action: Action) bool {
 }
 
 fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
+    if (!self.canPerformAction(faction_id, action)) return false;
+
     var view_update: bool = false;
     switch (action) {
         .next_turn => try self.world.nextTurn(),
         .move_unit => |info| {
-            const unit = self.world.units.deref(info.ref) orelse return false;
-
-            if (unit.faction_id != faction_id) return false;
-
-            if (!try self.world.move(info.ref, info.to)) return false;
+            if (!try self.world.move(info.ref, info.to)) unreachable;
 
             view_update = true;
         },
         .attack => |info| {
-            const unit = self.world.units.deref(info.attacker) orelse return false;
-
-            if (unit.faction_id != faction_id) return false;
-
-            if (!try self.world.attack(info.attacker, info.to)) return false;
+            if (!try self.world.attack(info.attacker, info.to)) unreachable;
 
             view_update = true;
         },
         .set_city_production => |info| {
-            const city = self.world.cities.getPtr(info.city_idx) orelse return false;
-            if (city.faction_id != faction_id) return false;
+            const city = self.world.cities.getPtr(info.city_idx) orelse unreachable;
 
             _ = city.startConstruction(info.production, self.world.rules);
         },
         .settle_city => |settler_ref| {
-            const unit = self.world.units.deref(settler_ref) orelse return false;
-
-            if (unit.faction_id != faction_id) return false;
-
-            if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, self.world.rules)) return false;
-
-            if (!try self.world.settleCity(settler_ref)) return false;
+            if (!try self.world.settleCity(settler_ref)) unreachable;
 
             view_update = true;
         },
         .unset_worked => |info| {
-            const city = self.world.cities.getPtr(info.city_idx) orelse return false;
+            const city = self.world.cities.getPtr(info.city_idx) orelse unreachable;
 
-            if (!city.unsetWorked(info.idx)) return false;
+            if (!city.unsetWorked(info.idx)) unreachable;
         },
         .set_worked => |info| {
-            const city = self.world.cities.getPtr(info.city_idx) orelse return false;
+            const city = self.world.cities.getPtr(info.city_idx) orelse unreachable;
 
-            if (city.unassignedPopulation() == 0) return false;
-
-            if (!city.claimed.contains(info.idx)) return false;
-
-            if (!city.setWorkedWithAutoReassign(info.idx, &self.world)) return false;
+            if (!city.setWorkedWithAutoReassign(info.idx, &self.world)) unreachable;
         },
         .promote_unit => |info| {
-            var unit = self.world.units.derefToPtr(info.unit) orelse return false;
+            var unit = self.world.units.derefToPtr(info.unit) orelse unreachable;
             unit.promotions.set(@intFromEnum(info.promotion));
 
             view_update = true;
         },
         .tile_work => |info| {
-            if (!self.world.doImprovementWork(info.unit, info.work)) return false;
+            if (!self.world.doImprovementWork(info.unit, info.work)) unreachable;
 
             view_update = true;
         },
@@ -367,7 +350,7 @@ pub fn performAction(self: *Self, action: Action) !bool {
             try sendAction(writer, action);
         }
     } else {
-        if (!self.canPerformAction(action)) return false;
+        if (!self.canPerformAction(self.civ_id.toFactionID(), action)) return false;
         try sendAction(self.socket.writer(), action);
     }
     return true;
