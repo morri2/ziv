@@ -10,7 +10,6 @@ const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
 
 const City = @import("City.zig");
-const View = @import("View.zig");
 
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
@@ -177,8 +176,6 @@ rules: *const Rules,
 
 grid: Grid,
 
-views: []View,
-
 turn: u32,
 
 // Per tile data
@@ -201,10 +198,8 @@ pub fn init(
     width: u32,
     height: u32,
     wrap_around: bool,
-    civ_count: u8,
     rules: *const Rules,
 ) !Self {
-    std.debug.assert(civ_count >= 1);
     const grid = Grid.init(width, height, wrap_around);
 
     const terrain = try allocator.alloc(Terrain, grid.len);
@@ -215,12 +210,7 @@ pub fn init(
     errdefer allocator.free(improvements);
     @memset(improvements, std.mem.zeroes(Improvements));
 
-    const views = try allocator.alloc(View, civ_count);
-    errdefer allocator.free(views);
-    for (views) |*view| view.* = try View.init(allocator, &grid);
-
     return Self{
-        .views = views,
         .allocator = allocator,
         .grid = grid,
         .terrain = terrain,
@@ -246,13 +236,14 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.terrain);
 
     for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
-    for (self.views) |*view| view.deinit();
 
-    self.allocator.free(self.views);
     self.cities.deinit(self.allocator);
 }
 
-pub fn nextTurn(self: *Self) !void {
+pub fn nextTurn(self: *Self) !struct {
+    view_change: bool,
+} {
+    var view_change = false;
     for (self.cities.keys(), self.cities.values()) |idx, *city| {
         const ya = city.getWorkedTileYields(self);
 
@@ -260,25 +251,27 @@ pub fn nextTurn(self: *Self) !void {
         const growth_res = try city.checkGrowth(self);
         _ = growth_res;
 
-        var update_view = city.checkExpansion();
+        view_change = view_change or city.checkExpansion();
         const production_result = try city.checkProduction();
         switch (production_result) {
             .done => |project| switch (project) {
                 .unit => |unit_type| {
                     try self.addUnit(idx, unit_type, city.faction_id);
-                    update_view = true;
+                    view_change = true;
                 },
                 else => unreachable, // TODO
             },
             else => {},
         }
-
-        if (update_view) try self.fullUpdateViews();
     }
 
     self.units.refresh();
 
     self.turn += 1;
+
+    return .{
+        .view_change = view_change,
+    };
 }
 
 pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
@@ -553,23 +546,23 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
     return true;
 }
 
-pub fn unitFOV(self: *const Self, unit: *const Unit, src: Idx) !hex_set.HexSet(0) {
+pub fn unitFov(self: *const Self, unit: *const Unit, src: Idx, set: *hex_set.HexSet(0)) !void {
     const vision_range = Rules.Promotion.Effect.promotionsSum(.modify_sight_range, unit.promotions, self.rules);
-    return try self.fov(@intCast(vision_range + 2), src);
+    try self.fov(@intCast(vision_range + 2), src, set);
 }
 
 /// Gets FOV from a tile as HexSet, caller must DEINIT! TODO double check behaviour with civ proper. Diagonals might be impact
 /// fov too much and axials might have too small an impact. works great as vision range 2, ok at 3, poor at 4+,
 /// TODO check if land is obscuring for embarked/naval units...
-pub fn fov(self: *const Self, vision_range: u8, src: Idx) !hex_set.HexSet(0) {
+pub fn fov(self: *const Self, vision_range: u8, src: Idx, set: *hex_set.HexSet(0)) !void {
     const elevated = self.terrain[src].attributes(self.rules).is_elevated;
 
-    var fov_set = try hex_set.HexSet(0).initFloodFill(src, 1, &self.grid, self.allocator);
+    try set.floodFillFrom(src, 1, &self.grid);
 
     var spiral_iter = Grid.SpiralIterator.newFrom(src, 2, vision_range, self.grid);
     while (spiral_iter.next(self.grid)) |idx| {
         var max_off_axial: u8 = 0;
-        var visable = false;
+        var visible = false;
 
         for (self.grid.neighbours(idx)) |maybe_n_idx| {
             const n_idx = maybe_n_idx orelse continue;
@@ -578,46 +571,15 @@ pub fn fov(self: *const Self, vision_range: u8, src: Idx) !hex_set.HexSet(0) {
             const off_axial = self.grid.distanceOffAxial(n_idx, src);
             if (off_axial < max_off_axial) continue;
 
-            if (off_axial > max_off_axial) visable = false; // previous should be ignored (equals -> both are viable)
+            if (off_axial > max_off_axial) visible = false; // previous should be ignored (equals -> both are viable)
             max_off_axial = off_axial;
 
-            if (!fov_set.contains(n_idx)) continue;
+            if (!set.contains(n_idx)) continue;
             if (self.terrain[n_idx].attributes(self.rules).is_obscuring and !elevated) continue;
             if (self.terrain[n_idx].attributes(self.rules).is_impassable) continue; // impassible ~= mountain
-            visable = true;
+            visible = true;
         }
-        if (visable) try fov_set.add(idx);
-    }
-    return fov_set;
-}
-
-pub fn fullUpdateViews(self: *Self) !void {
-    var iter //
-        = self.units.iterator();
-
-    for (self.views) |*view| {
-        view.unsetAllVisable(self);
-    }
-
-    while (iter.next()) |item| {
-        var vision = try self.unitFOV(&item.unit, item.idx);
-        defer vision.deinit();
-
-        if (item.unit.faction_id.toCivilizationID()) |civ_id| {
-            try self.views[@intFromEnum(civ_id)].addVisionSet(vision);
-        }
-    }
-
-    for (self.cities.values()) |city| {
-        var vision = hex_set.HexSet(0).init(self.allocator);
-        defer vision.deinit();
-        try vision.add(city.position);
-        try vision.addOther(&city.claimed);
-        try vision.addOther(&city.adjacent);
-
-        if (city.faction_id.toCivilizationID()) |civ_id| {
-            try self.views[@intFromEnum(civ_id)].addVisionSet(vision);
-        }
+        if (visible) try set.add(idx);
     }
 }
 

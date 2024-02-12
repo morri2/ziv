@@ -13,6 +13,7 @@ const Action = @import("action.zig").Action;
 
 const Socket = @import("Socket.zig");
 
+const hex_set = @import("hex_set.zig");
 const serialization = @import("serialization.zig");
 
 const Self = @This();
@@ -25,6 +26,8 @@ pub const Player = struct {
 // Host specific
 is_host: bool,
 players: []Player,
+
+views: []View,
 
 // Client specific
 socket: Socket,
@@ -58,10 +61,15 @@ pub fn host(
         width,
         height,
         wrap_around,
-        civ_count,
         rules,
     );
     errdefer self.world.deinit();
+
+    self.views = try allocator.alloc(View, civ_count);
+    errdefer allocator.free(self.views);
+
+    for (self.views) |*view| view.* = try View.init(allocator, &self.world.grid);
+    errdefer for (self.views) |*view| view.deinit();
 
     for (self.players) |player| {
         try player.socket.setBlocking(true);
@@ -99,10 +107,15 @@ pub fn connect(socket: Socket, rules: *const Rules, allocator: std.mem.Allocator
         width,
         height,
         wrap_around,
-        civ_count,
         rules,
     );
     errdefer self.world.deinit();
+
+    self.views = try allocator.alloc(View, civ_count);
+    errdefer allocator.free(self.views);
+
+    for (self.views) |*view| view.* = try View.init(allocator, &self.world.grid);
+    errdefer for (self.views) |*view| view.deinit();
 
     return self;
 }
@@ -116,17 +129,19 @@ pub fn deinit(self: *Self) void {
     } else {
         self.socket.close();
     }
+    for (self.views) |*view| view.deinit();
+    self.allocator.free(self.views);
     self.world.deinit();
 }
 
 pub fn getView(self: *const Self) *const View {
-    return &self.world.views[@intFromEnum(self.civ_id)];
+    return &self.views[@intFromEnum(self.civ_id)];
 }
 
 // Debug function to test using different players
 pub fn nextPlayer(self: *Self) void {
     const next_int_id = @intFromEnum(self.civ_id) + 1;
-    self.civ_id = if (next_int_id == self.world.views.len) @enumFromInt(0) else @enumFromInt(next_int_id);
+    self.civ_id = if (next_int_id == self.views.len) @enumFromInt(0) else @enumFromInt(next_int_id);
 }
 
 pub fn nextTurn(self: *Self) !?Action.Result {
@@ -197,8 +212,35 @@ pub fn tileWork(self: *Self, ref: Units.Reference, work: World.TileWork) !?Actio
 
 pub fn update(self: *Self) !Action.Result {
     const result = if (self.is_host) try self.hostUpdate() else try self.clientUpdate();
-    if (result.view_change) try self.world.fullUpdateViews();
+    if (result.view_change) try self.updateViews();
     return result;
+}
+
+pub fn updateViews(self: *Self) !void {
+    for (self.views) |*view| view.unsetAllVisable(&self.world);
+
+    // Add unit vision
+    {
+        var vision_set = hex_set.HexSet(0).init(self.allocator);
+        defer vision_set.deinit();
+
+        var iter = self.world.units.iterator();
+        while (iter.next()) |item| {
+            if (item.unit.faction_id.toCivilizationID()) |civ_id| {
+                try self.world.unitFov(&item.unit, item.idx, &vision_set);
+                try self.views[@intFromEnum(civ_id)].addVisionSet(vision_set);
+                vision_set.clear();
+            }
+        }
+    }
+
+    for (self.world.cities.values()) |city| {
+        if (city.faction_id.toCivilizationID()) |civ_id| {
+            try self.views[@intFromEnum(civ_id)].addVision(city.position);
+            try self.views[@intFromEnum(civ_id)].addVisionSet(city.claimed);
+            try self.views[@intFromEnum(civ_id)].addVisionSet(city.adjacent);
+        }
+    }
 }
 
 fn performAction(self: *Self, action: Action) !?Action.Result {
@@ -207,7 +249,7 @@ fn performAction(self: *Self, action: Action) !?Action.Result {
         const faction_id = self.civ_id.toFactionID();
         result = try action.exec(faction_id, &self.world) orelse return null;
 
-        if (result.?.view_change) try self.world.fullUpdateViews();
+        if (result.?.view_change) try self.updateViews();
 
         // Broadcast action to all players
         for (self.players) |player| {

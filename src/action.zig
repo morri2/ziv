@@ -125,7 +125,10 @@ pub const Action = union(Type) {
 
         var result = Result{};
         switch (self) {
-            .next_turn => try world.nextTurn(),
+            .next_turn => {
+                const turn_result = try world.nextTurn();
+                result.view_change = turn_result.view_change;
+            },
             .move_unit => |info| {
                 if (!try world.move(info.ref, info.to)) unreachable;
 

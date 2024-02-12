@@ -19,6 +19,8 @@ const gui = @import("rendering/gui.zig");
 
 const Socket = @import("Socket.zig");
 
+const hex_set = @import("hex_set.zig");
+
 const raylib = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
@@ -110,7 +112,7 @@ pub fn main() !void {
     try game.world.addCity(1089, @enumFromInt(0));
     try game.world.addCity(485, @enumFromInt(1));
 
-    try game.world.fullUpdateViews();
+    try game.updateViews();
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -532,8 +534,9 @@ pub fn main() !void {
         }
         if (maybe_selected_idx) |selected_idx| {
             if (raylib.IsKeyDown(raylib.KEY_X)) {
-                var vision_set = try game.world.fov(3, selected_idx);
+                var vision_set = hex_set.HexSet(0).init(gpa.allocator());
                 defer vision_set.deinit();
+                try game.world.fov(3, selected_idx, &vision_set);
 
                 for (vision_set.indices()) |index| {
                     render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } }, texture_set);
@@ -551,12 +554,12 @@ pub fn main() !void {
                         render.renderFormatHexAuto(index, game.world.grid, "idx: {}", .{index}, 0, -0.3, .{}, texture_set);
                         render.renderFormatHexAuto(index, game.world.grid, "(x{}, y{}) = {?}", .{ xy.x, xy.y, xy.toIdx(game.world.grid) }, 0, 0, .{ .font_size = 8 }, texture_set);
                         render.renderFormatHexAuto(index, game.world.grid, "(q{}, r{}) = {?}", .{ qrs.q, qrs.r, qrs.toIdx(game.world.grid) }, 0, 0.3, .{ .font_size = 8 }, texture_set);
-                        if (maybe_selected_idx != null) render.renderFormatHexAuto(index, game.world.grid, "D:{}", .{game.world.grid.distance(index, maybe_selected_idx.?)}, 0, -0.5, .{}, texture_set);
+                        render.renderFormatHexAuto(index, game.world.grid, "D:{}", .{game.world.grid.distance(index, selected_idx)}, 0, -0.5, .{}, texture_set);
 
                         const view = game.getView();
 
                         render.renderFormatHexAuto(index, game.world.grid, "view: {}", .{
-                            view.in_view.hexes.get(index) orelse 0,
+                            if (view.in_view.hexes.get(index)) |c| c + 1 else 0,
                         }, 0, 0.8, .{}, texture_set);
                     }
                 }
