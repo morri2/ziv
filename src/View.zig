@@ -24,12 +24,21 @@ last_seen_improvements: []Improvements,
 allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator, grid: *const Grid) !Self {
+    const last_seen_yields = try allocator.alloc(Yield, grid.len);
+    errdefer allocator.free(last_seen_yields);
+
+    const last_seen_terrain = try allocator.alloc(Terrain, grid.len);
+    errdefer allocator.free(last_seen_terrain);
+
+    const last_seen_improvements = try allocator.alloc(Improvements, grid.len);
+    errdefer allocator.free(last_seen_improvements);
+
     return .{
         .in_view = InViewHexSet.init(allocator),
         .explored = ExploredHexSet.init(allocator),
-        .last_seen_yields = try allocator.alloc(Yield, grid.len),
-        .last_seen_terrain = try allocator.alloc(Terrain, grid.len),
-        .last_seen_improvements = try allocator.alloc(Improvements, grid.len),
+        .last_seen_yields = last_seen_yields,
+        .last_seen_terrain = last_seen_terrain,
+        .last_seen_improvements = last_seen_improvements,
         .allocator = allocator,
     };
 }
