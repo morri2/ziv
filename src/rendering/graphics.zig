@@ -77,7 +77,6 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
             }
 
             renderTerrain(terrain, idx, world.grid, ts, world.rules);
-            renderImprovements(improvement, idx, world.grid, ts);
 
             if (improvement.transport != .none) {
                 var flag = false;
@@ -91,6 +90,8 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
                     render.renderTextureInHex(idx, world.grid, ts.road_textures[6], 0, 0, .{}, ts);
                 }
             }
+
+            renderImprovements(improvement, idx, world.grid, ts);
 
             render.renderTextureInHex(
                 idx,
