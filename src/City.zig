@@ -1,11 +1,13 @@
 const std = @import("std");
 const World = @import("World.zig");
 const Idx = @import("Grid.zig").Idx;
-const HexSet = @import("HexSet.zig");
 const Unit = @import("Unit.zig");
 
 const Rules = @import("Rules.zig");
 const Yield = Rules.Yield;
+
+const hex_set = @import("hex_set.zig");
+const HexSet = hex_set.HexSet(0);
 
 const Self = @This();
 
@@ -71,10 +73,10 @@ faction_id: World.FactionID,
 
 name: []const u8 = "shithole",
 city_id: usize,
-position: Idx = 0,
+position: Idx,
 claimed: HexSet,
 worked: HexSet,
-max_expansion: HexSet, // all hexes in the
+max_expansion: HexSet,
 max_workable: HexSet,
 adjacent: HexSet,
 
@@ -101,25 +103,22 @@ halted_production_projects: []WorkInProgressProductionProject = &.{},
 
 allocator: std.mem.Allocator,
 
-pub fn new(position: Idx, player_id: World.FactionID, world: *const World) Self {
-    var claimed = HexSet.init(world.allocator);
-    claimed.add(position);
-    claimed.addAdjacent(&world.grid);
+pub fn new(position: Idx, player_id: World.FactionID, world: *const World) !Self {
+    var claimed = try HexSet.initFloodFill(position, 1, &world.grid, world.allocator);
+    errdefer claimed.deinit();
 
-    var max_workable = HexSet.init(world.allocator);
-    max_workable.add(position);
-    for (0..3) |_| max_workable.addAdjacent(&world.grid);
+    var max_workable = try HexSet.initFloodFill(position, 3, &world.grid, world.allocator);
+    errdefer max_workable.deinit();
 
-    var max_expansion = HexSet.init(world.allocator);
-    max_expansion.add(position);
-    for (0..5) |_|
-        max_expansion.addAdjacent(&world.grid);
+    var max_expansion = try HexSet.initFloodFill(position, 5, &world.grid, world.allocator);
+    errdefer max_expansion.deinit();
 
-    const adjacent = claimed.initExternalAdjacent(&world.grid);
+    var adjacent = try claimed.initAdjacent(&world.grid);
+    errdefer adjacent.deinit();
 
     claimed.remove(position);
 
-    const out: Self = .{
+    return .{
         .faction_id = player_id,
         .city_id = (world.turn << 16) & (position & 0xffff), // id will be unique, use for loging etc
         .name = "Goteborg",
@@ -132,8 +131,6 @@ pub fn new(position: Idx, player_id: World.FactionID, world: *const World) Self 
         .adjacent = adjacent,
         .allocator = world.allocator,
     };
-
-    return out;
 }
 
 pub fn deinit(self: *Self) void {
@@ -145,19 +142,19 @@ pub fn deinit(self: *Self) void {
     self.adjacent.deinit();
 }
 
-pub fn setWorked(self: *Self, idx: Idx) bool {
+pub fn setWorked(self: *Self, idx: Idx) !bool {
     if (self.unassignedPopulation() < 1) return false;
     if (self.worked.contains(idx)) return false;
-    self.worked.add(idx);
+    try self.worked.add(idx);
     return true;
 }
 
-pub fn setWorkedWithAutoReassign(self: *Self, idx: Idx, world: *const World) bool {
+pub fn setWorkedWithAutoReassign(self: *Self, idx: Idx, world: *const World) !bool {
     if (self.unassignedPopulation() < 1) {
         const worst_idx = self.worstWorkedTile(world) orelse return false;
         if (!self.unsetWorked(worst_idx)) unreachable;
     }
-    return self.setWorked(idx);
+    return try self.setWorked(idx);
 }
 
 pub fn unsetWorked(self: *Self, idx: Idx) bool {
@@ -166,7 +163,7 @@ pub fn unsetWorked(self: *Self, idx: Idx) bool {
 
 pub fn getWorkedTileYields(self: *const Self, world: *const World) YieldAccumulator {
     var ya: YieldAccumulator = .{};
-    for (self.worked.slice()) |worked_idx| {
+    for (self.worked.indices()) |worked_idx| {
         ya.add(world.tileYield(worked_idx));
     }
     ya.add(world.tileYield(self.position));
@@ -258,7 +255,7 @@ pub fn expansionHeuristic(self: *const Self, idx: Idx, world: *const World) u32 
 fn bestExpansionTile(self: *const Self, world: *const World) ?Idx {
     var best: u32 = 0;
     var best_idx: ?Idx = null;
-    for (self.adjacent.slice()) |idx| {
+    for (self.adjacent.indices()) |idx| {
         if (!self.canClaimTile(idx, world)) continue;
         const val = self.expansionHeuristic(idx, world);
         if (val >= best) {
@@ -270,9 +267,9 @@ fn bestExpansionTile(self: *const Self, world: *const World) ?Idx {
 }
 
 ///
-pub fn expandBorder(self: *Self, world: *const World) bool {
+pub fn expandBorder(self: *Self, world: *const World) !bool {
     const idx = self.bestExpansionTile(world) orelse return false;
-    return claimTile(self, idx, world);
+    return try claimTile(self, idx, world);
 }
 
 /// Can claim tile
@@ -284,21 +281,21 @@ pub fn canClaimTile(self: *const Self, idx: Idx, world: *const World) bool {
 }
 
 /// Claim tile
-pub fn claimTile(self: *Self, idx: Idx, world: *const World) bool {
+pub fn claimTile(self: *Self, idx: Idx, world: *const World) !bool {
     if (!self.canClaimTile(idx, world)) return false;
 
-    self.claimed.add(idx);
-    self.adjacent.deinit();
-    self.adjacent = self.claimed.initExternalAdjacent(&world.grid);
+    try self.claimed.add(idx);
+    self.adjacent.clear();
+    try self.adjacent.addAdjacentFromOther(&self.claimed, &world.grid);
     return true;
 }
 
 /// checks and updates the city if it is growing or starving
-pub fn checkGrowth(self: *Self, world: *const World) GrowthResult {
+pub fn checkGrowth(self: *Self, world: *const World) !GrowthResult {
     // new pop
     if (self.food_stockpile >= self.foodTilGrowth()) {
         self.food_stockpile -= self.food_stockpile * (1.0 - self.retained_food_fraction);
-        self.populationGrowth(1, world);
+        try self.populationGrowth(1, world);
         return .growth;
     }
     // dead pop
@@ -321,11 +318,11 @@ pub fn unassignedPopulation(self: *const Self) u8 {
     return self.population -| @as(u8, @intCast(self.worked.count())); // should not underflow, but seems to when pop starves, TODO: investigate
 }
 
-pub fn populationGrowth(self: *Self, amt: u8, world: *const World) void {
+pub fn populationGrowth(self: *Self, amt: u8, world: *const World) !void {
     self.population += amt;
     for (0..amt) |_| {
         const best_idx = self.bestUnworkedTile(world) orelse continue;
-        self.worked.add(best_idx);
+        try self.worked.add(best_idx);
     }
 }
 
@@ -357,7 +354,7 @@ pub fn workHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
 pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
     var best: u32 = 0;
     var best_idx: ?Idx = null;
-    for (self.claimed.slice()) |idx| {
+    for (self.claimed.indices()) |idx| {
         if (self.worked.contains(idx)) continue;
         const val = self.workHeuristic(idx, world);
         if (val >= best) {
@@ -371,7 +368,7 @@ pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
 pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
     var worst: u32 = std.math.maxInt(u32);
     var worst_idx: ?Idx = null;
-    for (self.claimed.slice()) |idx| {
+    for (self.claimed.indices()) |idx| {
         if (!self.worked.contains(idx)) continue;
         const val = self.workHeuristic(idx, world);
         if (val < worst) {

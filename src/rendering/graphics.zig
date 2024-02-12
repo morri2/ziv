@@ -122,7 +122,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
         const y = world.grid.yFromIdx(idx);
         if (!bbox.contains(x, y)) continue;
 
-        for (city.claimed.slice()) |claimed| {
+        for (city.claimed.indices()) |claimed| {
             render.renderTextureInHex(claimed, world.grid, ts.city_border_texture, 0, 0, .{
                 .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
                 .scale = 0.95,

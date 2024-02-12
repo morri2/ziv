@@ -1,7 +1,5 @@
 const std = @import("std");
 const Self = @This();
-const HexSet = @import("HexSet.zig");
-const CountedHexSet = @import("CountedHexSet.zig");
 const World = @import("World.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
@@ -12,30 +10,55 @@ const Terrain = Rules.Terrain;
 const Improvements = Rules.Improvements;
 const Resource = Rules.Resource;
 
-in_view: CountedHexSet, // tracks number of units which can see,
-explored: HexSet,
+const hex_set = @import("hex_set.zig");
+
+const InViewHexSet = hex_set.HexSet(8);
+const ExploredHexSet = hex_set.HexSet(0);
+
+in_view: InViewHexSet, // tracks number of units which can see,
+explored: ExploredHexSet,
 
 last_seen_yields: []Yield,
 last_seen_terrain: []Terrain,
 last_seen_improvements: []Improvements,
 allocator: std.mem.Allocator,
 
-pub fn addVision(self: *Self, idx: Idx) void {
-    self.in_view.inc(idx);
-    self.explored.add(idx);
+pub fn init(allocator: std.mem.Allocator, grid: *const Grid) !Self {
+    return .{
+        .in_view = InViewHexSet.init(allocator),
+        .explored = ExploredHexSet.init(allocator),
+        .last_seen_yields = try allocator.alloc(Yield, grid.len),
+        .last_seen_terrain = try allocator.alloc(Terrain, grid.len),
+        .last_seen_improvements = try allocator.alloc(Improvements, grid.len),
+        .allocator = allocator,
+    };
 }
 
-pub fn removeVision(self: *Self, idx: Idx, world: *const World) void {
+pub fn deinit(self: *Self) void {
+    self.allocator.free(self.last_seen_improvements);
+    self.allocator.free(self.last_seen_terrain);
+    self.allocator.free(self.last_seen_yields);
+
+    self.in_view.deinit();
+    self.explored.deinit();
+}
+
+pub fn addVision(self: *Self, idx: Idx) !void {
+    try self.in_view.inc(idx);
+    try self.explored.add(idx);
+}
+
+pub fn removeVision(self: *Self, idx: Idx, world: *const World) !void {
     self.update(idx, world);
-    self.in_view.dec(idx);
+    try self.in_view.dec(idx);
 }
 
-pub fn addVisionSet(self: *Self, vision: HexSet) void {
-    for (vision.slice()) |idx| self.addVision(idx);
+pub fn addVisionSet(self: *Self, vision: hex_set.HexSet(0)) !void {
+    for (vision.indices()) |idx| try self.addVision(idx);
 }
 
-pub fn removeVisionSet(self: *Self, vision: HexSet, world: *const World) void {
-    for (vision.slice()) |idx| self.removeVision(idx, world);
+pub fn removeVisionSet(self: *Self, vision: hex_set.HexSet(0), world: *const World) void {
+    for (vision.indices()) |idx| self.removeVision(idx, world);
 }
 
 pub fn viewYield(self: *const Self, idx: Idx, world: *const World) ?Yield {
@@ -54,26 +77,6 @@ pub fn viewImprovements(self: *const Self, idx: Idx, world: *const World) ?Impro
     if (!self.explored.contains(idx)) return null;
     if (!self.in_view.contains(idx)) return self.last_seen_improvements[idx];
     return world.improvements[idx];
-}
-
-pub fn init(allocator: std.mem.Allocator, grid: *const Grid) !Self {
-    return .{
-        .in_view = CountedHexSet.init(allocator),
-        .explored = HexSet.init(allocator),
-        .last_seen_yields = try allocator.alloc(Yield, grid.len),
-        .last_seen_terrain = try allocator.alloc(Terrain, grid.len),
-        .last_seen_improvements = try allocator.alloc(Improvements, grid.len),
-        .allocator = allocator,
-    };
-}
-
-pub fn deinit(self: *Self) void {
-    self.allocator.free(self.last_seen_improvements);
-    self.allocator.free(self.last_seen_terrain);
-    self.allocator.free(self.last_seen_yields);
-
-    self.in_view.deinit();
-    self.explored.deinit();
 }
 
 pub fn update(self: *Self, idx: Idx, world: *const World) void {

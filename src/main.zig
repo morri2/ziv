@@ -110,7 +110,7 @@ pub fn main() !void {
     try game.world.addCity(1089, @enumFromInt(0));
     try game.world.addCity(485, @enumFromInt(1));
 
-    game.world.fullUpdateViews();
+    try game.world.fullUpdateViews();
 
     const screen_width = 1920;
     const screen_height = 1080;
@@ -482,7 +482,7 @@ pub fn main() !void {
                 );
 
                 for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
-                    if (city_idx == clicked_tile) _ = city.expandBorder(&game.world);
+                    if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world);
 
                     if (try game.unsetWorked(city_idx, clicked_tile)) break;
                     if (try game.setWorked(city_idx, clicked_tile)) break;
@@ -532,10 +532,10 @@ pub fn main() !void {
         }
         if (maybe_selected_idx) |selected_idx| {
             if (raylib.IsKeyDown(raylib.KEY_X)) {
-                var vision_set = game.world.fov(3, selected_idx);
+                var vision_set = try game.world.fov(3, selected_idx);
                 defer vision_set.deinit();
 
-                for (vision_set.slice()) |index| {
+                for (vision_set.indices()) |index| {
                     render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } }, texture_set);
                     if (game.world.terrain[index].attributes(game.world.rules).is_obscuring)
                         render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } }, texture_set);
