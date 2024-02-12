@@ -371,15 +371,13 @@ pub fn recalculateWaterAccess(self: *Self) !void {
 
 pub fn tileYield(self: *const Self, idx: Idx) Yield {
     const terrain = self.terrain[idx];
-    const resource = self.resources.get(idx);
+    const maybe_resource: ?Rules.Resource = if (self.resources.get(idx)) |r| r.type else null;
 
     var yield = terrain.yield(self.rules);
 
-    if (resource != null) {
-        yield = yield.add(resource.?.type.yield(self.rules));
-    }
+    if (maybe_resource) |resource| yield = yield.add(resource.yield(self.rules));
 
-    const imp_y = self.improvements[idx].building.yield(self.rules);
+    const imp_y = self.improvements[idx].building.yield(maybe_resource, self.rules);
     // std.debug.print("IMP Y: {}\n", .{imp_y.food});
     yield = yield.add(imp_y);
 

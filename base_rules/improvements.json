@@ -64,7 +64,102 @@
       },
       "yield": {
         "production": 1
-      }
+      },
+      "resource_yields": [
+        {
+          "resources": [
+            "salt"
+          ],
+          "yield": {
+            "food": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "camp",
+      "build_turns": 3,
+      "allow_on": {
+        "resources": [
+          "ivory",
+          "furs",
+          "truffles",
+          "bison",
+          "deer"
+        ]
+      },
+      "keep_vegetation": true,
+      "yield": {
+        "production": 1
+      },
+      "resource_yields": [
+        {
+          "resources": [
+            "deer",
+            "bison"
+          ],
+          "yield": {
+            "production": 1
+          }
+        },
+        {
+          "resources": [
+            "furs",
+            "truffles",
+            "ivory"
+          ],
+          "yield": {
+            "gold": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "plantation",
+      "build_turns": 3,
+      "allow_on": {
+        "resources": [
+          "bananas",
+          "incense",
+          "wine",
+          "cotton",
+          "sugar",
+          "spices",
+          "silk",
+          "citrus",
+          "dyes",
+          "cocoa"
+        ]
+      },
+      "yield": {
+        "production": 1
+      },
+      "resource_yields": [
+        {
+          "resources": [
+            "bananas"
+          ],
+          "yield": {
+            "food": 2
+          }
+        },
+        {
+          "resources": [
+            "incense",
+            "wine",
+            "cotton",
+            "sugar",
+            "spices",
+            "silk",
+            "citrus",
+            "dyes",
+            "cocoa"
+          ],
+          "yield": {
+            "gold": 1
+          }
+        }
+      ]
     },
     {
       "name": "lumber_mill",
@@ -74,6 +169,49 @@
           {
             "name": "forest"
           }
+        ]
+      },
+      "yield": {
+        "production": 1
+      }
+    },
+    {
+      "name": "pastures",
+      "build_turns": 3,
+      "allow_on": {
+        "resources": [
+          "sheep",
+          "cattle",
+          "horses"
+        ]
+      },
+      "resource_yields": [
+        {
+          "resources": [
+            "sheep"
+          ],
+          "yield": {
+            "food": 1
+          }
+        },
+        {
+          "resources": [
+            "horses",
+            "cattle"
+          ],
+          "yield": {
+            "production": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "quarry",
+      "build_turns": 3,
+      "allow_on": {
+        "resources": [
+          "stone",
+          "marble"
         ]
       },
       "yield": {
@@ -149,7 +287,6 @@
         ]
       },
       "yield": {
-        "gold": 1,
         "food": 1
       }
     }

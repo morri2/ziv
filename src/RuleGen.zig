@@ -575,7 +575,12 @@ fn parseImprovements(
                 required_attributes: Terrain.Attributes = .{},
             } = &.{},
         },
+        keep_vegetation: bool = false,
         yield: Yield = .{},
+        resource_yields: []struct {
+            resources: []const []const u8 = &.{},
+            yield: Yield = .{},
+        } = &.{},
     };
 
     const json_text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
@@ -641,10 +646,25 @@ fn parseImprovements(
         }
     }
 
+    var building_resource_yields: @TypeOf(rules.building_resource_yields) = .{};
+    try building_resource_yields.ensureUnusedCapacity(arena_allocator, 255); // TODO
+    for (buildings, 1..) |building, building_index| {
+        for (building.resource_yields) |resources_yield| {
+            for (resources_yield.resources) |resource_name| {
+                const resource = resource_map.get(resource_name) orelse return error.UnknownResource;
+                building_resource_yields.putAssumeCapacity(.{
+                    .building = @enumFromInt(building_index),
+                    .resource = resource,
+                }, resources_yield.yield);
+            }
+        }
+    }
+
     rules.building_strings = building_strings;
     rules.building_yields = building_yields;
     rules.building_names = building_names;
     rules.building_resource_connectors = resource_connectors;
+    rules.building_resource_yields = building_resource_yields;
 
     var allowed_on_map: @TypeOf(rules.building_allowed_map) = .{};
     defer allowed_on_map.deinit(allocator);
@@ -679,7 +699,7 @@ fn parseImprovements(
                 try allowed_on_map.put(allocator, .{
                     .building = building_enum,
                     .terrain = terrain,
-                }, if (tile.unpacked.vegetation == .none) .allowed else .allowed_after_clear);
+                }, if (tile.unpacked.vegetation == .none or building.keep_vegetation) .allowed else .allowed_after_clear);
 
                 continue :terrain_loop;
             }
@@ -697,7 +717,7 @@ fn parseImprovements(
                 try allowed_on_map.put(allocator, .{
                     .building = building_enum,
                     .terrain = terrain,
-                }, if (tile.unpacked.vegetation == .none) .allowed else .allowed_after_clear);
+                }, if (tile.unpacked.vegetation == .none or building.keep_vegetation) .allowed else .allowed_after_clear);
                 continue :terrain_loop;
             }
 
@@ -719,7 +739,7 @@ fn parseImprovements(
             }
 
             if (building.allow_on.resources.len != 0) {
-                if (tile.unpacked.vegetation == .none) {
+                if (tile.unpacked.vegetation == .none or building.keep_vegetation) {
                     try allowed_on_map.put(allocator, .{
                         .building = building_enum,
                         .terrain = terrain,

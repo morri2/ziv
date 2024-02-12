@@ -41,6 +41,11 @@ building_resource_connectors: std.AutoHashMapUnmanaged(struct {
     building: Building,
     resource: Resource,
 }, void),
+
+building_resource_yields: std.AutoHashMapUnmanaged(struct {
+    building: Building,
+    resource: Resource,
+}, Yield),
 building_names: []const u16,
 building_strings: []const u8,
 
@@ -248,8 +253,21 @@ pub const Building = enum(u8) {
         allowed_after_clear_if_resource = 4,
     };
 
-    pub fn yield(self: Building, rules: *const Rules) Yield {
+    pub fn yield(self: Building, resource: ?Resource, rules: *const Rules) Yield {
+        var y = self.improvementYield(rules);
+        if (resource) |r| y = y.add(self.improvedResourceYield(r, rules));
+        return y;
+    }
+
+    pub fn improvementYield(self: Building, rules: *const Rules) Yield {
         return rules.building_yields[@intFromEnum(self)];
+    }
+
+    pub fn improvedResourceYield(self: Building, resource: Resource, rules: *const Rules) Yield {
+        return rules.building_resource_yields.get(.{
+            .building = self,
+            .resource = resource,
+        }) orelse .{};
     }
 
     pub fn allowedOn(
