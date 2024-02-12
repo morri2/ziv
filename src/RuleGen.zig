@@ -597,6 +597,7 @@ fn parseImprovements(
     const building_yields = try arena_allocator.alloc(Yield, rules.building_count);
     const building_names = try arena_allocator.alloc(u16, rules.building_count + 1);
 
+    building_yields[0] = .{};
     const strings_len = blk: {
         var strings_len: usize = 0;
         for (buildings) |building| {

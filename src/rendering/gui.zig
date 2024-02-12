@@ -82,6 +82,7 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
         pub fn clear(self: *Self) void {
             self.lines = undefined;
             self.len = 0;
+            self.recalculateBounds();
         }
 
         pub fn renderUpdate(self: *Self) void {
@@ -352,7 +353,7 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
             if (self.collapsed) {
                 self.bounds.height = OPTIONS.COLLAPSED_HEIGHT;
             } else {
-                self.bounds.width = @min(OPTIONS.WIDTH, @as(f32, @floatFromInt(self.cols())) * (OPTIONS.WIDTH / OPTIONS.COLUMNS));
+                self.bounds.width = @max(50, @min(OPTIONS.WIDTH, @as(f32, @floatFromInt(self.cols())) * (OPTIONS.WIDTH / OPTIONS.COLUMNS)));
                 self.bounds.height = OPTIONS.TOP_SPACEING + @as(f32, @floatFromInt(self.rows())) * (OPTIONS.ENTRY_HEIGHT + OPTIONS.SPACEING);
             }
         }

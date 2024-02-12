@@ -128,9 +128,16 @@ pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork)
 
     progress_blk: {
         if (self.work_in_progress.getPtr(unit_ref.idx)) |wip| {
-            if (@intFromEnum(wip.work_type) == @intFromEnum(wip.work_type)) {
-                wip.progress += 1;
-                break :progress_blk;
+            if (@intFromEnum(wip.work_type) == @intFromEnum(work)) {
+                if (switch (wip.work_type) {
+                    .building => |b| b == work.building,
+                    .transport => |t| t == work.transport,
+                    .remove_vegetation_building => |b| b == work.remove_vegetation_building,
+                    else => true,
+                }) {
+                    wip.progress += 1;
+                    break :progress_blk;
+                }
             }
         }
 
@@ -371,6 +378,10 @@ pub fn tileYield(self: *const Self, idx: Idx) Yield {
     if (resource != null) {
         yield = yield.add(resource.?.type.yield(self.rules));
     }
+
+    const imp_y = self.improvements[idx].building.yield(self.rules);
+    // std.debug.print("IMP Y: {}\n", .{imp_y.food});
+    yield = yield.add(imp_y);
 
     // city yeilds
     if (self.cities.contains(idx)) {

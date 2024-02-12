@@ -136,6 +136,22 @@
       "yield": {
         "gold": 1
       }
+    },
+    {
+      "name": "fishing_boats",
+      "build_turns": 1,
+      "allow_on": {
+        "resources": [
+          "fish",
+          "pearls",
+          "crab",
+          "whales"
+        ]
+      },
+      "yield": {
+        "gold": 1,
+        "food": 1
+      }
     }
   ]
 }

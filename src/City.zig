@@ -344,13 +344,13 @@ pub fn populationStavation(self: *Self, amt: u8, world: *const World) void {
 pub fn workHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
     const y = world.tileYield(idx);
     var value: u32 = 0;
-    value += y.production * 10;
-    value += y.food * 9;
+    value += @as(u32, y.production) * 10;
+    value += @as(u32, y.food) * 9;
     if (self.foodConsumption() + 2 > @as(f32, @floatFromInt(self.getWorkedTileYields(world).food)))
         value += @as(u32, y.food) * 13; // if starving more food
     if (self.population < 3)
-        value += y.food * 3; // if small, more food
-    value += (y.faith + y.gold + y.science + y.culture) * 4;
+        value += @as(u32, y.food) * 3; // if small, more food
+    value += (@as(u32, y.faith) + @as(u32, y.gold) + @as(u32, y.science) + @as(u32, y.culture)) * 4;
     return value;
 }
 
