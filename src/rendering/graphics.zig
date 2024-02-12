@@ -77,7 +77,6 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
             }
 
             renderTerrain(terrain, idx, world.grid, ts, world.rules);
-            renderImprovements(improvement, idx, world.grid, ts);
 
             if (improvement.transport != .none) {
                 var flag = false;
@@ -91,6 +90,8 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
                     render.renderTextureInHex(idx, world.grid, ts.road_textures[6], 0, 0, .{}, ts);
                 }
             }
+
+            renderImprovements(improvement, idx, world.grid, ts);
 
             render.renderTextureInHex(
                 idx,
@@ -121,7 +122,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
         const y = world.grid.yFromIdx(idx);
         if (!bbox.contains(x, y)) continue;
 
-        for (city.claimed.slice()) |claimed| {
+        for (city.claimed.indices()) |claimed| {
             render.renderTextureInHex(claimed, world.grid, ts.city_border_texture, 0, 0, .{
                 .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
                 .scale = 0.95,

@@ -10,7 +10,6 @@ const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
 
 const City = @import("City.zig");
-const HexSet = @import("HexSet.zig");
 const View = @import("View.zig");
 
 const Grid = @import("Grid.zig");
@@ -21,6 +20,8 @@ const Dir = Grid.Dir;
 const Units = @import("Units.zig");
 
 const Unit = @import("Unit.zig");
+
+const hex_set = @import("hex_set.zig");
 
 pub const FactionID = enum(u8) {
     civilization_0 = 0,
@@ -256,7 +257,7 @@ pub fn nextTurn(self: *Self) !void {
         const ya = city.getWorkedTileYields(self);
 
         _ = city.processYields(&ya);
-        const growth_res = city.checkGrowth(self);
+        const growth_res = try city.checkGrowth(self);
         _ = growth_res;
 
         var update_view = city.checkExpansion();
@@ -272,7 +273,7 @@ pub fn nextTurn(self: *Self) !void {
             else => {},
         }
 
-        if (update_view) self.fullUpdateViews();
+        if (update_view) try self.fullUpdateViews();
     }
 
     self.units.refresh();
@@ -281,7 +282,7 @@ pub fn nextTurn(self: *Self) !void {
 }
 
 pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
-    const city = City.new(idx, faction_id, self);
+    const city = try City.new(idx, faction_id, self);
     try self.cities.put(self.allocator, idx, city);
 }
 
@@ -552,23 +553,20 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
     return true;
 }
 
-pub fn unitFOV(self: *const Self, unit: *const Unit, src: Idx) HexSet {
+pub fn unitFOV(self: *const Self, unit: *const Unit, src: Idx) !hex_set.HexSet(0) {
     const vision_range = Rules.Promotion.Effect.promotionsSum(.modify_sight_range, unit.promotions, self.rules);
-    return self.fov(@intCast(vision_range + 2), src);
+    return try self.fov(@intCast(vision_range + 2), src);
 }
 
 /// Gets FOV from a tile as HexSet, caller must DEINIT! TODO double check behaviour with civ proper. Diagonals might be impact
 /// fov too much and axials might have too small an impact. works great as vision range 2, ok at 3, poor at 4+,
 /// TODO check if land is obscuring for embarked/naval units...
-pub fn fov(self: *const Self, vision_range: u8, src: Idx) HexSet {
+pub fn fov(self: *const Self, vision_range: u8, src: Idx) !hex_set.HexSet(0) {
     const elevated = self.terrain[src].attributes(self.rules).is_elevated;
 
-    var spiral_iter =
-        Grid.SpiralIterator.newFrom(src, 2, vision_range, self.grid);
-    var fov_set = HexSet.init(self.allocator);
-    fov_set.add(src);
-    fov_set.addAdjacent(&self.grid);
+    var fov_set = try hex_set.HexSet(0).initFloodFill(src, 1, &self.grid, self.allocator);
 
+    var spiral_iter = Grid.SpiralIterator.newFrom(src, 2, vision_range, self.grid);
     while (spiral_iter.next(self.grid)) |idx| {
         var max_off_axial: u8 = 0;
         var visable = false;
@@ -588,12 +586,12 @@ pub fn fov(self: *const Self, vision_range: u8, src: Idx) HexSet {
             if (self.terrain[n_idx].attributes(self.rules).is_impassable) continue; // impassible ~= mountain
             visable = true;
         }
-        if (visable) fov_set.add(idx);
+        if (visable) try fov_set.add(idx);
     }
     return fov_set;
 }
 
-pub fn fullUpdateViews(self: *Self) void {
+pub fn fullUpdateViews(self: *Self) !void {
     var iter //
         = self.units.iterator();
 
@@ -602,23 +600,23 @@ pub fn fullUpdateViews(self: *Self) void {
     }
 
     while (iter.next()) |item| {
-        var vision = self.unitFOV(&item.unit, item.idx);
+        var vision = try self.unitFOV(&item.unit, item.idx);
         defer vision.deinit();
 
         if (item.unit.faction_id.toCivilizationID()) |civ_id| {
-            self.views[@intFromEnum(civ_id)].addVisionSet(vision);
+            try self.views[@intFromEnum(civ_id)].addVisionSet(vision);
         }
     }
 
     for (self.cities.values()) |city| {
-        var vision = HexSet.init(self.allocator);
+        var vision = hex_set.HexSet(0).init(self.allocator);
         defer vision.deinit();
-        vision.add(city.position);
-        vision.addOther(&city.claimed);
-        vision.addOther(&city.adjacent);
+        try vision.add(city.position);
+        try vision.addOther(&city.claimed);
+        try vision.addOther(&city.adjacent);
 
         if (city.faction_id.toCivilizationID()) |civ_id| {
-            self.views[@intFromEnum(civ_id)].addVisionSet(vision);
+            try self.views[@intFromEnum(civ_id)].addVisionSet(vision);
         }
     }
 }

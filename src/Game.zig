@@ -318,7 +318,7 @@ fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
         .set_worked => |info| {
             const city = self.world.cities.getPtr(info.city_idx) orelse unreachable;
 
-            if (!city.setWorkedWithAutoReassign(info.idx, &self.world)) unreachable;
+            if (!try city.setWorkedWithAutoReassign(info.idx, &self.world)) unreachable;
         },
         .promote_unit => |info| {
             var unit = self.world.units.derefToPtr(info.unit) orelse unreachable;
@@ -333,7 +333,7 @@ fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
         },
     }
 
-    if (view_update) self.world.fullUpdateViews();
+    if (view_update) try self.world.fullUpdateViews();
 
     return true;
 }
