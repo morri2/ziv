@@ -354,7 +354,7 @@ pub fn main() !void {
                     var maybe_work: ?World.TileWork = null;
                     if (improvement_window.fetchSelectedNull(&maybe_work)) {
                         if (maybe_work) |work| {
-                            _ = try game.performAction(.{ .tile_work = .{ .unit = ref, .work = work } });
+                            _ = try game.tileWork(ref, work);
                         }
                     }
                 }
@@ -484,8 +484,8 @@ pub fn main() !void {
                 for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
                     if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world);
 
-                    if (try game.unsetWorked(city_idx, clicked_tile)) break;
-                    if (try game.setWorked(city_idx, clicked_tile)) break;
+                    if (try game.unsetWorked(city_idx, clicked_tile)) |_| break;
+                    if (try game.setWorked(city_idx, clicked_tile)) |_| break;
                 }
             }
         }
@@ -583,7 +583,7 @@ pub fn main() !void {
         }
         raylib.EndDrawing();
 
-        try game.update();
+        _ = try game.update();
 
         _ = camera.update(16.0);
     }
