@@ -79,6 +79,13 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
             renderTerrain(terrain, idx, world.grid, ts, world.rules);
             renderImprovements(improvement, idx, world.grid, ts);
 
+            if (improvement.transport != .none)
+                for (world.grid.neighbours(idx), 0..) |maybe_n_idx, i| if (maybe_n_idx) |n_idx| {
+                    if (world.improvements[n_idx].transport != .none or world.cities.contains(n_idx)) {
+                        render.renderTextureInHex(idx, world.grid, ts.road_textures[i], 0, 0, .{}, ts);
+                    }
+                };
+
             render.renderTextureInHex(
                 idx,
                 world.grid,
@@ -369,10 +376,5 @@ pub fn renderImprovements(improvement: Rules.Improvements, tile_idx: Idx, grid: 
     if (improvement.building != .none) {
         const improvement_texture = ts.improvement_textures[@intFromEnum(improvement.building)];
         render.renderTextureHex(tile_idx, grid, improvement_texture, .{}, ts);
-    }
-
-    if (improvement.transport != .none) {
-        // PLACEHOLDER!
-        render.renderTextureHex(tile_idx, grid, ts.transport_textures[0], .{ .scale = 0.1 }, ts);
     }
 }

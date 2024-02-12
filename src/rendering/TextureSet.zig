@@ -21,7 +21,6 @@ base_textures: []const raylib.Texture2D,
 feature_textures: []const raylib.Texture2D,
 unit_icons: []const raylib.Texture2D,
 resource_icons: []const raylib.Texture2D,
-transport_textures: []const raylib.Texture2D,
 improvement_textures: []const raylib.Texture2D,
 edge_textures: []const raylib.Texture2D,
 red_pop: raylib.Texture2D,
@@ -30,6 +29,8 @@ city_textures: []const raylib.Texture2D,
 city_border_texture: raylib.Texture2D,
 smoke_texture: raylib.Texture2D,
 river_textures: []const raylib.Texture2D,
+road_textures: []const raylib.Texture2D,
+rail_textures: []const raylib.Texture2D,
 
 unit_slot_frame_back: []const raylib.Texture2D,
 unit_slot_frame_line: []const raylib.Texture2D,
@@ -128,6 +129,10 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             raylib.BEIGE,
         },
 
+        .road_textures = try loadNumberedTextures("textures/rastor/road_{}.png", universal_fallback, 6, allocator),
+
+        .rail_textures = try loadNumberedTextures("textures/rastor/road_{}.png", universal_fallback, 6, allocator),
+
         .river_textures = try loadNumberedTextures("textures/rastor/river_{}.png", universal_fallback, 6, allocator),
 
         .city_textures = try loadNumberedTextures("textures/rastor/city_{}.png", universal_fallback, 6, allocator),
@@ -172,12 +177,6 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
             rules.building_count,
             allocator,
         ),
-        .transport_textures = try loadEnumTextures(
-            "textures/transp_{s}.png",
-            universal_fallback,
-            Rules.Transport,
-            allocator,
-        ),
 
         .unit_icons = try loadTexturesEnum(
             "textures/unit_{s}.png",
@@ -202,7 +201,6 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
 
 pub fn deinit(self: *Self) void {
     for (self.unit_icons) |texture| raylib.UnloadTexture(texture);
-    for (self.transport_textures) |texture| raylib.UnloadTexture(texture);
     for (self.improvement_textures) |texture| raylib.UnloadTexture(texture);
     for (self.resource_icons) |texture| raylib.UnloadTexture(texture);
     for (self.vegetation_textures) |texture| raylib.UnloadTexture(texture);
@@ -216,9 +214,10 @@ pub fn deinit(self: *Self) void {
     for (self.unit_slot_frame_line) |texture| raylib.UnloadTexture(texture);
     for (self.unit_slot_frame_glow) |texture| raylib.UnloadTexture(texture);
     for (self.unit_symbols) |texture| raylib.UnloadTexture(texture);
+    for (self.road_textures) |texture| raylib.UnloadTexture(texture);
+    for (self.rail_textures) |texture| raylib.UnloadTexture(texture);
 
     self.allocator.free(self.unit_icons);
-    self.allocator.free(self.transport_textures);
     self.allocator.free(self.improvement_textures);
     self.allocator.free(self.resource_icons);
     self.allocator.free(self.vegetation_textures);
@@ -232,6 +231,8 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.unit_slot_frame_line);
     self.allocator.free(self.unit_slot_frame_glow);
     self.allocator.free(self.unit_symbols);
+    self.allocator.free(self.road_textures);
+    self.allocator.free(self.rail_textures);
 }
 
 /// For loading textures for full terrain, eg not components
