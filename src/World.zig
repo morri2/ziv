@@ -551,7 +551,7 @@ pub fn unitFov(self: *const Self, unit: *const Unit, src: Idx, set: *hex_set.Hex
     try self.fov(@intCast(vision_range + 2), src, set);
 }
 
-/// Gets FOV from a tile as HexSet, caller must DEINIT! TODO double check behaviour with civ proper. Diagonals might be impact
+/// TODO double check behaviour with civ proper. Diagonals might be impact
 /// fov too much and axials might have too small an impact. works great as vision range 2, ok at 3, poor at 4+,
 /// TODO check if land is obscuring for embarked/naval units...
 pub fn fov(self: *const Self, vision_range: u8, src: Idx, set: *hex_set.HexSet(0)) !void {
