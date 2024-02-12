@@ -64,7 +64,7 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
     const unit = hex_height / 2;
 
     const frame_shapes = &[_][]const u8{
-        "pin", "pin", "circle", "circle", "boxpin", "trade",
+        "circle", "circle", "pin", "pin", "boxpin", "trade",
     };
 
     return .{
