@@ -217,7 +217,7 @@ pub fn update(self: *Self) !Action.Result {
 }
 
 pub fn updateViews(self: *Self) !void {
-    for (self.views) |*view| view.unsetAllVisable(&self.world);
+    for (self.views) |*view| view.unsetAllVisible(&self.world);
 
     // Add unit vision
     {

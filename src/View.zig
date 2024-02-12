@@ -94,7 +94,7 @@ pub fn update(self: *Self, idx: Idx, world: *const World) void {
     self.last_seen_yields[idx] = world.tileYield(idx);
 }
 
-pub fn unsetAllVisable(self: *Self, world: *const World) void {
+pub fn unsetAllVisible(self: *Self, world: *const World) void {
     for (0..world.grid.len) |idx| {
         if (!self.in_view.contains(@intCast(idx))) continue;
         self.update(@intCast(idx), world);
@@ -102,10 +102,10 @@ pub fn unsetAllVisable(self: *Self, world: *const World) void {
     }
 }
 
-pub fn visability(self: *const Self, idx: Idx) enum { visable, hidden, fov } {
+pub fn visibility(self: *const Self, idx: Idx) enum { visible, hidden, fov } {
     if (!self.explored.contains(idx)) return .hidden;
     if (!self.in_view.contains(idx)) return .fov;
-    return .visable;
+    return .visible;
 }
 
 pub fn newResource(self: *Self, resource: Resource, world: *const World) void {

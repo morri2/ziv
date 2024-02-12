@@ -44,13 +44,13 @@ pub fn renderWorld(
 }
 
 pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
-    if (maybe_view == null) return;
+    const view = maybe_view orelse return;
 
     const fow_color = .{ .a = 90, .r = 150, .g = 150, .b = 150 };
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
             const idx = grid.idxFromCoords(@intCast(x), @intCast(y));
-            switch (maybe_view.?.visability(idx)) {
+            switch (view.visibility(idx)) {
                 .fov => render.renderTextureHex(idx, grid, ts.smoke_texture, .{ .tint = fow_color }, ts),
                 .hidden => render.renderTextureHex(idx, grid, ts.smoke_texture, .{}, ts),
                 else => {},
@@ -240,7 +240,7 @@ pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
 
             var yield = world.tileYield(idx);
             if (maybe_view) |view| {
-                switch (view.visability(idx)) {
+                switch (view.visibility(idx)) {
                     .fov => yield = view.last_seen_yields[idx],
                     .hidden => continue,
                     else => {},
@@ -336,7 +336,7 @@ pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*con
         if (!bbox.contains(x, y)) continue;
 
         if (maybe_view) |view| {
-            if (view.visability(idx) == .hidden) continue;
+            if (view.visibility(idx) == .hidden) continue;
         }
 
         const icon = ts.resource_icons[@intFromEnum(res.type)];
