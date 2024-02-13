@@ -1,5 +1,4 @@
 const std = @import("std");
-const flag_index_map = @import("flag_index_map.zig");
 
 const Rules = @This();
 
