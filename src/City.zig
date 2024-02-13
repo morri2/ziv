@@ -149,9 +149,9 @@ pub fn setWorked(self: *Self, idx: Idx) !bool {
     return true;
 }
 
-pub fn setWorkedWithAutoReassign(self: *Self, idx: Idx, world: *const World) !bool {
+pub fn setWorkedWithAutoReassign(self: *Self, idx: Idx, world: *const World, rules: *const Rules) !bool {
     if (self.unassignedPopulation() < 1) {
-        const worst_idx = self.worstWorkedTile(world) orelse return false;
+        const worst_idx = self.worstWorkedTile(world, rules) orelse return false;
         if (!self.unsetWorked(worst_idx)) unreachable;
     }
     return try self.setWorked(idx);
@@ -161,12 +161,12 @@ pub fn unsetWorked(self: *Self, idx: Idx) bool {
     return self.worked.checkRemove(idx);
 }
 
-pub fn getWorkedTileYields(self: *const Self, world: *const World) YieldAccumulator {
+pub fn getWorkedTileYields(self: *const Self, world: *const World, rules: *const Rules) YieldAccumulator {
     var ya: YieldAccumulator = .{};
     for (self.worked.indices()) |worked_idx| {
-        ya.add(world.tileYield(worked_idx));
+        ya.add(world.tileYield(worked_idx, rules));
     }
-    ya.add(world.tileYield(self.position));
+    ya.add(world.tileYield(self.position, rules));
     ya.production += self.unassignedPopulation() * 1; // 2 prod in Tak?
     return ya;
 }
@@ -229,7 +229,7 @@ pub fn processYields(self: *Self, tile_yields: *const YieldAccumulator) YieldAcc
     };
 }
 
-pub fn expansionHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
+pub fn expansionHeuristic(self: *const Self, idx: Idx, world: *const World, rules: *const Rules) u32 {
     const resource_value: u32 = blk: {
         const res = world.resources.get(idx) orelse {
             // for (world.grid.neighbours(idx)) |n_idx| {
@@ -240,7 +240,7 @@ pub fn expansionHeuristic(self: *const Self, idx: Idx, world: *const World) u32 
             break :blk 0;
         };
 
-        switch (res.type.kind(world.rules)) {
+        switch (res.type.kind(rules)) {
             .luxury => break :blk 4,
             .strategic => break :blk 3,
             .bonus => break :blk 2,
@@ -252,12 +252,12 @@ pub fn expansionHeuristic(self: *const Self, idx: Idx, world: *const World) u32 
     return 30 + 10 * resource_value - dist * dist;
 }
 
-fn bestExpansionTile(self: *const Self, world: *const World) ?Idx {
+fn bestExpansionTile(self: *const Self, world: *const World, rules: *const Rules) ?Idx {
     var best: u32 = 0;
     var best_idx: ?Idx = null;
     for (self.adjacent.indices()) |idx| {
         if (!self.canClaimTile(idx, world)) continue;
-        const val = self.expansionHeuristic(idx, world);
+        const val = self.expansionHeuristic(idx, world, rules);
         if (val >= best) {
             best = val;
             best_idx = idx;
@@ -267,8 +267,8 @@ fn bestExpansionTile(self: *const Self, world: *const World) ?Idx {
 }
 
 ///
-pub fn expandBorder(self: *Self, world: *const World) !bool {
-    const idx = self.bestExpansionTile(world) orelse return false;
+pub fn expandBorder(self: *Self, world: *const World, rules: *const Rules) !bool {
+    const idx = self.bestExpansionTile(world, rules) orelse return false;
     return try claimTile(self, idx, world);
 }
 
@@ -291,17 +291,17 @@ pub fn claimTile(self: *Self, idx: Idx, world: *const World) !bool {
 }
 
 /// checks and updates the city if it is growing or starving
-pub fn checkGrowth(self: *Self, world: *const World) !GrowthResult {
+pub fn checkGrowth(self: *Self, world: *const World, rules: *const Rules) !GrowthResult {
     // new pop
     if (self.food_stockpile >= self.foodTilGrowth()) {
         self.food_stockpile -= self.food_stockpile * (1.0 - self.retained_food_fraction);
-        try self.populationGrowth(1, world);
+        try self.populationGrowth(1, world, rules);
         return .growth;
     }
     // dead pop
     if (self.food_stockpile < 0) {
         self.food_stockpile = 0;
-        self.populationStavation(1, world);
+        self.populationStavation(1, world, rules);
         return .starvation;
     }
     // starvation is also a thing
@@ -318,10 +318,10 @@ pub fn unassignedPopulation(self: *const Self) u8 {
     return self.population -| @as(u8, @intCast(self.worked.count())); // should not underflow, but seems to when pop starves, TODO: investigate
 }
 
-pub fn populationGrowth(self: *Self, amt: u8, world: *const World) !void {
+pub fn populationGrowth(self: *Self, amt: u8, world: *const World, rules: *const Rules) !void {
     self.population += amt;
     for (0..amt) |_| {
-        const best_idx = self.bestUnworkedTile(world) orelse continue;
+        const best_idx = self.bestUnworkedTile(world, rules) orelse continue;
         try self.worked.add(best_idx);
     }
 }
@@ -331,19 +331,19 @@ pub fn foodTilGrowth(self: *const Self) f32 {
     return 15 + 8 * pop + std.math.pow(f32, pop, 1.5);
 }
 
-pub fn populationStavation(self: *Self, amt: u8, world: *const World) void {
+pub fn populationStavation(self: *Self, amt: u8, world: *const World, rules: *const Rules) void {
     self.population -|= amt;
     for (0..amt) |_| {
-        const worst_idx = self.worstWorkedTile(world) orelse continue;
+        const worst_idx = self.worstWorkedTile(world, rules) orelse continue;
         self.worked.remove(worst_idx);
     }
 }
-pub fn workHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
-    const y = world.tileYield(idx);
+pub fn workHeuristic(self: *const Self, idx: Idx, world: *const World, rules: *const Rules) u32 {
+    const y = world.tileYield(idx, rules);
     var value: u32 = 0;
     value += @as(u32, y.production) * 10;
     value += @as(u32, y.food) * 9;
-    if (self.foodConsumption() + 2 > @as(f32, @floatFromInt(self.getWorkedTileYields(world).food)))
+    if (self.foodConsumption() + 2 > @as(f32, @floatFromInt(self.getWorkedTileYields(world, rules).food)))
         value += @as(u32, y.food) * 13; // if starving more food
     if (self.population < 3)
         value += @as(u32, y.food) * 3; // if small, more food
@@ -351,12 +351,12 @@ pub fn workHeuristic(self: *const Self, idx: Idx, world: *const World) u32 {
     return value;
 }
 
-pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
+pub fn bestUnworkedTile(self: *Self, world: *const World, rules: *const Rules) ?Idx {
     var best: u32 = 0;
     var best_idx: ?Idx = null;
     for (self.claimed.indices()) |idx| {
         if (self.worked.contains(idx)) continue;
-        const val = self.workHeuristic(idx, world);
+        const val = self.workHeuristic(idx, world, rules);
         if (val >= best) {
             best = val;
             best_idx = idx;
@@ -365,12 +365,12 @@ pub fn bestUnworkedTile(self: *Self, world: *const World) ?Idx {
     return best_idx;
 }
 
-pub fn worstWorkedTile(self: *Self, world: *const World) ?Idx {
+pub fn worstWorkedTile(self: *Self, world: *const World, rules: *const Rules) ?Idx {
     var worst: u32 = std.math.maxInt(u32);
     var worst_idx: ?Idx = null;
     for (self.claimed.indices()) |idx| {
         if (!self.worked.contains(idx)) continue;
-        const val = self.workHeuristic(idx, world);
+        const val = self.workHeuristic(idx, world, rules);
         if (val < worst) {
             worst = val;
             worst_idx = idx;

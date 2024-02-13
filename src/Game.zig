@@ -33,6 +33,8 @@ views: []View,
 socket: Socket,
 
 civ_id: World.CivilizationID,
+
+rules: Rules,
 world: World,
 
 allocator: std.mem.Allocator,
@@ -44,7 +46,7 @@ pub fn host(
     civ_id: World.CivilizationID,
     civ_count: u8,
     players: []Player,
-    rules: *const Rules,
+    rules_dir: std.fs.Dir,
     allocator: std.mem.Allocator,
 ) !Self {
     std.debug.assert(@intFromEnum(civ_id) < civ_count);
@@ -56,12 +58,14 @@ pub fn host(
 
     self.players = players;
 
+    self.rules = try Rules.parse(rules_dir, allocator);
+    errdefer self.rules.deinit();
+
     self.world = try World.init(
         allocator,
         width,
         height,
         wrap_around,
-        rules,
     );
     errdefer self.world.deinit();
 
@@ -85,7 +89,7 @@ pub fn host(
     return self;
 }
 
-pub fn connect(socket: Socket, rules: *const Rules, allocator: std.mem.Allocator) !Self {
+pub fn connect(socket: Socket, rules_dir: std.fs.Dir, allocator: std.mem.Allocator) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
     self.is_host = false;
@@ -102,12 +106,14 @@ pub fn connect(socket: Socket, rules: *const Rules, allocator: std.mem.Allocator
     self.civ_id = @enumFromInt(try reader.readByte());
     try self.socket.setBlocking(false);
 
+    self.rules = try Rules.parse(rules_dir, allocator);
+    errdefer self.rules.deinit();
+
     self.world = try World.init(
         allocator,
         width,
         height,
         wrap_around,
-        rules,
     );
     errdefer self.world.deinit();
 
@@ -132,6 +138,7 @@ pub fn deinit(self: *Self) void {
     for (self.views) |*view| view.deinit();
     self.allocator.free(self.views);
     self.world.deinit();
+    self.rules.deinit();
 }
 
 pub fn getView(self: *const Self) *const View {
@@ -217,7 +224,7 @@ pub fn update(self: *Self) !Action.Result {
 }
 
 pub fn updateViews(self: *Self) !void {
-    for (self.views) |*view| view.unsetAllVisible(&self.world);
+    for (self.views) |*view| view.unsetAllVisible(&self.world, &self.rules);
 
     // Add unit vision
     {
@@ -227,7 +234,7 @@ pub fn updateViews(self: *Self) !void {
         var iter = self.world.units.iterator();
         while (iter.next()) |item| {
             if (item.unit.faction_id.toCivilizationID()) |civ_id| {
-                try self.world.unitFov(&item.unit, item.idx, &vision_set);
+                try self.world.unitFov(&item.unit, item.idx, &vision_set, &self.rules);
                 try self.views[@intFromEnum(civ_id)].addVisionSet(vision_set);
                 vision_set.clear();
             }
@@ -247,7 +254,7 @@ fn performAction(self: *Self, action: Action) !?Action.Result {
     var result: ?Action.Result = Action.Result{};
     if (self.is_host) {
         const faction_id = self.civ_id.toFactionID();
-        result = try action.exec(faction_id, &self.world) orelse return null;
+        result = try action.exec(faction_id, &self.world, &self.rules) orelse return null;
 
         if (result.?.view_change) try self.updateViews();
 
@@ -258,7 +265,7 @@ fn performAction(self: *Self, action: Action) !?Action.Result {
             try serialization.serialize(writer, action);
         }
     } else {
-        if (!action.possible(self.civ_id.toFactionID(), &self.world)) return null;
+        if (!action.possible(self.civ_id.toFactionID(), &self.world, &self.rules)) return null;
         try serialization.serialize(self.socket.writer(), action);
     }
     return result;
@@ -271,7 +278,7 @@ fn hostUpdate(self: *Self) !Action.Result {
         while (try player.socket.hasData()) {
             try player.socket.setBlocking(true);
             const action = try serialization.deserialize(player.socket.reader(), Action);
-            if (try action.exec(faction_id, &self.world)) |exec_result| {
+            if (try action.exec(faction_id, &self.world, &self.rules)) |exec_result| {
                 for (self.players) |p| {
                     const writer = p.socket.writer();
                     try writer.writeByte(@intFromEnum(faction_id));
@@ -297,7 +304,7 @@ fn clientUpdate(self: *Self) !Action.Result {
         const faction_id: World.FactionID = @enumFromInt(try reader.readByte());
 
         const action = try serialization.deserialize(self.socket.reader(), Action);
-        if (try action.exec(faction_id, &self.world)) |exec_result| {
+        if (try action.exec(faction_id, &self.world, &self.rules)) |exec_result| {
             result = result.unionWith(exec_result);
         } else {
             // TODO: Resync

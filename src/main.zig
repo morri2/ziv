@@ -59,19 +59,13 @@ pub fn main() !void {
         return clap.help(std.io.getStdErr().writer(), clap.Help, &clap_params, .{});
     }
 
-    var rules = blk: {
-        var rules_dir = try std.fs.cwd().openDir(clap_res.args.rules orelse "base_rules", .{});
-        defer rules_dir.close();
-        break :blk try Rules.parse(rules_dir, gpa.allocator());
-    };
-    defer rules.deinit();
-
+    var rules_dir = try std.fs.cwd().openDir(clap_res.args.rules orelse "base_rules", .{});
     var game = if (clap_res.args.client != 0) blk: {
         const socket = try Socket.connect(try std.net.Ip4Address.parse("127.0.0.1", 2000));
         errdefer socket.close();
         break :blk try Game.connect(
             socket,
-            &rules,
+            rules_dir,
             gpa.allocator(),
         );
     } else blk: {
@@ -91,23 +85,24 @@ pub fn main() !void {
             @enumFromInt(0),
             2,
             players,
-            &rules,
+            rules_dir,
             gpa.allocator(),
         );
     };
     defer game.deinit();
+    rules_dir.close();
 
     try game.world.loadFromFile("maps/last_saved.map");
 
     // UNITS
-    try game.world.addUnit(1200, @enumFromInt(4), @enumFromInt(0));
-    try game.world.addUnit(1202, @enumFromInt(2), @enumFromInt(0));
-    try game.world.addUnit(1089, @enumFromInt(0), @enumFromInt(0));
-    try game.world.addUnit(1205, @enumFromInt(3), @enumFromInt(0));
-    try game.world.addUnit(1203, @enumFromInt(7), @enumFromInt(0));
+    try game.world.addUnit(1200, @enumFromInt(4), @enumFromInt(0), &game.rules);
+    try game.world.addUnit(1202, @enumFromInt(2), @enumFromInt(0), &game.rules);
+    try game.world.addUnit(1089, @enumFromInt(0), @enumFromInt(0), &game.rules);
+    try game.world.addUnit(1205, @enumFromInt(3), @enumFromInt(0), &game.rules);
+    try game.world.addUnit(1203, @enumFromInt(7), @enumFromInt(0), &game.rules);
 
-    try game.world.addUnit(1150, @enumFromInt(7), @enumFromInt(1));
-    try game.world.addUnit(1139, @enumFromInt(3), @enumFromInt(1));
+    try game.world.addUnit(1150, @enumFromInt(7), @enumFromInt(1), &game.rules);
+    try game.world.addUnit(1139, @enumFromInt(3), @enumFromInt(1), &game.rules);
 
     try game.world.addCity(1089, @enumFromInt(0));
     try game.world.addCity(485, @enumFromInt(1));
@@ -126,7 +121,7 @@ pub fn main() !void {
 
     var camera = Camera.init(screen_width, screen_height);
 
-    var texture_set = try TextureSet.init(&rules, gpa.allocator());
+    var texture_set = try TextureSet.init(&game.rules, gpa.allocator());
     defer texture_set.deinit();
 
     var maybe_selected_idx: ?Idx = null;
@@ -181,11 +176,11 @@ pub fn main() !void {
     });
 
     var palet_window: PaletWindow = PaletWindow.newEmpty();
-    for (0..rules.terrain_count) |ti| {
+    for (0..game.rules.terrain_count) |ti| {
         const t = @as(Rules.Terrain, @enumFromInt(ti));
-        if (t.attributes(&rules).has_freshwater or t.attributes(&rules).has_river) continue;
+        if (t.attributes(&game.rules).has_freshwater or t.attributes(&game.rules).has_river) continue;
         const texture: ?raylib.Texture2D = texture_set.terrain_textures[ti];
-        palet_window.addItemTexture(t, t.name(&rules), texture);
+        palet_window.addItemTexture(t, t.name(&game.rules), texture);
     }
 
     palet_window.setName("Edit Palet");
@@ -202,11 +197,11 @@ pub fn main() !void {
     });
 
     var resource_window: ResourceWindow = ResourceWindow.newEmpty();
-    for (0..rules.resource_count) |ri| {
+    for (0..game.rules.resource_count) |ri| {
         const r = @as(Rules.Resource, @enumFromInt(ri));
 
         const texture: ?raylib.Texture2D = texture_set.resource_icons[ri];
-        resource_window.addItemTexture(r, r.name(&rules), texture);
+        resource_window.addItemTexture(r, r.name(&game.rules), texture);
     }
     resource_window.setName("Resource Palet");
 
@@ -221,10 +216,10 @@ pub fn main() !void {
     });
 
     var promotion_window: PromotionWindow = PromotionWindow.newEmpty();
-    for (0..rules.promotion_count) |pi| {
+    for (0..game.rules.promotion_count) |pi| {
         const p = @as(Rules.Promotion, @enumFromInt(pi));
 
-        promotion_window.addItem(p, p.name(&rules));
+        promotion_window.addItem(p, p.name(&game.rules));
     }
     promotion_window.setName("Add Promotion");
     promotion_window.bounds.y += 50;
@@ -256,11 +251,11 @@ pub fn main() !void {
     city_construction_window.bounds.y += 150;
     city_construction_window.setName("Build in city.");
 
-    for (0..rules.unit_type_count) |uti| {
+    for (0..game.rules.unit_type_count) |uti| {
         const ut: Rules.UnitType = @enumFromInt(uti);
         const pt = City.ProductionTarget{ .unit = ut };
         var buf: [255]u8 = undefined;
-        const label = try std.fmt.bufPrint(&buf, "Build unit: {s}", .{ut.name(game.world.rules)});
+        const label = try std.fmt.bufPrint(&buf, "Build unit: {s}", .{ut.name(&game.rules)});
         city_construction_window.addItem(pt, label);
     }
 
@@ -288,7 +283,7 @@ pub fn main() !void {
 
             if (raylib.IsKeyPressed(raylib.KEY_SPACE)) _ = try game.nextTurn();
 
-            if (raylib.IsKeyPressed(raylib.KEY_R)) try game.world.recalculateWaterAccess();
+            if (raylib.IsKeyPressed(raylib.KEY_R)) try game.world.recalculateWaterAccess(&game.rules);
             if (raylib.IsKeyPressed(raylib.KEY_H)) hide_gui = !hide_gui;
 
             if (raylib.IsKeyPressed(raylib.KEY_P)) game.nextPlayer();
@@ -335,18 +330,18 @@ pub fn main() !void {
                         unit_info_window.addCategoryHeader("General");
 
                         unit_info_window.addLineFormat("HP: {}", .{unit.hit_points}, false);
-                        unit_info_window.addLineFormat("Move: {d:.1}/{d:.1}", .{ unit.movement, unit.maxMovement(game.world.rules) }, false);
+                        unit_info_window.addLineFormat("Move: {d:.1}/{d:.1}", .{ unit.movement, unit.maxMovement(&game.rules) }, false);
                         unit_info_window.addLineFormat("Faction id: {}", .{unit.faction_id}, false);
                         unit_info_window.addLineFormat("Fortified: {}", .{unit.fortified}, false);
                         unit_info_window.addLineFormat("Prepared: {}", .{unit.prepared}, false);
 
                         unit_info_window.addCategoryHeader("Promotions");
-                        for (0..rules.promotion_count) |pi| {
-                            unit_info_window.setName(unit.type.name(game.world.rules));
+                        for (0..game.rules.promotion_count) |pi| {
+                            unit_info_window.setName(unit.type.name(&game.rules));
                             const p: Rules.Promotion = @enumFromInt(pi);
 
                             if (unit.promotions.isSet(pi)) {
-                                unit_info_window.addLineFormat("{s}", .{p.name(game.world.rules)}, false);
+                                unit_info_window.addLineFormat("{s}", .{p.name(&game.rules)}, false);
                             }
                         }
                     }
@@ -364,7 +359,7 @@ pub fn main() !void {
                 // UPDATE UNIT INFO
                 if (maybe_selected_idx) |idx| {
                     const terrain = game.world.terrain[idx];
-                    const attributes = terrain.attributes(&rules);
+                    const attributes = terrain.attributes(&game.rules);
                     hex_info_window.clear();
 
                     hex_info_window.addCategoryHeader("Attributes");
@@ -453,25 +448,25 @@ pub fn main() !void {
                 // BUILD IMPROVEMENTS MENU!
                 if (maybe_unit_reference) |ref| {
                     improvement_window.clearItems();
-                    if (game.world.canDoImprovementWork(ref, .remove_vegetation)) {
+                    if (game.world.canDoImprovementWork(ref, .remove_vegetation, &game.rules)) {
                         improvement_window.addItem(.remove_vegetation, "Clear Vegetation");
                     }
-                    for (0..rules.building_count) |bi| {
+                    for (0..game.rules.building_count) |bi| {
                         const b: Rules.Building = @enumFromInt(bi);
 
-                        if (game.world.canDoImprovementWork(ref, .{ .building = b })) {
+                        if (game.world.canDoImprovementWork(ref, .{ .building = b }, &game.rules)) {
                             var buf: [255]u8 = undefined;
-                            const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&rules)});
+                            const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&game.rules)});
                             improvement_window.addItem(.{ .building = b }, label);
-                        } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b })) {
+                        } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b }, &game.rules)) {
                             var buf: [255]u8 = undefined;
-                            const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&rules)});
+                            const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&game.rules)});
                             improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
                         }
                     }
-                    if (game.world.canDoImprovementWork(ref, .{ .transport = .road }))
+                    if (game.world.canDoImprovementWork(ref, .{ .transport = .road }, &game.rules))
                         improvement_window.addItem(.{ .transport = .road }, "Transport: \n Road");
-                    if (game.world.canDoImprovementWork(ref, .{ .transport = .rail }))
+                    if (game.world.canDoImprovementWork(ref, .{ .transport = .rail }, &game.rules))
                         improvement_window.addItem(.{ .transport = .rail }, "Transport: \n Rail");
                 }
             }
@@ -484,7 +479,7 @@ pub fn main() !void {
                 );
 
                 for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
-                    if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world);
+                    if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world, &game.rules);
 
                     if (try game.unsetWorked(city_idx, clicked_tile)) |_| break;
                     if (try game.setWorked(city_idx, clicked_tile)) |_| break;
@@ -513,6 +508,7 @@ pub fn main() !void {
             camera.camera.zoom,
             maybe_unit_reference,
             texture_set,
+            &game.rules,
         );
         if (maybe_selected_idx) |selected_idx| {
             if (raylib.IsKeyDown(raylib.KEY_M)) {
@@ -536,11 +532,11 @@ pub fn main() !void {
             if (raylib.IsKeyDown(raylib.KEY_X)) {
                 var vision_set = hex_set.HexSet(0).init(gpa.allocator());
                 defer vision_set.deinit();
-                try game.world.fov(3, selected_idx, &vision_set);
+                try game.world.fov(3, selected_idx, &vision_set, &game.rules);
 
                 for (vision_set.indices()) |index| {
                     render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } }, texture_set);
-                    if (game.world.terrain[index].attributes(game.world.rules).is_obscuring)
+                    if (game.world.terrain[index].attributes(&game.rules).is_obscuring)
                         render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } }, texture_set);
                 }
             }

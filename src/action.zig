@@ -66,7 +66,7 @@ pub const Action = union(Type) {
         }
     };
 
-    pub fn possible(self: Action, faction_id: World.FactionID, world: *const World) bool {
+    pub fn possible(self: Action, faction_id: World.FactionID, world: *const World, rules: *const Rules) bool {
         switch (self) {
             .next_turn => {},
             .move_unit => |info| {
@@ -74,14 +74,14 @@ pub const Action = union(Type) {
 
                 if (unit.faction_id != faction_id) return false;
 
-                if (world.moveCost(info.ref, info.to) == .disallowed) return false;
+                if (world.moveCost(info.ref, info.to, rules) == .disallowed) return false;
             },
             .attack => |info| {
                 const unit = world.units.deref(info.attacker) orelse return false;
 
                 if (unit.faction_id != faction_id) return false;
 
-                if (!try world.canAttack(info.attacker, info.to)) return false;
+                if (!try world.canAttack(info.attacker, info.to, rules)) return false;
             },
             .set_city_production => |info| {
                 const city = world.cities.get(info.city_idx) orelse return false;
@@ -92,9 +92,9 @@ pub const Action = union(Type) {
 
                 if (unit.faction_id != faction_id) return false;
 
-                if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, world.rules)) return false;
+                if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, rules)) return false;
 
-                if (!world.canSettleCityAt(settler_ref.idx, faction_id)) return false;
+                if (!world.canSettleCityAt(settler_ref.idx, faction_id, rules)) return false;
             },
             .unset_worked => |info| {
                 const city = world.cities.get(info.city_idx) orelse return false;
@@ -113,39 +113,39 @@ pub const Action = union(Type) {
                 _ = world.units.deref(info.unit) orelse return false;
             },
             .tile_work => |info| {
-                return world.canDoImprovementWork(info.unit, info.work);
+                return world.canDoImprovementWork(info.unit, info.work, rules);
             },
         }
 
         return true;
     }
 
-    pub fn exec(self: Action, faction_id: World.FactionID, world: *World) !?Result {
-        if (!self.possible(faction_id, world)) return null;
+    pub fn exec(self: Action, faction_id: World.FactionID, world: *World, rules: *const Rules) !?Result {
+        if (!self.possible(faction_id, world, rules)) return null;
 
         var result = Result{};
         switch (self) {
             .next_turn => {
-                const turn_result = try world.nextTurn();
+                const turn_result = try world.nextTurn(rules);
                 result.view_change = turn_result.view_change;
             },
             .move_unit => |info| {
-                if (!try world.move(info.ref, info.to)) unreachable;
+                if (!try world.move(info.ref, info.to, rules)) unreachable;
 
                 result.view_change = true;
             },
             .attack => |info| {
-                if (!try world.attack(info.attacker, info.to)) unreachable;
+                if (!try world.attack(info.attacker, info.to, rules)) unreachable;
 
                 result.view_change = true;
             },
             .set_city_production => |info| {
                 const city = world.cities.getPtr(info.city_idx) orelse unreachable;
 
-                _ = city.startConstruction(info.production, world.rules);
+                _ = city.startConstruction(info.production, rules);
             },
             .settle_city => |settler_ref| {
-                if (!try world.settleCity(settler_ref)) unreachable;
+                if (!try world.settleCity(settler_ref, rules)) unreachable;
 
                 result.view_change = true;
             },
@@ -157,7 +157,7 @@ pub const Action = union(Type) {
             .set_worked => |info| {
                 const city = world.cities.getPtr(info.city_idx) orelse unreachable;
 
-                if (!try city.setWorkedWithAutoReassign(info.idx, world)) unreachable;
+                if (!try city.setWorkedWithAutoReassign(info.idx, world, rules)) unreachable;
             },
             .promote_unit => |info| {
                 var unit = world.units.derefToPtr(info.unit) orelse unreachable;
@@ -166,7 +166,7 @@ pub const Action = union(Type) {
                 result.view_change = true;
             },
             .tile_work => |info| {
-                if (!world.doImprovementWork(info.unit, info.work)) unreachable;
+                if (!world.doImprovementWork(info.unit, info.work, rules)) unreachable;
 
                 result.view_change = true;
             },

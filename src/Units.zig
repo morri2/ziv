@@ -98,17 +98,13 @@ pub const Reference = struct {
 };
 
 allocator: std.mem.Allocator,
-rules: *const Rules,
 
 stacked_key: Stacked.Key = @enumFromInt(1),
 maps: [Slot.len()]std.AutoArrayHashMapUnmanaged(Idx, Storage) = [_]std.AutoArrayHashMapUnmanaged(Idx, Storage){.{}} ** Slot.len(),
 stacked: std.AutoHashMapUnmanaged(Stacked.Key, Stacked) = .{},
 
-pub fn init(rules: *const Rules, allocator: std.mem.Allocator) Self {
-    return .{
-        .allocator = allocator,
-        .rules = rules,
-    };
+pub fn init(allocator: std.mem.Allocator) Self {
+    return .{ .allocator = allocator };
 }
 
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
@@ -135,11 +131,11 @@ pub fn putNoStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !void {
     gop.value_ptr.* = .{ .unit = unit };
 }
 
-pub fn putNoStackAutoSlot(self: *Self, idx: Idx, unit: Unit) !void {
+pub fn putNoStackAutoSlot(self: *Self, idx: Idx, unit: Unit, rules: *const Rules) !void {
     return self.putNoStack(
         idx,
         unit,
-        slotFromUnitType(unit.type, self.rules),
+        slotFromUnitType(unit.type, rules),
     );
 }
 
@@ -165,11 +161,11 @@ pub fn putOrStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !void {
     unit_storage.stacked = stacked_key;
 }
 
-pub fn putOrStackAutoSlot(self: *Self, idx: Idx, unit: Unit) !void {
+pub fn putOrStackAutoSlot(self: *Self, idx: Idx, unit: Unit, rules: *const Rules) !void {
     try self.putOrStack(
         idx,
         unit,
-        slotFromUnitType(unit.type, self.rules),
+        slotFromUnitType(unit.type, rules),
     );
 }
 
@@ -276,10 +272,10 @@ pub fn removeReference(self: *Self, reference: Reference) void {
     self.remove(reference.idx, reference.slot);
 }
 
-pub fn refresh(self: *Self) void {
+pub fn refresh(self: *Self, rules: *const Rules) void {
     for (&self.maps) |*map| {
         for (map.values()) |*storage| {
-            storage.unit.refresh(self.rules);
+            storage.unit.refresh(rules);
         }
     }
 }

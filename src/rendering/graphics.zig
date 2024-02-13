@@ -32,12 +32,13 @@ pub fn renderWorld(
     zoom: f32,
     maybe_unit_reference: ?Units.Reference,
     ts: TextureSet,
+    rules: *const Rules,
 ) void {
-    renderTerrainLayer(world, bbox, maybe_view, ts);
+    renderTerrainLayer(world, bbox, maybe_view, ts, rules);
 
     renderCities(world, bbox, ts);
     renderUnits(world, bbox, maybe_view, maybe_unit_reference, zoom, ts);
-    renderYields(world, bbox, maybe_view, ts);
+    renderYields(world, bbox, maybe_view, ts, rules);
 
     renderResources(world, bbox, maybe_view, ts);
     renderTerraIncognita(world.grid, bbox, maybe_view, ts);
@@ -60,7 +61,7 @@ pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const V
 }
 
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
-pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
+pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet, rules: *const Rules) void {
     const outline_color = .{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
     for (bbox.y_min..bbox.y_max) |y| {
         for (bbox.x_min..bbox.x_max) |x| {
@@ -76,7 +77,7 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
                 improvement = view.viewImprovements(idx, world) orelse unreachable;
             }
 
-            renderTerrain(terrain, idx, world.grid, ts, world.rules);
+            renderTerrain(terrain, idx, world.grid, ts, rules);
 
             if (improvement.transport != .none) {
                 var flag = false;
@@ -233,12 +234,12 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
     }
 }
 
-pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
+pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet, rules: *const Rules) void {
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
             const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
 
-            var yield = world.tileYield(idx);
+            var yield = world.tileYield(idx, rules);
             if (maybe_view) |view| {
                 switch (view.visibility(idx)) {
                     .fov => yield = view.last_seen_yields[idx],

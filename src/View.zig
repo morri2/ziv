@@ -57,8 +57,8 @@ pub fn addVision(self: *Self, idx: Idx) !void {
     try self.explored.add(idx);
 }
 
-pub fn removeVision(self: *Self, idx: Idx, world: *const World) !void {
-    self.update(idx, world);
+pub fn removeVision(self: *Self, idx: Idx, world: *const World, rules: *const Rules) !void {
+    self.update(idx, world, rules);
     try self.in_view.dec(idx);
 }
 
@@ -70,10 +70,10 @@ pub fn removeVisionSet(self: *Self, vision: hex_set.HexSet(0), world: *const Wor
     for (vision.indices()) |idx| self.removeVision(idx, world);
 }
 
-pub fn viewYield(self: *const Self, idx: Idx, world: *const World) ?Yield {
+pub fn viewYield(self: *const Self, idx: Idx, world: *const World, rules: *const Rules) ?Yield {
     if (!self.explored.contains(idx)) return null;
     if (!self.in_view.contains(idx)) return self.last_seen_yields[idx];
-    return world.tileYield(idx);
+    return world.tileYield(idx, rules);
 }
 
 pub fn viewTerrain(self: *const Self, idx: Idx, world: *const World) ?Terrain {
@@ -88,16 +88,16 @@ pub fn viewImprovements(self: *const Self, idx: Idx, world: *const World) ?Impro
     return world.improvements[idx];
 }
 
-pub fn update(self: *Self, idx: Idx, world: *const World) void {
+pub fn update(self: *Self, idx: Idx, world: *const World, rules: *const Rules) void {
     self.last_seen_terrain[idx] = world.terrain[idx];
     self.last_seen_improvements[idx] = world.improvements[idx];
-    self.last_seen_yields[idx] = world.tileYield(idx);
+    self.last_seen_yields[idx] = world.tileYield(idx, rules);
 }
 
-pub fn unsetAllVisible(self: *Self, world: *const World) void {
+pub fn unsetAllVisible(self: *Self, world: *const World, rules: *const Rules) void {
     for (0..world.grid.len) |idx| {
         if (!self.in_view.contains(@intCast(idx))) continue;
-        self.update(@intCast(idx), world);
+        self.update(@intCast(idx), world, rules);
         self.in_view.remove(@intCast(idx));
     }
 }
