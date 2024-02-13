@@ -1,5 +1,4 @@
 const std = @import("std");
-const serialization = @import("serialization.zig");
 
 const Rules = @This();
 
@@ -463,99 +462,99 @@ pub const UnitType = enum(u8) {
     }
 };
 
-pub fn serialize(self: *const Rules, writer: anytype) !void {
+const rules_serialization = @import("serialization.zig").customSerialization(&.{
     // Terrain
-    {
-        try writer.writeInt(u32, self.base_count, .little);
-        try serialization.serialize(writer, self.base_names);
-        try writer.writeInt(u32, self.feature_count, .little);
-        try serialization.serialize(writer, self.feature_names);
-        try writer.writeInt(u32, self.vegetation_count, .little);
-        try serialization.serialize(writer, self.vegetation_names);
-        try serialization.serialize(writer, self.terrain_strings);
+    .{ .name = "base_count" },
+    .{ .name = "base_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "base_count",
+        .extra = 1,
+    } } },
+    .{ .name = "feature_count" },
+    .{ .name = "feature_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "feature_count",
+        .extra = 1,
+    } } },
+    .{ .name = "vegetation_count" },
+    .{ .name = "vegetation_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "vegetation_count",
+        .extra = 1,
+    } } },
 
-        try writer.writeInt(u32, self.terrain_count, .little);
-        for (self.terrain_bases) |base| try serialization.serialize(writer, base);
-        for (self.terrain_features) |feature| try serialization.serialize(writer, feature);
-        for (self.terrain_vegetation) |vegetation| try serialization.serialize(writer, vegetation);
-        for (self.terrain_attributes) |attributes| try serialization.serialize(writer, attributes);
-        for (self.terrain_yields) |yield| try serialization.serialize(writer, yield);
-        for (self.terrain_happiness) |happiness| try serialization.serialize(writer, happiness);
-        for (self.terrain_combat_bonus) |combat_bonus| try serialization.serialize(writer, combat_bonus);
-        for (self.terrain_no_vegetation) |terrain| try serialization.serialize(writer, terrain);
-
-        var iter = self.terrain_unpacked_map.iterator();
-        while (iter.next()) |entry| {
-            try serialization.serialize(writer, entry.key_ptr.*);
-            try serialization.serialize(writer, entry.value_ptr.*);
-        }
-
-        for (self.terrain_names) |index| try serialization.serialize(writer, index);
-    }
+    .{ .name = "terrain_count" },
+    .{ .name = "terrain_bases", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_features", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_vegetation", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_attributes", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_yields", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_happiness", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_combat_bonus", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_no_vegetation", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_unpacked_map", .ty = .{ .hash_map_with_len = "terrain_count" } },
+    .{ .name = "terrain_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "terrain_count",
+        .extra = 1,
+    } } },
+    .{ .name = "terrain_strings" },
 
     // Resources
-    {
-        try serialization.serialize(writer, self.resource_count);
-        try serialization.serialize(writer, self.resource_strings);
-        for (self.resource_kinds) |kind| try serialization.serialize(writer, kind);
-        for (self.resource_yields) |yield| try serialization.serialize(writer, yield);
-        for (self.resource_names) |index| try serialization.serialize(writer, index);
-    }
+    .{ .name = "resource_count" },
+    .{ .name = "resource_kinds", .ty = .{ .slice_with_len = "resource_count" } },
+    .{ .name = "resource_yields", .ty = .{ .slice_with_len = "resource_count" } },
+    .{ .name = "resource_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "resource_count",
+        .extra = 1,
+    } } },
+    .{ .name = "resource_strings" },
 
     // Buildings
-    {
-        try serialization.serialize(writer, self.building_count);
-        try serialization.serialize(writer, self.building_strings);
-        for (self.building_yields) |yield| try serialization.serialize(writer, yield);
-
-        {
-            var iter = self.building_allowed_map.iterator();
-            while (iter.next()) |entry| {
-                try serialization.serialize(writer, entry.key_ptr.*);
-                try serialization.serialize(writer, entry.value_ptr.*);
-            }
-        }
-
-        {
-            var iter = self.building_resource_connectors.iterator();
-            while (iter.next()) |entry| {
-                try serialization.serialize(writer, entry.key_ptr.*);
-            }
-        }
-
-        {
-            var iter = self.building_resource_yields.iterator();
-            while (iter.next()) |entry| {
-                try serialization.serialize(writer, entry.key_ptr.*);
-                try serialization.serialize(writer, entry.value_ptr.*);
-            }
-        }
-        for (self.building_names) |index| try serialization.serialize(writer, index);
-    }
+    .{ .name = "building_count" },
+    .{ .name = "building_yields", .ty = .{ .slice_with_len = "building_count" } },
+    .{ .name = "building_allowed_map", .ty = .hash_map },
+    .{ .name = "building_resource_connectors", .ty = .hash_set },
+    .{ .name = "building_resource_yields", .ty = .hash_map },
+    .{ .name = "building_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "building_count",
+        .extra = 1,
+    } } },
+    .{ .name = "building_strings" },
 
     // Promotions
-    {
-        try serialization.serialize(writer, self.promotion_count);
-        try serialization.serialize(writer, self.promotion_strings);
-        for (self.promotion_prerequisites) |prereq| try serialization.serialize(writer, prereq);
-        for (self.promotion_storage) |p| try serialization.serialize(writer, p);
-        for (self.promotion_names) |index| try serialization.serialize(writer, index);
-    }
+    .{ .name = "promotion_count" },
+    .{ .name = "promotion_prerequisites", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "promotion_count",
+        .extra = 1,
+    } } },
+    .{ .name = "promotion_storage" },
+    .{ .name = "promotion_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "promotion_count",
+        .extra = 1,
+    } } },
+    .{ .name = "promotion_strings" },
 
     // Effects
-    {
-        for (self.effects) |index| try serialization.serialize(writer, index);
-        for (self.effect_promotions) |promotion| try serialization.serialize(writer, promotion.mask);
-        for (self.effect_values) |value| try serialization.serialize(writer, value);
-    }
+    .{ .name = "effects" },
+    .{ .name = "effect_promotions" },
+    .{ .name = "effect_values" },
 
     // Unit types
-    {
-        try serialization.serialize(writer, self.unit_type_count);
-        try serialization.serialize(writer, self.unit_type_strings);
+    .{ .name = "unit_type_count" },
+    .{ .name = "unit_type_stats", .ty = .{ .slice_with_len = "unit_type_count" } },
+    .{ .name = "unit_type_is_military", .ty = .dynamic_bit_set_unmanaged },
+    .{ .name = "unit_type_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "unit_type_count",
+        .extra = 1,
+    } } },
+    .{ .name = "unit_type_strings" },
+}, Rules);
 
-        for (self.unit_type_stats) |stats| try serialization.serialize(writer, stats);
+pub fn serialize(self: Rules, writer: anytype) !void {
+    try rules_serialization.serializeCustom(writer, self);
+}
 
-        for (self.unit_type_names) |index| try serialization.serialize(writer, index);
-    }
+pub fn deserialize(reader: anytype, allocator: std.mem.Allocator) !Rules {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    errdefer arena.deinit();
+    var self = try rules_serialization.deserializeCustom(reader, arena.allocator());
+    self.arena = arena;
+    return self;
 }
