@@ -1,4 +1,5 @@
 const std = @import("std");
+const serialization = @import("serialization.zig");
 
 const Rules = @This();
 
@@ -461,3 +462,100 @@ pub const UnitType = enum(u8) {
         return rules.unit_type_strings[start..end];
     }
 };
+
+pub fn serialize(self: *const Rules, writer: anytype) !void {
+    // Terrain
+    {
+        try writer.writeInt(u32, self.base_count, .little);
+        try serialization.serialize(writer, self.base_names);
+        try writer.writeInt(u32, self.feature_count, .little);
+        try serialization.serialize(writer, self.feature_names);
+        try writer.writeInt(u32, self.vegetation_count, .little);
+        try serialization.serialize(writer, self.vegetation_names);
+        try serialization.serialize(writer, self.terrain_strings);
+
+        try writer.writeInt(u32, self.terrain_count, .little);
+        for (self.terrain_bases) |base| try serialization.serialize(writer, base);
+        for (self.terrain_features) |feature| try serialization.serialize(writer, feature);
+        for (self.terrain_vegetation) |vegetation| try serialization.serialize(writer, vegetation);
+        for (self.terrain_attributes) |attributes| try serialization.serialize(writer, attributes);
+        for (self.terrain_yields) |yield| try serialization.serialize(writer, yield);
+        for (self.terrain_happiness) |happiness| try serialization.serialize(writer, happiness);
+        for (self.terrain_combat_bonus) |combat_bonus| try serialization.serialize(writer, combat_bonus);
+        for (self.terrain_no_vegetation) |terrain| try serialization.serialize(writer, terrain);
+
+        var iter = self.terrain_unpacked_map.iterator();
+        while (iter.next()) |entry| {
+            try serialization.serialize(writer, entry.key_ptr.*);
+            try serialization.serialize(writer, entry.value_ptr.*);
+        }
+
+        for (self.terrain_names) |index| try serialization.serialize(writer, index);
+    }
+
+    // Resources
+    {
+        try serialization.serialize(writer, self.resource_count);
+        try serialization.serialize(writer, self.resource_strings);
+        for (self.resource_kinds) |kind| try serialization.serialize(writer, kind);
+        for (self.resource_yields) |yield| try serialization.serialize(writer, yield);
+        for (self.resource_names) |index| try serialization.serialize(writer, index);
+    }
+
+    // Buildings
+    {
+        try serialization.serialize(writer, self.building_count);
+        try serialization.serialize(writer, self.building_strings);
+        for (self.building_yields) |yield| try serialization.serialize(writer, yield);
+
+        {
+            var iter = self.building_allowed_map.iterator();
+            while (iter.next()) |entry| {
+                try serialization.serialize(writer, entry.key_ptr.*);
+                try serialization.serialize(writer, entry.value_ptr.*);
+            }
+        }
+
+        {
+            var iter = self.building_resource_connectors.iterator();
+            while (iter.next()) |entry| {
+                try serialization.serialize(writer, entry.key_ptr.*);
+            }
+        }
+
+        {
+            var iter = self.building_resource_yields.iterator();
+            while (iter.next()) |entry| {
+                try serialization.serialize(writer, entry.key_ptr.*);
+                try serialization.serialize(writer, entry.value_ptr.*);
+            }
+        }
+        for (self.building_names) |index| try serialization.serialize(writer, index);
+    }
+
+    // Promotions
+    {
+        try serialization.serialize(writer, self.promotion_count);
+        try serialization.serialize(writer, self.promotion_strings);
+        for (self.promotion_prerequisites) |prereq| try serialization.serialize(writer, prereq);
+        for (self.promotion_storage) |p| try serialization.serialize(writer, p);
+        for (self.promotion_names) |index| try serialization.serialize(writer, index);
+    }
+
+    // Effects
+    {
+        for (self.effects) |index| try serialization.serialize(writer, index);
+        for (self.effect_promotions) |promotion| try serialization.serialize(writer, promotion.mask);
+        for (self.effect_values) |value| try serialization.serialize(writer, value);
+    }
+
+    // Unit types
+    {
+        try serialization.serialize(writer, self.unit_type_count);
+        try serialization.serialize(writer, self.unit_type_strings);
+
+        for (self.unit_type_stats) |stats| try serialization.serialize(writer, stats);
+
+        for (self.unit_type_names) |index| try serialization.serialize(writer, index);
+    }
+}
