@@ -83,13 +83,14 @@ pub fn host(
         try writer.writeByte(@intFromBool(wrap_around));
         try writer.writeByte(civ_count);
         try writer.writeByte(@intFromEnum(player.civ_id));
+        try self.rules.serialize(writer);
         try player.socket.setBlocking(false);
     }
 
     return self;
 }
 
-pub fn connect(socket: Socket, rules_dir: std.fs.Dir, allocator: std.mem.Allocator) !Self {
+pub fn connect(socket: Socket, allocator: std.mem.Allocator) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
     self.is_host = false;
@@ -104,10 +105,11 @@ pub fn connect(socket: Socket, rules_dir: std.fs.Dir, allocator: std.mem.Allocat
     const wrap_around: bool = @bitCast(@as(u1, @intCast(try reader.readByte())));
     const civ_count = try reader.readByte();
     self.civ_id = @enumFromInt(try reader.readByte());
-    try self.socket.setBlocking(false);
 
-    self.rules = try Rules.parse(rules_dir, allocator);
+    self.rules = try Rules.deserialize(reader, allocator);
     errdefer self.rules.deinit();
+
+    try self.socket.setBlocking(false);
 
     self.world = try World.init(
         allocator,

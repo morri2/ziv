@@ -59,13 +59,11 @@ pub fn main() !void {
         return clap.help(std.io.getStdErr().writer(), clap.Help, &clap_params, .{});
     }
 
-    var rules_dir = try std.fs.cwd().openDir(clap_res.args.rules orelse "base_rules", .{});
     var game = if (clap_res.args.client != 0) blk: {
         const socket = try Socket.connect(try std.net.Ip4Address.parse("127.0.0.1", 2000));
         errdefer socket.close();
         break :blk try Game.connect(
             socket,
-            rules_dir,
             gpa.allocator(),
         );
     } else blk: {
@@ -78,6 +76,8 @@ pub fn main() !void {
             player.socket = try socket.listenForConnection();
             player.civ_id = @enumFromInt(i);
         }
+        var rules_dir = try std.fs.cwd().openDir(clap_res.args.rules orelse "base_rules", .{});
+        defer rules_dir.close();
         break :blk try Game.host(
             56,
             36,
@@ -90,7 +90,6 @@ pub fn main() !void {
         );
     };
     defer game.deinit();
-    rules_dir.close();
 
     try game.world.loadFromFile("maps/last_saved.map");
 
