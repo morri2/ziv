@@ -99,7 +99,6 @@ faith_mult: f32 = 1.0,
 culture_til_expansion: f32 = 10, // random placeholder value
 
 current_production_project: ?WorkInProgressProductionProject = null,
-halted_production_projects: []WorkInProgressProductionProject = &.{},
 
 allocator: std.mem.Allocator,
 
