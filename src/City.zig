@@ -72,7 +72,7 @@ const WorkInProgressProductionProject = struct {
 faction_id: World.FactionID,
 
 name: []const u8 = "shithole",
-city_id: usize,
+city_id: u32,
 position: Idx,
 claimed: HexSet,
 worked: HexSet,
