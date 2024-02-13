@@ -71,7 +71,7 @@ const WorkInProgressProductionProject = struct {
 
 faction_id: World.FactionID,
 
-name: []const u8 = "shithole",
+name: []const u8 = "Goteborg",
 city_id: u32,
 position: Idx,
 claimed: HexSet,
@@ -120,13 +120,11 @@ pub fn new(position: Idx, player_id: World.FactionID, world: *const World) !Self
     return .{
         .faction_id = player_id,
         .city_id = (world.turn << 16) & (position & 0xffff), // id will be unique, use for loging etc
-        .name = "Goteborg",
         .position = position,
         .max_expansion = max_expansion,
         .max_workable = max_workable,
         .worked = HexSet.init(world.allocator),
         .claimed = claimed,
-        .population = 1,
         .adjacent = adjacent,
         .allocator = world.allocator,
     };
