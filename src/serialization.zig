@@ -22,7 +22,7 @@ pub fn serialize(writer: anytype, value: anytype) !void {
         .Struct => |info| {
             if (info.backing_integer) |backing_integer| {
                 const Int = getAlignedInt(backing_integer);
-                const struct_int: Int = @bitCast(value);
+                const struct_int: backing_integer = @bitCast(value);
                 try writer.writeInt(Int, struct_int, .little);
             } else {
                 inline for (info.fields) |field| {
