@@ -73,6 +73,8 @@ pub fn deinit(self: *Rules) void {
 }
 
 pub const Yield = packed struct {
+    pub const Integer = @typeInfo(Yield).Struct.backing_integer.?;
+
     food: u5 = 0,
     production: u5 = 0,
     gold: u5 = 0,
