@@ -30,11 +30,22 @@ pub fn serialize(writer: anytype, value: anytype) !void {
                 }
             }
         },
+        .Pointer => |info| switch (info.size) {
+            .Slice => {
+                try writer.writeInt(u32, @intCast(value.len), .little);
+                for (value) |e| try serialize(writer, e);
+            },
+            else => @compileError("Can not serialize non slice pointer type"),
+        },
         else => @compileError("Unimplemented serialization type: " ++ @typeName(Value)),
     }
 }
 
 pub fn deserialize(reader: anytype, comptime Value: type) !Value {
+    return deserializeAlloc(reader, Value, null);
+}
+
+pub fn deserializeAlloc(reader: anytype, comptime Value: type, maybe_allocator: ?std.mem.Allocator) !Value {
     return switch (@typeInfo(Value)) {
         .Void => {},
         .Bool => blk: {
@@ -50,7 +61,8 @@ pub fn deserialize(reader: anytype, comptime Value: type) !Value {
                 .little,
             ));
             inline for (info.fields) |field| {
-                if (@field(TagType, field.name) == tag) break :blk @unionInit(Value, field.name, try deserialize(reader, field.type));
+                if (@field(TagType, field.name) == tag)
+                    break :blk @unionInit(Value, field.name, try deserializeAlloc(reader, field.type, maybe_allocator));
             }
             unreachable;
         },
@@ -62,10 +74,20 @@ pub fn deserialize(reader: anytype, comptime Value: type) !Value {
             } else {
                 var value: Value = undefined;
                 inline for (info.fields) |field| {
-                    @field(value, field.name) = try deserialize(reader, field.type);
+                    @field(value, field.name) = try deserializeAlloc(reader, field.type, maybe_allocator);
                 }
                 break :blk value;
             }
+        },
+        .Pointer => |info| switch (info.size) {
+            .Slice => if (maybe_allocator) |allocator| blk: {
+                const len = try reader.readInt(u32, .little);
+                const values = try allocator.alloc(info.child, len);
+                errdefer allocator.free(values);
+                for (values) |*e| e.* = deserializeAlloc(reader, info.child, allocator);
+                break :blk values;
+            } else error.NoAllocator,
+            else => @compileError("Cannot deserialize non slice pointer type"),
         },
         else => @compileError("Unimplemented deserialization type: " ++ @typeName(Value)),
     };
