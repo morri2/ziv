@@ -30,6 +30,9 @@ pub fn serialize(writer: anytype, value: anytype) !void {
                 }
             }
         },
+        .Array => {
+            for (value) |e| try serialize(writer, e);
+        },
         .Pointer => |info| switch (info.size) {
             .Slice => {
                 try writer.writeInt(u32, @intCast(value.len), .little);
@@ -78,6 +81,11 @@ pub fn deserializeAlloc(reader: anytype, comptime Value: type, maybe_allocator: 
                 }
                 break :blk value;
             }
+        },
+        .Array => |info| blk: {
+            var value: Value = undefined;
+            for (&value) |*e| e.* = try deserializeAlloc(reader, info.child, maybe_allocator);
+            break :blk value;
         },
         .Pointer => |info| switch (info.size) {
             .Slice => if (maybe_allocator) |allocator| blk: {
