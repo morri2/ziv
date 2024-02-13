@@ -42,11 +42,11 @@ pub const CivilizationID = enum(u5) {
     }
 };
 
-/// The lowest index is always in low :))
 pub const WorkInProgress = struct {
     work_type: TileWork,
     progress: u8,
 };
+
 pub const TileWork = union(TileWorkType) {
     building: Building,
     remove_vegetation_building: Building,
@@ -64,6 +64,220 @@ pub const TileWork = union(TileWorkType) {
         remove_vegetation = 5,
     };
 };
+
+pub const ResourceAndAmount = packed struct {
+    type: Resource,
+    amount: u8 = 1,
+};
+
+allocator: std.mem.Allocator,
+
+grid: Grid,
+
+turn: u32,
+
+// Per tile data
+terrain: []Terrain,
+improvements: []Improvements,
+
+// Tile lookup data
+resources: std.AutoArrayHashMapUnmanaged(Idx, ResourceAndAmount),
+work_in_progress: std.AutoArrayHashMapUnmanaged(Idx, WorkInProgress),
+
+// Tile edge data
+rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
+
+units: Units,
+
+cities: std.AutoArrayHashMapUnmanaged(Idx, City),
+
+pub fn init(
+    allocator: std.mem.Allocator,
+    width: u32,
+    height: u32,
+    wrap_around: bool,
+) !Self {
+    const grid = Grid.init(width, height, wrap_around);
+
+    const terrain = try allocator.alloc(Terrain, grid.len);
+    errdefer allocator.free(terrain);
+    @memset(terrain, std.mem.zeroes(Terrain));
+
+    const improvements = try allocator.alloc(Improvements, grid.len);
+    errdefer allocator.free(improvements);
+    @memset(improvements, std.mem.zeroes(Improvements));
+
+    return Self{
+        .allocator = allocator,
+        .grid = grid,
+        .terrain = terrain,
+        .improvements = improvements,
+        .resources = .{},
+        .work_in_progress = .{},
+        .rivers = .{},
+        .turn = 1,
+        .cities = .{},
+        .units = Units.init(allocator),
+    };
+}
+
+pub fn deinit(self: *Self) void {
+    self.rivers.deinit(self.allocator);
+    self.work_in_progress.deinit(self.allocator);
+    self.resources.deinit(self.allocator);
+
+    self.units.deinit(self.allocator);
+
+    self.allocator.free(self.improvements);
+    self.allocator.free(self.terrain);
+
+    for (self.cities.values()) |*city| city.deinit();
+    self.cities.deinit(self.allocator);
+}
+
+pub fn nextTurn(self: *Self, rules: *const Rules) !struct {
+    view_change: bool,
+} {
+    var view_change = false;
+    for (self.cities.keys(), self.cities.values()) |idx, *city| {
+        const ya = city.getWorkedTileYields(self, rules);
+
+        _ = city.processYields(&ya);
+        const growth_res = try city.checkGrowth(self, rules);
+        _ = growth_res;
+
+        view_change = view_change or city.checkExpansion();
+        const production_result = try city.checkProduction();
+        switch (production_result) {
+            .done => |project| switch (project) {
+                .unit => |unit_type| {
+                    try self.addUnit(idx, unit_type, city.faction_id, rules);
+                    view_change = true;
+                },
+                else => unreachable, // TODO
+            },
+            else => {},
+        }
+    }
+
+    self.units.refresh(rules);
+
+    self.turn += 1;
+
+    return .{
+        .view_change = view_change,
+    };
+}
+
+pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
+    const city = try City.new(idx, faction_id, self);
+    try self.cities.put(self.allocator, idx, city);
+}
+
+pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID, rules: *const Rules) !void {
+    const unit = Unit.new(unit_temp, faction, rules);
+    try self.units.putOrStackAutoSlot(idx, unit, rules);
+}
+
+pub fn claimed(self: *const Self, idx: Idx) bool {
+    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
+    return false;
+}
+
+pub fn claimedFaction(self: *const Self, idx: Idx) ?FactionID {
+    for (self.cities.values()) |city|
+        if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
+    return null;
+}
+
+pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: FactionID, rules: *const Rules) bool {
+    if (self.claimedFaction(idx)) |claimed_by| {
+        if (claimed_by != faction) return false;
+    }
+    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
+    if (self.terrain[idx].attributes(rules).is_impassable) return false;
+    if (self.terrain[idx].attributes(rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(rules).is_water) return false;
+    return true;
+}
+
+pub fn settleCity(self: *Self, reference: Units.Reference, rules: *const Rules) !bool {
+    const unit = self.units.deref(reference) orelse return false;
+    if (!self.canSettleCityAt(reference.idx, unit.faction_id, rules)) return false;
+    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, rules)) return false;
+    if (unit.movement <= 0) return false;
+
+    try self.addCity(reference.idx, unit.faction_id);
+    self.units.removeReference(reference); // will this fuck up the refrence held by controll?
+
+    return true;
+}
+
+pub fn recalculateWaterAccess(self: *Self, rules: *const Rules) !void {
+    var new_terrain = try self.allocator.alloc(Rules.Terrain.Unpacked, self.grid.len);
+    defer self.allocator.free(new_terrain);
+
+    for (0..self.grid.len) |idx| {
+        const terrain = self.terrain[idx];
+        new_terrain[idx] = .{
+            .base = terrain.base(rules),
+            .feature = terrain.feature(rules),
+            .vegetation = terrain.vegetation(rules),
+            .has_freshwater = false,
+            .has_river = false,
+        };
+    }
+
+    for (0..self.grid.len) |idx_us| {
+        const idx: u32 = @intCast(idx_us);
+
+        const terrain = self.terrain[idx];
+        if (terrain.attributes(rules).is_freshwater) {
+            new_terrain[idx].has_freshwater = true;
+            for (self.grid.neighbours(idx)) |maybe_n_idx|
+                if (maybe_n_idx) |n_idx| {
+                    new_terrain[n_idx].has_freshwater = true;
+                };
+        }
+    }
+
+    for (self.rivers.keys()) |edge| {
+        new_terrain[edge.low].has_freshwater = true;
+        new_terrain[edge.high].has_freshwater = true;
+        new_terrain[edge.low].has_river = true;
+        new_terrain[edge.high].has_river = true;
+    }
+
+    for (0..self.grid.len) |idx_us| {
+        const idx: u32 = @intCast(idx_us);
+        if (self.terrain[idx].attributes(rules).is_water) {
+            new_terrain[idx].has_freshwater = false;
+        }
+    }
+
+    for (0..self.grid.len) |idx|
+        self.terrain[idx] = new_terrain[idx].pack(rules) orelse std.debug.panic("Failed to pack tile", .{});
+}
+
+pub fn tileYield(self: *const Self, idx: Idx, rules: *const Rules) Yield {
+    const terrain = self.terrain[idx];
+    const maybe_resource: ?Rules.Resource = if (self.resources.get(idx)) |r| r.type else null;
+
+    var yield = terrain.yield(rules);
+
+    if (maybe_resource) |resource| yield = yield.add(resource.yield(rules));
+
+    const imp_y = self.improvements[idx].building.yield(maybe_resource, rules);
+    yield = yield.add(imp_y);
+
+    // City yields
+    if (self.cities.contains(idx)) {
+        yield.production = @max(yield.production, 1);
+        yield.food = @max(yield.food, 2);
+    }
+
+    return yield;
+}
 
 pub fn workAllowedOn(self: *const Self, idx: Idx, work: TileWork, rules: *const Rules) bool {
     if (self.cities.contains(idx)) return false;
@@ -163,221 +377,6 @@ pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork,
     } else unreachable;
     self.units.derefToPtr(unit_ref).?.movement = 0;
     return true;
-}
-
-pub const ResourceAndAmount = packed struct {
-    type: Resource,
-    amount: u8 = 1,
-};
-
-allocator: std.mem.Allocator,
-
-grid: Grid,
-
-turn: u32,
-
-// Per tile data
-terrain: []Terrain,
-improvements: []Improvements,
-
-// Tile lookup data
-resources: std.AutoArrayHashMapUnmanaged(Idx, ResourceAndAmount),
-work_in_progress: std.AutoArrayHashMapUnmanaged(Idx, WorkInProgress),
-
-// Tile edge data
-rivers: std.AutoArrayHashMapUnmanaged(Edge, void),
-
-units: Units,
-
-cities: std.AutoArrayHashMapUnmanaged(Idx, City),
-
-pub fn init(
-    allocator: std.mem.Allocator,
-    width: u32,
-    height: u32,
-    wrap_around: bool,
-) !Self {
-    const grid = Grid.init(width, height, wrap_around);
-
-    const terrain = try allocator.alloc(Terrain, grid.len);
-    errdefer allocator.free(terrain);
-    @memset(terrain, std.mem.zeroes(Terrain));
-
-    const improvements = try allocator.alloc(Improvements, grid.len);
-    errdefer allocator.free(improvements);
-    @memset(improvements, std.mem.zeroes(Improvements));
-
-    return Self{
-        .allocator = allocator,
-        .grid = grid,
-        .terrain = terrain,
-        .improvements = improvements,
-        .resources = .{},
-        .work_in_progress = .{},
-        .rivers = .{},
-        .turn = 1,
-        .cities = .{},
-        .units = Units.init(allocator),
-    };
-}
-
-pub fn deinit(self: *Self) void {
-    self.rivers.deinit(self.allocator);
-    self.work_in_progress.deinit(self.allocator);
-    self.resources.deinit(self.allocator);
-
-    self.units.deinit(self.allocator);
-
-    self.allocator.free(self.improvements);
-    self.allocator.free(self.terrain);
-
-    for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
-
-    self.cities.deinit(self.allocator);
-}
-
-pub fn nextTurn(self: *Self, rules: *const Rules) !struct {
-    view_change: bool,
-} {
-    var view_change = false;
-    for (self.cities.keys(), self.cities.values()) |idx, *city| {
-        const ya = city.getWorkedTileYields(self, rules);
-
-        _ = city.processYields(&ya);
-        const growth_res = try city.checkGrowth(self, rules);
-        _ = growth_res;
-
-        view_change = view_change or city.checkExpansion();
-        const production_result = try city.checkProduction();
-        switch (production_result) {
-            .done => |project| switch (project) {
-                .unit => |unit_type| {
-                    try self.addUnit(idx, unit_type, city.faction_id, rules);
-                    view_change = true;
-                },
-                else => unreachable, // TODO
-            },
-            else => {},
-        }
-    }
-
-    self.units.refresh(rules);
-
-    self.turn += 1;
-
-    return .{
-        .view_change = view_change,
-    };
-}
-
-pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
-    const city = try City.new(idx, faction_id, self);
-    try self.cities.put(self.allocator, idx, city);
-}
-
-pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID, rules: *const Rules) !void {
-    const unit = Unit.new(unit_temp, faction, rules);
-    try self.units.putOrStackAutoSlot(idx, unit, rules);
-}
-
-pub fn claimed(self: *const Self, idx: Idx) bool {
-    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return true;
-    return false;
-}
-
-pub fn claimedFaction(self: *const Self, idx: Idx) ?FactionID {
-    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
-    return null;
-}
-
-pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: FactionID, rules: *const Rules) bool {
-    if (self.claimedFaction(idx)) |claimed_by| {
-        if (claimed_by != faction) return false;
-    }
-    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
-    if (self.terrain[idx].attributes(rules).is_impassable) return false;
-    if (self.terrain[idx].attributes(rules).is_wonder) return false;
-    if (self.terrain[idx].attributes(rules).is_water) return false;
-    return true;
-}
-
-pub fn settleCity(self: *Self, reference: Units.Reference, rules: *const Rules) !bool {
-    const unit = self.units.deref(reference) orelse return false;
-    if (!self.canSettleCityAt(reference.idx, unit.faction_id, rules)) return false;
-    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, rules)) return false;
-    if (unit.movement <= 0) return false;
-
-    try self.addCity(reference.idx, unit.faction_id);
-    self.units.removeReference(reference); // will this fuck up the refrence held by controll?
-
-    return true;
-}
-
-pub fn recalculateWaterAccess(self: *Self, rules: *const Rules) !void {
-    var new_terrain = try self.allocator.alloc(Rules.Terrain.Unpacked, self.grid.len);
-    defer self.allocator.free(new_terrain);
-
-    for (0..self.grid.len) |idx| {
-        const terrain = self.terrain[idx];
-        new_terrain[idx] = .{
-            .base = terrain.base(rules),
-            .feature = terrain.feature(rules),
-            .vegetation = terrain.vegetation(rules),
-            .has_freshwater = false,
-            .has_river = false,
-        };
-    }
-
-    for (0..self.grid.len) |idx_us| {
-        const idx: u32 = @intCast(idx_us);
-
-        const terrain = self.terrain[idx];
-        if (terrain.attributes(rules).is_freshwater) {
-            new_terrain[idx].has_freshwater = true;
-            for (self.grid.neighbours(idx)) |maybe_n_idx|
-                if (maybe_n_idx) |n_idx| {
-                    new_terrain[n_idx].has_freshwater = true;
-                };
-        }
-    }
-
-    for (self.rivers.keys()) |edge| {
-        new_terrain[edge.low].has_freshwater = true;
-        new_terrain[edge.high].has_freshwater = true;
-        new_terrain[edge.low].has_river = true;
-        new_terrain[edge.high].has_river = true;
-    }
-
-    for (0..self.grid.len) |idx_us| {
-        const idx: u32 = @intCast(idx_us);
-        if (self.terrain[idx].attributes(rules).is_water) {
-            new_terrain[idx].has_freshwater = false;
-        }
-    }
-
-    for (0..self.grid.len) |idx| self.terrain[idx] = new_terrain[idx].pack(rules) orelse
-        std.debug.panic("Failed to pack tile", .{});
-}
-
-pub fn tileYield(self: *const Self, idx: Idx, rules: *const Rules) Yield {
-    const terrain = self.terrain[idx];
-    const maybe_resource: ?Rules.Resource = if (self.resources.get(idx)) |r| r.type else null;
-
-    var yield = terrain.yield(rules);
-
-    if (maybe_resource) |resource| yield = yield.add(resource.yield(rules));
-
-    const imp_y = self.improvements[idx].building.yield(maybe_resource, rules);
-    // std.debug.print("IMP Y: {}\n", .{imp_y.food});
-    yield = yield.add(imp_y);
-
-    // city yeilds
-    if (self.cities.contains(idx)) {
-        yield.production = @max(yield.production, 1);
-        yield.food = @max(yield.food, 2);
-    }
-
-    return yield;
 }
 
 pub fn moveCost(
