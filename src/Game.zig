@@ -23,6 +23,15 @@ pub const Player = struct {
     socket: Socket,
 };
 
+pub const Map = union(enum) {
+    new: struct {
+        width: u32,
+        height: u32,
+        wrap_around: bool,
+    },
+    new_load_terrain: std.fs.File,
+};
+
 // Host specific
 is_host: bool,
 players: []Player,
@@ -40,9 +49,7 @@ world: World,
 allocator: std.mem.Allocator,
 
 pub fn host(
-    width: u32,
-    height: u32,
-    wrap_around: bool,
+    map: Map,
     civ_id: World.CivilizationID,
     civ_count: u8,
     players: []Player,
@@ -61,12 +68,15 @@ pub fn host(
     self.rules = try Rules.parse(rules_dir, allocator);
     errdefer self.rules.deinit();
 
-    self.world = try World.init(
-        allocator,
-        width,
-        height,
-        wrap_around,
-    );
+    self.world = switch (map) {
+        .new => |grid| try World.init(
+            allocator,
+            grid.width,
+            grid.height,
+            grid.wrap_around,
+        ),
+        .new_load_terrain => |file| try World.deserializeTerrain(file.reader(), allocator),
+    };
     errdefer self.world.deinit();
 
     self.views = try allocator.alloc(View, civ_count);
@@ -78,12 +88,10 @@ pub fn host(
     for (self.players) |player| {
         try player.socket.setBlocking(true);
         const writer = player.socket.writer();
-        try writer.writeInt(u32, width, .little);
-        try writer.writeInt(u32, height, .little);
-        try writer.writeByte(@intFromBool(wrap_around));
         try writer.writeByte(civ_count);
         try writer.writeByte(@intFromEnum(player.civ_id));
         try self.rules.serialize(writer);
+        try self.world.serializeTerrain(writer);
         try player.socket.setBlocking(false);
     }
 
@@ -100,24 +108,16 @@ pub fn connect(socket: Socket, allocator: std.mem.Allocator) !Self {
 
     try self.socket.setBlocking(true);
     const reader = self.socket.reader();
-    const width = try reader.readInt(u32, .little);
-    const height = try reader.readInt(u32, .little);
-    const wrap_around: bool = @bitCast(@as(u1, @intCast(try reader.readByte())));
     const civ_count = try reader.readByte();
     self.civ_id = @enumFromInt(try reader.readByte());
 
     self.rules = try Rules.deserialize(reader, allocator);
     errdefer self.rules.deinit();
 
-    try self.socket.setBlocking(false);
-
-    self.world = try World.init(
-        allocator,
-        width,
-        height,
-        wrap_around,
-    );
+    self.world = try World.deserializeTerrain(reader, allocator);
     errdefer self.world.deinit();
+
+    try self.socket.setBlocking(false);
 
     self.views = try allocator.alloc(View, civ_count);
     errdefer allocator.free(self.views);

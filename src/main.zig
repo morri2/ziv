@@ -68,20 +68,42 @@ pub fn main() !void {
         );
     } else blk: {
         const connections = clap_res.args.host orelse 0;
+
         const socket = try Socket.create(2000);
         defer socket.close();
+
         const players = try gpa.allocator().alloc(Game.Player, connections);
         errdefer gpa.allocator().free(players);
         for (players, 1..) |*player, i| {
             player.socket = try socket.listenForConnection();
             player.civ_id = @enumFromInt(i);
         }
+
+        const map_path = "maps/last_saved.map";
+        var maybe_map_file: ?std.fs.File = map_blk: {
+            break :map_blk std.fs.cwd().openFile(map_path, .{}) catch |err| switch (err) {
+                error.FileNotFound => {
+                    std.debug.print("Could not find map at: {s}\n", .{map_path});
+                    break :map_blk null;
+                },
+                else => return err,
+            };
+        };
+        defer if (maybe_map_file) |*map_file| map_file.close();
+
         var rules_dir = try std.fs.cwd().openDir(clap_res.args.rules orelse "base_rules", .{});
         defer rules_dir.close();
+
         break :blk try Game.host(
-            56,
-            36,
-            true,
+            if (maybe_map_file) |map_file| .{
+                .new_load_terrain = map_file,
+            } else .{
+                .new = .{
+                    .width = 56,
+                    .height = 36,
+                    .wrap_around = true,
+                },
+            },
             @enumFromInt(0),
             2,
             players,
@@ -90,8 +112,6 @@ pub fn main() !void {
         );
     };
     defer game.deinit();
-
-    try game.world.loadFromFile("maps/last_saved.map");
 
     // UNITS
     try game.world.addUnit(1200, @enumFromInt(4), @enumFromInt(0), &game.rules);
@@ -274,10 +294,11 @@ pub fn main() !void {
         // CONTROLL STUFF //
         // ////////////// //
         control_blk: {
-            // SAVE MAP
             if (raylib.IsKeyPressed(raylib.KEY_C)) {
-                try game.world.saveToFile("maps/last_saved.map");
-                std.debug.print("\nMap saved (as 'maps/last_saved.map')!\n", .{});
+                var file = try std.fs.cwd().createFile("maps/last_saved.map", .{});
+                defer file.close();
+                try game.world.serializeTerrain(file.writer());
+                std.debug.print("Map saved at 'maps/last_saved.map'\n", .{});
             }
 
             if (raylib.IsKeyPressed(raylib.KEY_SPACE)) _ = try game.nextTurn();

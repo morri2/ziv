@@ -579,62 +579,32 @@ pub fn fov(self: *const Self, vision_range: u8, src: Idx, set: *hex_set.HexSet(0
     }
 }
 
-pub fn saveToFile(self: *Self, path: []const u8) !void {
-    var file = try std.fs.cwd().createFile(path, .{});
-    var writer = file.writer();
+const terrain_serialization = @import("serialization.zig").customSerialization(&.{
+    .{ .name = "grid" },
+    .{ .name = "terrain" },
+    .{ .name = "resources", .ty = .hash_map },
+    .{ .name = "rivers", .ty = .hash_set },
+}, Self);
 
-    for (0..self.grid.len) |i| {
-        const terrain_bytes: [@sizeOf(Terrain)]u8 = std.mem.asBytes(&self.terrain[i]).*;
-        _ = try file.write(&terrain_bytes);
-    }
-
-    _ = try writer.writeInt(u32, @intCast(self.resources.count()), .little); // write len
-    for (self.resources.keys()) |key| {
-        const value = self.resources.get(key) orelse unreachable;
-        _ = try writer.writeInt(Idx, key, .little);
-        _ = try writer.writeStruct(value);
-    }
-
-    _ = try writer.writeInt(u32, @intCast(self.rivers.count()), .little);
-    for (self.rivers.keys()) |edge| {
-        try writer.writeStruct(edge);
-    }
-
-    file.close();
+pub fn serializeTerrain(self: Self, writer: anytype) !void {
+    try terrain_serialization.serializeCustom(writer, self);
 }
 
-pub fn loadFromFile(self: *Self, path: []const u8) !void {
-    var file = try std.fs.cwd().openFile(path, .{});
-    var reader = file.reader();
-    for (0..self.grid.len) |i| {
-        const terrain_bytes = try reader.readBytesNoEof(@sizeOf(Terrain));
-
-        const terrain: *const Terrain = @ptrCast(&terrain_bytes);
-        self.terrain[i] = terrain.*;
+pub fn deserializeTerrain(reader: anytype, allocator: std.mem.Allocator) !Self {
+    var self = try terrain_serialization.deserializeCustom(reader, allocator);
+    errdefer {
+        self.resources.deinit(allocator);
+        self.rivers.deinit(allocator);
+        allocator.free(self.terrain);
     }
-    blk: {
-        const len = reader.readInt(u32, .little) catch {
-            std.debug.print("\nEarly return in loadFromFile\n", .{});
-            break :blk;
-        };
-        for (0..len) |_| {
-            const k = try reader.readInt(Idx, .little);
+    self.allocator = allocator;
+    self.improvements = try allocator.alloc(Improvements, self.grid.len);
+    errdefer allocator.free(self.improvements);
+    @memset(self.improvements, std.mem.zeroes(Improvements));
 
-            const v = try reader.readStruct(ResourceAndAmount);
-            try self.resources.put(self.allocator, @intCast(k), v);
-        }
-    }
-
-    blk: {
-        const len = reader.readInt(u32, .little) catch {
-            std.debug.print("\nEarly return in loadFromFile\n", .{});
-            break :blk;
-        };
-        for (0..len) |_| {
-            const edge = try reader.readStruct(Grid.Edge);
-            try self.rivers.put(self.allocator, edge, {});
-        }
-    }
-
-    file.close();
+    self.work_in_progress = .{};
+    self.cities = .{};
+    self.turn = 1;
+    self.units = Units.init(allocator);
+    return self;
 }
