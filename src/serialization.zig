@@ -84,7 +84,7 @@ pub fn deserializeAlloc(reader: anytype, comptime Value: type, maybe_allocator: 
                 const len = try reader.readInt(u32, .little);
                 const values = try allocator.alloc(info.child, len);
                 errdefer allocator.free(values);
-                for (values) |*e| e.* = deserializeAlloc(reader, info.child, allocator);
+                for (values) |*e| e.* = try deserializeAlloc(reader, info.child, allocator);
                 break :blk values;
             } else error.NoAllocator,
             else => @compileError("Cannot deserialize non slice pointer type"),
