@@ -3,7 +3,9 @@ const Socket = @import("Socket.zig");
 
 pub const Serializable = struct {
     name: []const u8,
-    ty: union(enum) {
+    ty: SerializableType = .default,
+
+    pub const SerializableType = union(enum) {
         default: void,
         slice_with_len: []const u8,
         slice_with_len_extra: struct {
@@ -17,141 +19,139 @@ pub const Serializable = struct {
         hash_map_managed: void,
         hash_set_managed: void,
         dynamic_bit_set_unmanaged: void,
-    } = .default,
+        array_of: []const SerializableType,
+    };
 
-    pub fn serialize(comptime self: Serializable, writer: anytype, value: anytype) !void {
+    pub fn serialize(comptime self: Serializable, writer: anytype, parent: anytype, child: anytype) !void {
         switch (self.ty) {
-            .default => try serializeValue(writer, @field(value, self.name)),
+            .default => try serializeValue(writer, child),
             .slice_with_len => |len_name| {
-                const len = @field(value, len_name);
-                std.debug.assert(len == @field(value, self.name).len);
-                for (@field(value, self.name)) |e| try serializeValue(writer, e);
+                const len = @field(parent, len_name);
+                std.debug.assert(len == child.len);
+                for (child) |e| try serializeValue(writer, e);
             },
             .slice_with_len_extra => |info| {
-                const len = @field(value, info.len_name) + 1;
-                std.debug.assert(len == @field(value, self.name).len);
-                for (@field(value, self.name)) |e| try serializeValue(writer, e);
+                const len = @field(parent, info.len_name) + 1;
+                std.debug.assert(len == child.len);
+                for (child) |e| try serializeValue(writer, e);
             },
             .hash_map_with_len => |len_name| {
-                const len = @field(value, len_name);
-                std.debug.assert(len == @field(value, self.name).count());
-                var iter = @field(value, self.name).iterator();
+                const len = @field(parent, len_name);
+                std.debug.assert(len == child.count());
+                var iter = child.iterator();
                 while (iter.next()) |entry| {
                     try serializeValue(writer, entry.key_ptr.*);
                     try serializeValue(writer, entry.value_ptr.*);
                 }
             },
             .hash_set_with_len => |len_name| {
-                const len = @field(value, len_name);
-                std.debug.assert(len == @field(value, self.name).count());
-                var iter = @field(value, self.name).iterator();
+                const len = @field(parent, len_name);
+                std.debug.assert(len == child.count());
+                var iter = child.iterator();
                 while (iter.next()) |entry| {
                     try serializeValue(writer, entry.key_ptr.*);
                 }
             },
             .hash_map, .hash_map_managed => {
-                try writer.writeInt(u32, @intCast(@field(value, self.name).count()), .little);
-                var iter = @field(value, self.name).iterator();
+                try writer.writeInt(u32, @intCast(child.count()), .little);
+                var iter = child.iterator();
                 while (iter.next()) |entry| {
                     try serializeValue(writer, entry.key_ptr.*);
                     try serializeValue(writer, entry.value_ptr.*);
                 }
             },
             .hash_set, .hash_set_managed => {
-                try writer.writeInt(u32, @intCast(@field(value, self.name).count()), .little);
-                var iter = @field(value, self.name).iterator();
+                try writer.writeInt(u32, @intCast(child.count()), .little);
+                var iter = child.iterator();
                 while (iter.next()) |entry| {
                     try serializeValue(writer, entry.key_ptr.*);
                 }
             },
             .dynamic_bit_set_unmanaged => {
-                const bit_length = @field(value, self.name).bit_length;
+                const bit_length = child.bit_length;
                 try writer.writeInt(u32, @intCast(bit_length), .little);
                 const num_masks = (bit_length + (@bitSizeOf(std.DynamicBitSet.MaskInt) - 1)) / @bitSizeOf(std.DynamicBitSet.MaskInt);
-                try writer.writeAll(std.mem.sliceAsBytes(@field(value, self.name).masks[0..num_masks]));
+                try writer.writeAll(std.mem.sliceAsBytes(child.masks[0..num_masks]));
             },
+            .array_of => |serializable| for (child) |e| try serializable[0].serialize(writer, parent, e),
         }
     }
 
     pub fn deserializeToAlloc(
         comptime self: Serializable,
         reader: anytype,
-        comptime Value: type,
-        value: *Value,
+        comptime Parent: type,
+        comptime Child: type,
+        parent: Parent,
+        child: *Child,
         allocator: std.mem.Allocator,
     ) !void {
         switch (self.ty) {
-            .default => @field(value, self.name) = try deserializeValueAlloc(reader, @TypeOf(@field(value.*, self.name)), allocator),
+            .default => child.* = try deserializeValueAlloc(reader, Child, allocator),
             .slice_with_len => |len_name| {
-                const len = @field(value.*, len_name);
-                const ChildType = @typeInfo(@TypeOf(@field(value.*, self.name))).Pointer.child;
+                const len = @field(parent, len_name);
+                const ChildType = @typeInfo(Child).Pointer.child;
                 const slice = try allocator.alloc(ChildType, len);
                 for (slice) |*e| e.* = try deserializeValueAlloc(reader, ChildType, allocator);
-                @field(value.*, self.name) = slice;
+                child.* = slice;
             },
             .slice_with_len_extra => |info| {
-                const len = @field(value.*, info.len_name) + info.extra;
-                const ChildType = @typeInfo(@TypeOf(@field(value.*, self.name))).Pointer.child;
+                const len = @field(parent, info.len_name) + info.extra;
+                const ChildType = @typeInfo(Child).Pointer.child;
                 const slice = try allocator.alloc(ChildType, len);
                 for (slice) |*e| e.* = try deserializeValueAlloc(reader, ChildType, allocator);
-                @field(value.*, self.name) = slice;
+                child.* = slice;
             },
             .hash_map_with_len => |len_name| {
-                const len = @field(value.*, len_name);
-                @field(value.*, self.name) = .{};
-                try @field(value.*, self.name).ensureUnusedCapacity(allocator, len);
-                const HashMapType = @TypeOf(@field(value.*, self.name));
+                const len = @field(parent, len_name);
+                child.* = .{};
+                try child.ensureUnusedCapacity(allocator, len);
                 for (0..len) |_| {
-                    const key_value = try deserializeValueAlloc(reader, HashMapType.KV, allocator);
-                    @field(value.*, self.name).putAssumeCapacity(key_value.key, key_value.value);
+                    const key_value = try deserializeValueAlloc(reader, Child.KV, allocator);
+                    child.putAssumeCapacity(key_value.key, key_value.value);
                 }
             },
             .hash_set_with_len => |len_name| {
-                const len = @field(value.*, len_name);
-                @field(value.*, self.name) = .{};
-                try @field(value.*, self.name).ensureUnusedCapacity(allocator, len);
-                const HashMapType = @TypeOf(@field(value.*, self.name));
+                const len = @field(parent, len_name);
+                child.* = .{};
+                try child.ensureUnusedCapacity(allocator, len);
                 for (0..len) |_| {
-                    const key_value = try deserializeValueAlloc(reader, HashMapType.KV, allocator);
-                    @field(value.*, self.name).putAssumeCapacity(key_value.key, {});
+                    const key_value = try deserializeValueAlloc(reader, Child.KV, allocator);
+                    child.putAssumeCapacity(key_value.key, {});
                 }
             },
             .hash_map => {
                 const len = try reader.readInt(u32, .little);
-                @field(value.*, self.name) = .{};
-                try @field(value.*, self.name).ensureUnusedCapacity(allocator, len);
-                const HashMapType = @TypeOf(@field(value.*, self.name));
+                child.* = .{};
+                try child.ensureUnusedCapacity(allocator, len);
                 for (0..len) |_| {
-                    const key_value = try deserializeValueAlloc(reader, HashMapType.KV, allocator);
-                    @field(value.*, self.name).putAssumeCapacity(key_value.key, key_value.value);
+                    const key_value = try deserializeValueAlloc(reader, Child.KV, allocator);
+                    child.putAssumeCapacity(key_value.key, key_value.value);
                 }
             },
             .hash_set => {
                 const len = try reader.readInt(u32, .little);
-                @field(value.*, self.name) = .{};
-                try @field(value.*, self.name).ensureUnusedCapacity(allocator, len);
-                const HashMapType = @TypeOf(@field(value.*, self.name));
+                child.* = .{};
+                try child.ensureUnusedCapacity(allocator, len);
                 for (0..len) |_| {
-                    const key_value = try deserializeValueAlloc(reader, HashMapType.KV, allocator);
-                    @field(value.*, self.name).putAssumeCapacity(key_value.key, {});
+                    const key_value = try deserializeValueAlloc(reader, Child.KV, allocator);
+                    child.putAssumeCapacity(key_value.key, {});
                 }
             },
             .hash_map_managed => {
                 const len = try reader.readInt(u32, .little);
-                const HashMapType = @TypeOf(@field(value.*, self.name));
-                @field(value.*, self.name) = try HashMapType.initWithCapacity(allocator, len);
+                child.* = try Child.initWithCapacity(allocator, len);
                 for (0..len) |_| {
-                    const key_value = try deserializeValueAlloc(reader, HashMapType.KV, allocator);
-                    @field(value.*, self.name).putAssumeCapacity(key_value.key, key_value.value);
+                    const key_value = try deserializeValueAlloc(reader, Child.KV, allocator);
+                    child.putAssumeCapacity(key_value.key, key_value.value);
                 }
             },
             .hash_set_managed => {
                 const len = try reader.readInt(u32, .little);
-                const HashMapType = @TypeOf(@field(value.*, self.name));
-                @field(value.*, self.name) = try HashMapType.initWithCapacity(allocator, len);
+                child.* = try Child.initWithCapacity(allocator, len);
                 for (0..len) |_| {
-                    const key_value = try deserializeValueAlloc(reader, HashMapType.KV, allocator);
-                    @field(value.*, self.name).putAssumeCapacity(key_value.key, {});
+                    const key_value = try deserializeValueAlloc(reader, Child.KV, allocator);
+                    child.putAssumeCapacity(key_value.key, {});
                 }
             },
             .dynamic_bit_set_unmanaged => {
@@ -162,11 +162,19 @@ pub const Serializable = struct {
 
                 _ = try reader.read(std.mem.sliceAsBytes(masks));
 
-                @field(value.*, self.name) = .{
+                child.* = .{
                     .bit_length = bit_length,
                     .masks = masks.ptr,
                 };
             },
+            .array_of => |serializable| for (child) |*e| try serializable[0].deserializeToAlloc(
+                reader,
+                Parent,
+                @TypeOf(e.*),
+                parent,
+                e,
+                allocator,
+            ),
         }
     }
 };
@@ -174,7 +182,7 @@ pub const Serializable = struct {
 pub fn customSerialization(comptime serializables: []const Serializable, comptime Value: type) type {
     return struct {
         pub fn serialize(writer: anytype, value: Value) !void {
-            inline for (serializables) |serializable| try serializable.serialize(writer, value);
+            inline for (serializables) |serializable| try serializable.serialize(writer, value, @field(value, serializable.name));
         }
 
         pub fn deserializeAlloc(reader: anytype, allocator: std.mem.Allocator) !Value {
@@ -182,7 +190,9 @@ pub fn customSerialization(comptime serializables: []const Serializable, comptim
             inline for (serializables) |serializable| try serializable.deserializeToAlloc(
                 reader,
                 Value,
-                &self,
+                @TypeOf(@field(self, serializable.name)),
+                self,
+                &@field(self, serializable.name),
                 allocator,
             );
             return self;
