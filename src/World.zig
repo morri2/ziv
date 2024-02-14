@@ -587,11 +587,11 @@ const terrain_serialization = @import("serialization.zig").customSerialization(&
 }, Self);
 
 pub fn serializeTerrain(self: Self, writer: anytype) !void {
-    try terrain_serialization.serializeCustom(writer, self);
+    try terrain_serialization.serialize(writer, self);
 }
 
 pub fn deserializeTerrain(reader: anytype, allocator: std.mem.Allocator) !Self {
-    var self = try terrain_serialization.deserializeCustom(reader, allocator);
+    var self = try terrain_serialization.deserializeAlloc(reader, allocator);
     errdefer {
         self.resources.deinit(allocator);
         self.rivers.deinit(allocator);

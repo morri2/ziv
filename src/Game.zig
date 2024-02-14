@@ -264,11 +264,11 @@ fn performAction(self: *Self, action: Action) !?Action.Result {
         for (self.players) |player| {
             const writer = player.socket.writer();
             try writer.writeByte(@intFromEnum(faction_id));
-            try serialization.serialize(writer, action);
+            try serialization.serializeValue(writer, action);
         }
     } else {
         if (!action.possible(self.civ_id.toFactionID(), &self.world, &self.rules)) return null;
-        try serialization.serialize(self.socket.writer(), action);
+        try serialization.serializeValue(self.socket.writer(), action);
     }
     return result;
 }
@@ -279,12 +279,12 @@ fn hostUpdate(self: *Self) !Action.Result {
         const faction_id = player.civ_id.toFactionID();
         while (try player.socket.hasData()) {
             try player.socket.setBlocking(true);
-            const action = try serialization.deserialize(player.socket.reader(), Action);
+            const action = try serialization.deserializeValue(player.socket.reader(), Action);
             if (try action.exec(faction_id, &self.world, &self.rules)) |exec_result| {
                 for (self.players) |p| {
                     const writer = p.socket.writer();
                     try writer.writeByte(@intFromEnum(faction_id));
-                    try serialization.serialize(writer, action);
+                    try serialization.serializeValue(writer, action);
                 }
                 result = result.unionWith(exec_result);
             } else {
@@ -305,7 +305,7 @@ fn clientUpdate(self: *Self) !Action.Result {
         const reader = self.socket.reader();
         const faction_id: World.FactionID = @enumFromInt(try reader.readByte());
 
-        const action = try serialization.deserialize(self.socket.reader(), Action);
+        const action = try serialization.deserializeValue(self.socket.reader(), Action);
         if (try action.exec(faction_id, &self.world, &self.rules)) |exec_result| {
             result = result.unionWith(exec_result);
         } else {

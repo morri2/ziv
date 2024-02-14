@@ -548,13 +548,13 @@ const rules_serialization = @import("serialization.zig").customSerialization(&.{
 }, Rules);
 
 pub fn serialize(self: Rules, writer: anytype) !void {
-    try rules_serialization.serializeCustom(writer, self);
+    try rules_serialization.serialize(writer, self);
 }
 
 pub fn deserialize(reader: anytype, allocator: std.mem.Allocator) !Rules {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
-    var self = try rules_serialization.deserializeCustom(reader, arena.allocator());
+    var self = try rules_serialization.deserializeAlloc(reader, arena.allocator());
     self.arena = arena;
     return self;
 }
