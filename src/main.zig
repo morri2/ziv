@@ -114,14 +114,16 @@ pub fn main() !void {
     defer game.deinit();
 
     // UNITS
-    _ = try game.world.addUnit(1200, @enumFromInt(4), @enumFromInt(0), &game.rules);
-    _ = try game.world.addUnit(1202, @enumFromInt(2), @enumFromInt(0), &game.rules);
-    _ = try game.world.addUnit(1089, @enumFromInt(0), @enumFromInt(0), &game.rules);
-    _ = try game.world.addUnit(1205, @enumFromInt(3), @enumFromInt(0), &game.rules);
-    _ = try game.world.addUnit(1203, @enumFromInt(7), @enumFromInt(0), &game.rules);
+    if (game.is_host) {
+        _ = try game.addUnit(1200, @enumFromInt(4), @enumFromInt(0));
+        _ = try game.addUnit(1202, @enumFromInt(2), @enumFromInt(0));
+        _ = try game.addUnit(1089, @enumFromInt(0), @enumFromInt(0));
+        _ = try game.addUnit(1205, @enumFromInt(3), @enumFromInt(0));
+        _ = try game.addUnit(1203, @enumFromInt(7), @enumFromInt(0));
 
-    _ = try game.world.addUnit(1150, @enumFromInt(7), @enumFromInt(1), &game.rules);
-    _ = try game.world.addUnit(1139, @enumFromInt(3), @enumFromInt(1), &game.rules);
+        _ = try game.addUnit(1150, @enumFromInt(7), @enumFromInt(1));
+        _ = try game.addUnit(1139, @enumFromInt(3), @enumFromInt(1));
+    }
 
     try game.world.addCity(1089, @enumFromInt(0));
     try game.world.addCity(485, @enumFromInt(1));

@@ -43,6 +43,12 @@ pub const Action = union(Type) {
         work: World.TileWork,
     },
 
+    add_unit: struct {
+        unit_type: Rules.UnitType,
+        idx: Idx,
+        faction_id: World.FactionID,
+    },
+
     pub const Type = enum(u8) {
         // Zero is reserved for ping packet
         next_turn = 1,
@@ -54,6 +60,7 @@ pub const Action = union(Type) {
         set_worked = 7,
         promote_unit = 8,
         tile_work = 9,
+        add_unit = 10,
     };
 
     pub const Result = struct {
@@ -115,6 +122,7 @@ pub const Action = union(Type) {
             .tile_work => |info| {
                 return world.canDoImprovementWork(info.unit, info.work, rules);
             },
+            .add_unit => |info| if (world.units.hasOtherFaction(info.idx, info.faction_id)) return false,
         }
 
         return true;
@@ -167,6 +175,11 @@ pub const Action = union(Type) {
             },
             .tile_work => |info| {
                 if (!world.doImprovementWork(info.unit, info.work, rules)) unreachable;
+
+                result.view_change = true;
+            },
+            .add_unit => |info| {
+                if (!try world.addUnit(info.idx, info.unit_type, info.faction_id, rules)) unreachable;
 
                 result.view_change = true;
             },

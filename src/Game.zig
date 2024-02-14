@@ -219,6 +219,16 @@ pub fn tileWork(self: *Self, ref: Units.Reference, work: World.TileWork) !?Actio
     });
 }
 
+pub fn addUnit(self: *Self, idx: Idx, unit_type: Rules.UnitType, faction_id: World.FactionID) !?Action.Result {
+    return try self.performAction(.{
+        .add_unit = .{
+            .idx = idx,
+            .unit_type = unit_type,
+            .faction_id = faction_id,
+        },
+    });
+}
+
 pub fn update(self: *Self) !Action.Result {
     const result = if (self.is_host) try self.hostUpdate() else try self.clientUpdate();
     if (result.view_change) try self.updateViews();
