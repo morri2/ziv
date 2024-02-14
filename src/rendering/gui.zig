@@ -1,4 +1,3 @@
-const Camera = @import("Camera.zig");
 const std = @import("std");
 const raylib = @cImport({
     @cInclude("raylib.h");
@@ -7,37 +6,27 @@ const raylib = @cImport({
 });
 
 pub const InfoWindowOptions = struct {
-    LINE_HEIGHT: f32 = 20,
+    line_height: f32 = 20,
 
-    SPACEING: f32 = 5,
-    TOP_SPACEING: f32 = 30,
-    WIDTH: f32 = 200,
+    spacing: f32 = 5,
+    top_spacing: f32 = 30,
+    width: f32 = 200,
 
-    MAX_LINES: u16 = 255,
-    X_TO_CLOSE: bool = false,
-    X_TO_COLLAPSE: bool = true,
+    max_lines: u16 = 255,
 
-    START_COLLAPSED: bool = true,
-    COLLAPSED_HEIGHT: f32 = 50, // should always be > 2x window top bar size
+    collapsed_height: f32 = 50, // should always be > 2x window top bar size
 };
 
-pub fn InfoWindow(options: InfoWindowOptions) type {
+pub fn InfoWindow(comptime name: [*:0]const u8, comptime options: InfoWindowOptions) type {
     return struct {
         const Self = @This();
 
-        const OPTIONS = options;
-
-        name: [255:0]u8 = undefined,
-
-        should_close: bool = false,
         collapsed: bool,
 
         len: u16,
-        lines: [OPTIONS.MAX_LINES]Line,
+        lines: [options.max_lines]Line,
 
         bounds: raylib.Rectangle,
-
-        draging_window: bool = false,
 
         const Line = struct {
             id: u16,
@@ -45,20 +34,20 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
             category_header: bool = false,
         };
 
-        pub fn newEmpty() Self {
+        pub fn newEmpty(collapsed: bool) Self {
             var out: Self = .{
                 .len = 0,
                 .lines = undefined,
-                .bounds = .{ .x = 10, .y = 10, .width = OPTIONS.WIDTH, .height = OPTIONS.TOP_SPACEING },
-                .collapsed = OPTIONS.START_COLLAPSED,
+                .bounds = .{
+                    .x = 10,
+                    .y = 10,
+                    .width = options.width,
+                    .height = options.top_spacing,
+                },
+                .collapsed = collapsed,
             };
-            out.setName("[SELECT WINDOW]");
             out.recalculateBounds();
             return out;
-        }
-
-        pub fn setName(self: *Self, name: []const u8) void {
-            _ = std.fmt.bufPrintZ(&self.name, "{s}", .{name}) catch unreachable;
         }
 
         pub fn addLineFormat(self: *Self, comptime fmt: []const u8, fmt_args: anytype, category_header: bool) void {
@@ -85,12 +74,11 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
             self.recalculateBounds();
         }
 
-        pub fn renderUpdate(self: *Self) void {
-            self.handleDrag();
+        pub fn renderUpdate(self: *Self, accept_input: bool) void {
+            self.handleDrag(accept_input);
 
-            if (raylib.GuiWindowBox(self.bounds, &self.name) != 0) {
-                if (OPTIONS.X_TO_CLOSE) self.should_close = true;
-                if (OPTIONS.X_TO_COLLAPSE) self.collapsed = !self.collapsed;
+            if (raylib.GuiWindowBox(self.bounds, name) != 0 and accept_input) {
+                self.collapsed = !self.collapsed;
                 self.recalculateBounds();
             }
 
@@ -98,7 +86,7 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
                 const box = rectanglePadded(splitRectangleHorizontal(self.bounds, 0.5).bottom, 2);
 
                 if (self.collapsed)
-                    if (raylib.GuiButton(box, "Click HERE to expand...") != 0) {
+                    if (raylib.GuiButton(box, "Click HERE to expand...") != 0 and accept_input) {
                         self.collapsed = false;
                         self.recalculateBounds();
                     };
@@ -115,10 +103,10 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
 
         fn entryBounds(self: *const Self, i: u16) raylib.Rectangle {
             return .{
-                .x = self.bounds.x + OPTIONS.SPACEING,
-                .y = self.bounds.y + (OPTIONS.SPACEING + OPTIONS.LINE_HEIGHT * @as(f32, @floatFromInt(i))) + OPTIONS.TOP_SPACEING,
-                .width = OPTIONS.WIDTH - 2 * OPTIONS.SPACEING,
-                .height = OPTIONS.LINE_HEIGHT,
+                .x = self.bounds.x + options.spacing,
+                .y = self.bounds.y + (options.spacing + options.line_height * @as(f32, @floatFromInt(i))) + options.top_spacing,
+                .width = options.width - 2 * options.spacing,
+                .height = options.line_height,
             };
         }
 
@@ -130,8 +118,8 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
                 (raylib.CheckCollisionPointRec(mouse_last, self.bounds));
         }
 
-        pub fn handleDrag(self: *Self) void {
-            if (!raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
+        fn handleDrag(self: *Self, accept_input: bool) void {
+            if (!raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and accept_input) {
                 const mouse_pos = raylib.GetMousePosition();
                 const delta = raylib.GetMouseDelta();
                 const mouse_last = raylib.Vector2Subtract(mouse_pos, delta);
@@ -147,74 +135,66 @@ pub fn InfoWindow(options: InfoWindowOptions) type {
 
         fn recalculateBounds(self: *Self) void {
             if (self.collapsed) {
-                self.bounds.width = OPTIONS.WIDTH;
-                self.bounds.height = OPTIONS.COLLAPSED_HEIGHT;
+                self.bounds.width = options.width;
+                self.bounds.height = options.collapsed_height;
             } else {
-                self.bounds.width = OPTIONS.WIDTH;
-                self.bounds.height = OPTIONS.TOP_SPACEING + OPTIONS.LINE_HEIGHT * @as(f32, @floatFromInt(self.len)) + OPTIONS.SPACEING;
+                self.bounds.width = options.width;
+                self.bounds.height = options.top_spacing + options.line_height * @as(f32, @floatFromInt(self.len)) + options.spacing;
             }
         }
     };
 }
 
 pub const SelectWindowOptions = struct {
-    ENTRY_HEIGHT: f32 = 100,
-    SPACEING: f32 = 5,
-    TOP_SPACEING: f32 = 30,
-    WIDTH: f32 = 200,
-    COLUMNS: u16 = 1,
-    MAX_LABEL_LEN: u16 = 64,
-    MAX_ITEMS: u16 = 255,
-    X_TO_CLOSE: bool = false,
-    X_TO_COLLAPSE: bool = true,
-    CLOSE_AFTER_SELECT: bool = false,
-    KEEP_HIGHLIGHT: bool = true,
-    NULL_OPTION: bool = false,
-    TEXTURE_ENTRY_FRACTION: f32 = 0.75,
-    START_COLLAPSED: bool = true,
-    COLLAPSED_HEIGHT: f32 = 50, // should always be > 2x window top bar size
+    entry_height: f32 = 100,
+    spacing: f32 = 5,
+    top_spacing: f32 = 30,
+    width: f32 = 200,
+    columns: u16 = 1,
+    max_label_len: u16 = 64,
+    max_items: u16 = 255,
+    keep_highlight: bool = true,
+    nullable: enum {
+        not_nullable,
+        nullable,
+        null_option,
+    } = .nullable,
+    texture_entry_fraction: f32 = 0.75,
+    collapsed_height: f32 = 50, // should always be > 2x window top bar size
 };
 
-pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) type {
+pub fn SelectWindow(comptime name: [*:0]const u8, comptime Type: type, comptime options: SelectWindowOptions) type {
     return struct {
         const Self = @This();
 
-        const OPTIONS = options;
+        const Selected = if (options.nullable == .not_nullable) Type else ?Type;
 
-        name: [255:0]u8 = undefined,
-
-        should_close: bool = false,
         collapsed: bool,
-        hidden: bool = false,
         new_selection: bool = false,
-        last_selection: ?R = null,
-        last_i: ?u16 = null,
+        selected: Selected,
 
         len: u16,
-        items: [OPTIONS.MAX_ITEMS]Item,
+        items: [options.max_items]Item,
         bounds: raylib.Rectangle,
-
-        draging_window: bool = false,
 
         const Item = struct {
             id: u16,
-            value: R,
-            label: [OPTIONS.MAX_LABEL_LEN:0]u8,
+            value: Type,
+            label: [options.max_label_len:0]u8,
             texture: ?raylib.Texture2D = null,
         };
 
-        pub fn newEmpty() Self {
-            var out: Self = .{
+        pub fn newEmpty(collapsed: bool, initial_selected: Selected) Self {
+            return .{
                 .len = 0,
                 .items = undefined,
-                .bounds = .{ .x = 10, .y = 10, .width = OPTIONS.WIDTH, .height = OPTIONS.TOP_SPACEING },
-                .collapsed = OPTIONS.START_COLLAPSED,
+                .bounds = .{ .x = 10, .y = 10, .width = options.width, .height = options.top_spacing },
+                .collapsed = collapsed,
+                .selected = initial_selected,
             };
-            out.setName("[SELECT WINDOW]");
-            return out;
         }
 
-        pub fn new(values: []R) Self {
+        pub fn new(values: []const Type) Self {
             var out = newEmpty();
             for (values) |value| {
                 out.addItem(value);
@@ -222,16 +202,12 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
             return out;
         }
 
-        pub fn setName(self: *Self, name: []const u8) void {
-            _ = std.fmt.bufPrintZ(&self.name, "{s}", .{name}) catch unreachable;
-        }
-
-        pub fn addItem(self: *Self, value: R, label: []const u8) void {
-            var buf: [OPTIONS.MAX_LABEL_LEN:0]u8 = undefined;
+        pub fn addItem(self: *Self, value: Type, label: []const u8) void {
+            var buf: [options.max_label_len:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&buf, "{}. {s}", .{ self.len, label }) catch
                 std.debug.panic("GUI LABEL TOO LONG!", .{});
 
-            if (self.len < OPTIONS.MAX_ITEMS - 1) {
+            if (self.len < options.max_items - 1) {
                 self.items[self.len] = .{ .id = self.len, .value = value, .label = buf };
                 self.len += 1;
                 self.recalculateBounds();
@@ -242,91 +218,81 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
             self.len = 0;
         }
 
-        pub fn addItemTexture(self: *Self, value: R, label: []const u8, texture: ?raylib.Texture2D) void {
+        pub fn addItemTexture(self: *Self, value: Type, label: []const u8, texture: raylib.Texture2D) void {
             self.addItem(value, label);
-            if (texture) |t| {
-                self.items[self.len - 1].texture = t;
-            }
+            self.items[self.len - 1].texture = texture;
         }
 
-        pub fn renderUpdate(self: *Self) void {
-            if (self.hidden) return;
-            self.handleDrag();
+        pub fn renderUpdate(self: *Self, accept_input: bool) void {
+            self.handleDrag(accept_input);
 
-            if (raylib.GuiWindowBox(self.bounds, &self.name) != 0) {
-                if (OPTIONS.X_TO_CLOSE) self.should_close = true;
-                if (OPTIONS.X_TO_COLLAPSE) self.collapsed = !self.collapsed;
+            if (raylib.GuiWindowBox(self.bounds, name) != 0 and accept_input) {
+                self.collapsed = !self.collapsed;
                 self.recalculateBounds();
             }
 
             if (self.collapsed) {
                 const box = rectanglePadded(splitRectangleHorizontal(self.bounds, 0.5).bottom, 2);
 
-                if (self.collapsed)
-                    if (raylib.GuiButton(box, "Click HERE to expand...") != 0) {
-                        self.collapsed = false;
-                        self.recalculateBounds();
-                    };
+                if (self.collapsed) if (raylib.GuiButton(box, "Click HERE to expand...") != 0 and accept_input) {
+                    self.collapsed = false;
+                    self.recalculateBounds();
+                };
                 return;
             }
 
+            self.new_selection = false;
             for (self.items[0..self.len], 0..) |item, i| {
                 var box = self.entryBounds(@intCast(i));
-                if (self.last_i) |last| if (last == i and OPTIONS.KEEP_HIGHLIGHT) raylib.DrawRectangleRec(box, raylib.BLUE);
+                if (options.keep_highlight) {
+                    if (options.nullable == .not_nullable) {
+                        if (std.mem.eql(
+                            u8,
+                            std.mem.asBytes(&self.selected),
+                            std.mem.asBytes(&item.value),
+                        )) {
+                            raylib.DrawRectangleRec(box, raylib.BLUE);
+                        }
+                    } else {
+                        if (self.selected) |selected| if (std.mem.eql(
+                            u8,
+                            std.mem.asBytes(&selected),
+                            std.mem.asBytes(&item.value),
+                        )) {
+                            raylib.DrawRectangleRec(box, raylib.BLUE);
+                        };
+                    }
+                }
 
-                const split_box = splitRectangleHorizontal(box, OPTIONS.TEXTURE_ENTRY_FRACTION);
+                const split_box = splitRectangleHorizontal(box, options.texture_entry_fraction);
                 if (item.texture) |texture| {
-                    textureInRectangle(rectanglePadded(split_box.top, OPTIONS.SPACEING), texture);
+                    textureInRectangle(rectanglePadded(split_box.top, options.spacing), texture);
                     box = split_box.bottom;
                 }
 
-                if (raylib.GuiButton(rectanglePadded(box, OPTIONS.SPACEING), &item.label) != 0) {
+                if (raylib.GuiButton(rectanglePadded(box, options.spacing), &item.label) != 0 and accept_input) {
                     self.new_selection = true;
-                    self.last_selection = item.value;
-                    self.last_i = @intCast(i);
+                    self.selected = item.value;
                 }
             }
 
-            if (OPTIONS.NULL_OPTION) {
-                if (raylib.GuiButton(rectanglePadded(self.entryBounds(self.len), OPTIONS.SPACEING), "None") != 0) {
+            if (options.nullable == .null_option) {
+                if (raylib.GuiButton(rectanglePadded(self.entryBounds(self.len), options.spacing), "None") != 0 and accept_input) {
                     self.new_selection = true;
-                    self.last_selection = null;
-                    self.last_i = null;
+                    self.selected = null;
                 }
+            }
+
+            if (options.nullable != .not_nullable and !options.keep_highlight and !self.new_selection) {
+                self.selected = null;
             }
         }
 
-        pub fn fetchSelectedNull(self: *Self, destination: *?R) bool {
-            if (!self.new_selection) return false;
-            destination.* = self.last_selection;
-
-            self.new_selection = false;
-            if (OPTIONS.CLOSE_AFTER_SELECT) self.should_close = true;
-            return true;
-        }
-
-        pub fn fetchSelected(self: *Self, destination: *R) bool {
-            var selected: ?R = null;
-            const res = self.fetchSelectedNull(&selected);
-            if (selected == null) return false;
-            destination.* = selected.?;
-            return res;
-        }
-
-        fn entryBounds(self: *const Self, i: u16) raylib.Rectangle {
-            const col: f32 = @floatFromInt(i % OPTIONS.COLUMNS);
-            const row: f32 = @floatFromInt(i / OPTIONS.COLUMNS);
-            const col_width = OPTIONS.WIDTH / OPTIONS.COLUMNS;
-            return .{
-                .x = self.bounds.x + col_width * col,
-                .y = self.bounds.y + OPTIONS.ENTRY_HEIGHT * row + OPTIONS.TOP_SPACEING,
-                .width = col_width,
-                .height = OPTIONS.ENTRY_HEIGHT,
-            };
+        pub fn getSelected(self: *const Self) Selected {
+            return self.selected;
         }
 
         pub fn checkMouseCapture(self: *const Self) bool {
-            if (self.hidden) return false;
             const mouse_pos = raylib.GetMousePosition();
             const delta = raylib.GetMouseDelta();
             const mouse_last = raylib.Vector2Subtract(mouse_pos, delta);
@@ -334,8 +300,8 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
                 (raylib.CheckCollisionPointRec(mouse_last, self.bounds));
         }
 
-        pub fn handleDrag(self: *Self) void {
-            if (!raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
+        fn handleDrag(self: *Self, accept_input: bool) void {
+            if (!raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT) and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and accept_input) {
                 const mouse_pos = raylib.GetMousePosition();
                 const delta = raylib.GetMouseDelta();
                 const mouse_last = raylib.Vector2Subtract(mouse_pos, delta);
@@ -349,35 +315,56 @@ pub fn SelectWindow(comptime R: type, comptime options: SelectWindowOptions) typ
             }
         }
 
+        fn entryBounds(self: *const Self, i: u16) raylib.Rectangle {
+            const col: f32 = @floatFromInt(i % options.columns);
+            const row: f32 = @floatFromInt(i / options.columns);
+            const col_width = options.width / options.columns;
+            return .{
+                .x = self.bounds.x + col_width * col,
+                .y = self.bounds.y + options.entry_height * row + options.top_spacing,
+                .width = col_width,
+                .height = options.entry_height,
+            };
+        }
+
         fn recalculateBounds(self: *Self) void {
             if (self.collapsed) {
-                self.bounds.height = OPTIONS.COLLAPSED_HEIGHT;
+                self.bounds.height = options.collapsed_height;
             } else {
-                self.bounds.width = @max(50, @min(OPTIONS.WIDTH, @as(f32, @floatFromInt(self.cols())) * (OPTIONS.WIDTH / OPTIONS.COLUMNS)));
-                self.bounds.height = OPTIONS.TOP_SPACEING + @as(f32, @floatFromInt(self.rows())) * (OPTIONS.ENTRY_HEIGHT + OPTIONS.SPACEING);
+                self.bounds.width = std.math.clamp(
+                    @as(f32, @floatFromInt(self.cols())) * (options.width / options.columns),
+                    50,
+                    options.width,
+                );
+                self.bounds.height = options.top_spacing + @as(f32, @floatFromInt(self.rows())) * (options.entry_height + options.spacing);
             }
         }
 
         fn entryCount(self: *const Self) u16 {
-            return self.len + @intFromBool(OPTIONS.NULL_OPTION);
+            return self.len + @intFromBool(options.nullable == .null_option);
         }
 
         fn rows(self: *const Self) u16 {
-            return @divFloor(self.entryCount(), OPTIONS.COLUMNS) +
-                @intFromBool(self.entryCount() % OPTIONS.COLUMNS != 0);
+            return @divFloor(self.entryCount(), options.columns) +
+                @intFromBool(self.entryCount() % options.columns != 0);
         }
 
         fn cols(self: *const Self) u16 {
-            return @min(self.entryCount(), OPTIONS.COLUMNS);
+            return @min(self.entryCount(), options.columns);
         }
     };
 }
 
-pub fn rectanglePadded(rect: raylib.Rectangle, padding: f32) raylib.Rectangle {
-    return .{ .x = rect.x + padding, .y = rect.y + padding, .width = @max(0, rect.width - 2 * padding), .height = @max(0, rect.height - 2 * padding) };
+fn rectanglePadded(rect: raylib.Rectangle, padding: f32) raylib.Rectangle {
+    return .{
+        .x = rect.x + padding,
+        .y = rect.y + padding,
+        .width = @max(0, rect.width - 2 * padding),
+        .height = @max(0, rect.height - 2 * padding),
+    };
 }
 
-pub fn textureInRectangle(rect: raylib.Rectangle, texture: raylib.Texture2D) void {
+fn textureInRectangle(rect: raylib.Rectangle, texture: raylib.Texture2D) void {
     const width: f32 = @as(f32, @floatFromInt(texture.width));
     const height: f32 = @as(f32, @floatFromInt(texture.height));
 
@@ -385,15 +372,31 @@ pub fn textureInRectangle(rect: raylib.Rectangle, texture: raylib.Texture2D) voi
 
     raylib.DrawTextureEx(
         texture,
-        .{ .y = rect.y, .x = rect.x + rect.width / 2 - width * scale / 2 },
+        .{
+            .y = rect.y,
+            .x = rect.x + rect.width / 2 - width * scale / 2,
+        },
         0,
         scale,
         raylib.WHITE,
     );
 }
 
-pub fn splitRectangleHorizontal(rect: raylib.Rectangle, t: f32) struct { top: raylib.Rectangle, bottom: raylib.Rectangle } {
-    const top: raylib.Rectangle = .{ .x = rect.x, .y = rect.y, .width = rect.width, .height = rect.height * t };
-    const bottom: raylib.Rectangle = .{ .x = rect.x, .y = rect.y + top.height, .width = rect.width, .height = rect.height * (1 - t) };
+fn splitRectangleHorizontal(rect: raylib.Rectangle, t: f32) struct {
+    top: raylib.Rectangle,
+    bottom: raylib.Rectangle,
+} {
+    const top: raylib.Rectangle = .{
+        .x = rect.x,
+        .y = rect.y,
+        .width = rect.width,
+        .height = rect.height * t,
+    };
+    const bottom: raylib.Rectangle = .{
+        .x = rect.x,
+        .y = rect.y + top.height,
+        .width = rect.width,
+        .height = rect.height * (1 - t),
+    };
     return .{ .top = top, .bottom = bottom };
 }

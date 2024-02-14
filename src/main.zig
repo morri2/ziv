@@ -147,127 +147,107 @@ pub fn main() !void {
 
     // MAP EDIT MODE
 
-    const EditModes = enum {
+    const EditMode = enum {
         none,
         draw,
-        rivers,
+        river,
         resource,
     };
 
     var hide_gui = false;
 
-    const EditWindow = gui.SelectWindow(EditModes, .{
-        .WIDTH = 200,
-        .COLUMNS = 4,
-        .ENTRY_HEIGHT = 30,
-        .SPACEING = 4,
-    });
-    var edit_mode: EditModes = .none;
-
-    var edit_window = EditWindow.newEmpty();
-    edit_window.setName("SELECT EDIT MODE");
-    edit_window.addItem(.none, "None");
-    edit_window.addItem(.draw, "Draw");
-    edit_window.addItem(.rivers, "River");
-    edit_window.addItem(.resource, "Resource");
-
-    const ImprovementWindow = gui.SelectWindow(World.TileWork, .{
-        .WIDTH = 600,
-        .COLUMNS = 4,
-        .ENTRY_HEIGHT = 50,
-        .SPACEING = 2,
-        .TEXTURE_ENTRY_FRACTION = 0.0,
+    const EditWindow = gui.SelectWindow("Select edit mode", EditMode, .{
+        .width = 200,
+        .columns = 4,
+        .entry_height = 30,
+        .spacing = 4,
+        .nullable = .not_nullable,
     });
 
-    var improvement_window: ImprovementWindow = ImprovementWindow.newEmpty();
-    improvement_window.setName("Build improvement");
+    var edit_window = EditWindow.newEmpty(true, .none);
+    inline for (@typeInfo(EditMode).Enum.fields) |field| {
+        edit_window.addItem(@enumFromInt(field.value), field.name);
+    }
 
+    const ImprovementWindow = gui.SelectWindow("Build improvement", World.TileWork, .{
+        .width = 600,
+        .columns = 4,
+        .entry_height = 50,
+        .spacing = 2,
+        .texture_entry_fraction = 0.0,
+        .keep_highlight = false,
+        .nullable = .null_option,
+    });
+
+    var improvement_window = ImprovementWindow.newEmpty(true, null);
     improvement_window.bounds.y += 800;
 
-    const PaletWindow = gui.SelectWindow(Rules.Terrain, .{
-        .WIDTH = 400,
-        .COLUMNS = 5,
-        .NULL_OPTION = true,
-        .ENTRY_HEIGHT = 50,
-        .SPACEING = 2,
-        .TEXTURE_ENTRY_FRACTION = 0.6,
+    const TerrainWindow = gui.SelectWindow("Pick terrain", Rules.Terrain, .{
+        .width = 400,
+        .columns = 5,
+        .entry_height = 50,
+        .spacing = 2,
+        .texture_entry_fraction = 0.6,
+        .nullable = .null_option,
     });
 
-    var palet_window: PaletWindow = PaletWindow.newEmpty();
+    var terrain_window = TerrainWindow.newEmpty(true, null);
     for (0..game.rules.terrain_count) |ti| {
-        const t = @as(Rules.Terrain, @enumFromInt(ti));
+        const t: Rules.Terrain = @enumFromInt(ti);
         if (t.attributes(&game.rules).has_freshwater or t.attributes(&game.rules).has_river) continue;
-        const texture: ?raylib.Texture2D = texture_set.terrain_textures[ti];
-        palet_window.addItemTexture(t, t.name(&game.rules), texture);
+        terrain_window.addItemTexture(
+            t,
+            t.name(&game.rules),
+            texture_set.terrain_textures[ti],
+        );
     }
 
-    palet_window.setName("Edit Palet");
-
-    var terrain_brush: ?Rules.Terrain = null;
-
-    const ResourceWindow = gui.SelectWindow(Rules.Resource, .{
-        .WIDTH = 400,
-        .COLUMNS = 5,
-        .NULL_OPTION = true,
-        .ENTRY_HEIGHT = 50,
-        .SPACEING = 2,
-        .TEXTURE_ENTRY_FRACTION = 0.6,
+    const ResourceWindow = gui.SelectWindow("Select resource", Rules.Resource, .{
+        .width = 400,
+        .columns = 5,
+        .entry_height = 50,
+        .spacing = 2,
+        .texture_entry_fraction = 0.6,
+        .nullable = .null_option,
     });
 
-    var resource_window: ResourceWindow = ResourceWindow.newEmpty();
+    var resource_window = ResourceWindow.newEmpty(true, null);
     for (0..game.rules.resource_count) |ri| {
-        const r = @as(Rules.Resource, @enumFromInt(ri));
+        const r: Rules.Resource = @enumFromInt(ri);
 
-        const texture: ?raylib.Texture2D = texture_set.resource_icons[ri];
-        resource_window.addItemTexture(r, r.name(&game.rules), texture);
+        resource_window.addItemTexture(
+            r,
+            r.name(&game.rules),
+            texture_set.resource_icons[ri],
+        );
     }
-    resource_window.setName("Resource Palet");
 
-    var resource_brush: ?Rules.Resource = null;
-
-    const PromotionWindow = gui.SelectWindow(Rules.Promotion, .{
-        .WIDTH = 150,
-        .COLUMNS = 1,
-        .ENTRY_HEIGHT = 25,
-        .KEEP_HIGHLIGHT = false,
-        .SPACEING = 2,
+    const PromotionWindow = gui.SelectWindow("Add promotion", Rules.Promotion, .{
+        .width = 150,
+        .columns = 1,
+        .entry_height = 25,
+        .keep_highlight = false,
+        .spacing = 2,
     });
 
-    var promotion_window: PromotionWindow = PromotionWindow.newEmpty();
+    var promotion_window = PromotionWindow.newEmpty(true, null);
     for (0..game.rules.promotion_count) |pi| {
         const p = @as(Rules.Promotion, @enumFromInt(pi));
 
         promotion_window.addItem(p, p.name(&game.rules));
     }
-    promotion_window.setName("Add Promotion");
     promotion_window.bounds.y += 50;
-    var set_promotion: ?Rules.Promotion = null;
 
-    const UnitInfoWindow = gui.InfoWindow(.{});
-
-    var unit_info_window: UnitInfoWindow = UnitInfoWindow.newEmpty();
-    unit_info_window.bounds.y += 100;
-    unit_info_window.setName("[UNIT]");
-    unit_info_window.addLine("Select a unit to view info...");
-
-    const HexInfoWindow = gui.InfoWindow(.{});
-
-    var hex_info_window: HexInfoWindow = HexInfoWindow.newEmpty();
-    hex_info_window.bounds.y += 200;
-    hex_info_window.setName("[HEX]");
-    hex_info_window.addLine("Select a hex to view info...");
-
-    const CityConstructionWindow = gui.SelectWindow(City.ProductionTarget, .{
-        .WIDTH = 150,
-        .COLUMNS = 1,
-        .ENTRY_HEIGHT = 25,
-        .KEEP_HIGHLIGHT = false,
-        .SPACEING = 2,
+    const CityConstructionWindow = gui.SelectWindow("Select unit to build in city", City.ProductionTarget, .{
+        .width = 150,
+        .columns = 1,
+        .entry_height = 25,
+        .keep_highlight = false,
+        .spacing = 2,
     });
 
-    var city_construction_window: CityConstructionWindow = CityConstructionWindow.newEmpty();
+    var city_construction_window = CityConstructionWindow.newEmpty(true, null);
     city_construction_window.bounds.y += 150;
-    city_construction_window.setName("Build in city.");
 
     for (0..game.rules.unit_type_count) |uti| {
         const ut: Rules.UnitType = @enumFromInt(uti);
@@ -277,7 +257,17 @@ pub fn main() !void {
         city_construction_window.addItem(pt, label);
     }
 
-    var set_production_target: ?City.ProductionTarget = null;
+    const UnitInfoWindow = gui.InfoWindow("Unit info", .{});
+
+    var unit_info_window = UnitInfoWindow.newEmpty(true);
+    unit_info_window.bounds.y += 100;
+    unit_info_window.addLine("Select a unit to view info...");
+
+    const TerrainInfoWindow = gui.InfoWindow("Terrain info", .{});
+
+    var terrain_info_window = TerrainInfoWindow.newEmpty(true);
+    terrain_info_window.bounds.y += 200;
+    terrain_info_window.addLine("Select a hex to view info...");
 
     // MAIN GAME LOOP
     while (!raylib.WindowShouldClose()) {
@@ -304,24 +294,16 @@ pub fn main() !void {
 
             if (raylib.IsKeyPressed(raylib.KEY_P)) game.nextPlayer();
 
-            // GUI STUFF
-
             if (!hide_gui) {
-                _ = edit_window.fetchSelected(&edit_mode);
-                if (edit_mode != .draw) palet_window.hidden = true else palet_window.hidden = false;
-                if (edit_mode != .resource) resource_window.hidden = true else resource_window.hidden = false;
-
                 // Set unit promotions
-                if (promotion_window.fetchSelectedNull(&set_promotion)) {
-                    if (set_promotion) |promotion| if (maybe_unit_reference) |unit_ref| {
+                if (promotion_window.getSelected()) |promotion| {
+                    if (maybe_unit_reference) |unit_ref| {
                         _ = try game.promoteUnit(unit_ref, promotion);
-                    };
+                    }
                 }
-                _ = palet_window.fetchSelectedNull(&terrain_brush);
 
-                _ = city_construction_window.fetchSelectedNull(&set_production_target);
                 // Set construction
-                if (set_production_target) |production_target| {
+                if (city_construction_window.getSelected()) |production_target| {
                     if (maybe_selected_idx) |idx| {
                         if (game.world.cities.get(idx)) |city| {
                             if (city.faction_id == game.civ_id.toFactionID()) {
@@ -330,13 +312,6 @@ pub fn main() !void {
                         }
                     }
                 }
-                set_production_target = null;
-
-                // Set edit brush
-
-                _ = resource_window.fetchSelectedNull(&resource_brush);
-
-                _ = palet_window.fetchSelectedNull(&terrain_brush);
 
                 // UPDATE UNIT INFO
                 if (maybe_unit_reference) |ref| {
@@ -344,7 +319,7 @@ pub fn main() !void {
                         unit_info_window.clear();
 
                         unit_info_window.addCategoryHeader("General");
-
+                        unit_info_window.addLineFormat("Type: {s}", .{unit.type.name(&game.rules)}, false);
                         unit_info_window.addLineFormat("HP: {}", .{unit.hit_points}, false);
                         unit_info_window.addLineFormat("Move: {d:.1}/{d:.1}", .{ unit.movement, unit.maxMovement(&game.rules) }, false);
                         unit_info_window.addLineFormat("Faction id: {}", .{unit.faction_id}, false);
@@ -353,7 +328,6 @@ pub fn main() !void {
 
                         unit_info_window.addCategoryHeader("Promotions");
                         for (0..game.rules.promotion_count) |pi| {
-                            unit_info_window.setName(unit.type.name(&game.rules));
                             const p: Rules.Promotion = @enumFromInt(pi);
 
                             if (unit.promotions.isSet(pi)) {
@@ -362,154 +336,151 @@ pub fn main() !void {
                         }
                     }
 
-                    // TODO when new selection
-
-                    var maybe_work: ?World.TileWork = null;
-                    if (improvement_window.fetchSelectedNull(&maybe_work)) {
-                        if (maybe_work) |work| {
-                            _ = try game.tileWork(ref, work);
-                        }
-                    }
+                    if (improvement_window.getSelected()) |work| _ = try game.tileWork(ref, work);
                 }
 
                 // UPDATE UNIT INFO
                 if (maybe_selected_idx) |idx| {
                     const terrain = game.world.terrain[idx];
                     const attributes = terrain.attributes(&game.rules);
-                    hex_info_window.clear();
+                    terrain_info_window.clear();
 
-                    hex_info_window.addCategoryHeader("Attributes");
+                    terrain_info_window.addCategoryHeader("Attributes");
 
-                    hex_info_window.addLineFormat("Freshwater: {}", .{attributes.has_freshwater}, false);
-                    hex_info_window.addLineFormat("River: {}", .{attributes.has_river}, false);
+                    terrain_info_window.addLineFormat("Freshwater: {}", .{attributes.has_freshwater}, false);
+                    terrain_info_window.addLineFormat("River: {}", .{attributes.has_river}, false);
                 }
+            }
 
-                // SETTLE CITY
-                if (raylib.IsKeyPressed(raylib.KEY_B)) {
-                    if (maybe_unit_reference) |unit_ref| {
-                        _ = try game.settleCity(unit_ref);
+            // SETTLE CITY
+            if (raylib.IsKeyPressed(raylib.KEY_B)) {
+                if (maybe_unit_reference) |unit_ref| {
+                    _ = try game.settleCity(unit_ref);
+                }
+            }
+
+            const mouse_idx = camera.getMouseTile(
+                game.world.grid,
+                bounding_box,
+                texture_set,
+            );
+
+            // Check capture
+            if (unit_info_window.checkMouseCapture()) break :control_blk;
+            if (terrain_info_window.checkMouseCapture()) break :control_blk;
+            if (promotion_window.checkMouseCapture()) break :control_blk;
+            if (city_construction_window.checkMouseCapture()) break :control_blk;
+            if (edit_window.checkMouseCapture()) break :control_blk;
+            if (improvement_window.checkMouseCapture()) break :control_blk;
+
+            switch (edit_window.getSelected()) {
+                .draw => if (terrain_window.checkMouseCapture()) break :control_blk,
+                .resource => if (resource_window.checkMouseCapture()) break :control_blk,
+                .none, .river => {},
+            }
+
+            if (raylib.IsKeyPressed(raylib.KEY_T)) {
+                const res = try game.world.resources.getOrPut(game.world.allocator, mouse_idx);
+                if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
+            }
+
+            switch (edit_window.getSelected()) {
+                .draw => if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
+                    if (terrain_window.getSelected()) |terrain| game.world.terrain[mouse_idx] = terrain;
+                },
+                .resource => if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                    if (resource_window.getSelected()) |resource|
+                        try game.world.resources.put(game.world.allocator, mouse_idx, .{
+                            .type = resource,
+                        })
+                    else
+                        _ = game.world.resources.swapRemove(mouse_idx);
+                },
+                .river => if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                    if (camera.getMouseEdge(game.world.grid, bounding_box, texture_set)) |e| {
+                        if (game.world.rivers.contains(e)) {
+                            _ = game.world.rivers.swapRemove(e);
+                        } else {
+                            game.world.rivers.put(game.world.allocator, e, {}) catch unreachable;
+                        }
                     }
+                },
+                .none => {},
+            }
+            if (edit_window.getSelected() != .none) break :control_blk;
+
+            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                if (maybe_selected_idx) |selected_idx| {
+                    if (selected_idx != mouse_idx) blk: {
+                        if (maybe_unit_reference == null) {
+                            maybe_unit_reference = game.world.units.firstReference(selected_idx);
+                            if (maybe_unit_reference == null) {
+                                maybe_selected_idx = mouse_idx;
+                                maybe_unit_reference = game.world.units.firstReference(mouse_idx);
+                                break :blk;
+                            }
+                        }
+
+                        var attacked: bool = false;
+                        if (game.world.units.firstReference(mouse_idx)) |ref| {
+                            const unit = game.world.units.deref(ref) orelse unreachable;
+                            if (unit.faction_id != game.civ_id.toFactionID()) {
+                                _ = try game.attack(maybe_unit_reference.?, mouse_idx);
+                                attacked = true;
+                            }
+                        }
+
+                        if (!attacked) _ = try game.move(maybe_unit_reference.?, mouse_idx);
+
+                        maybe_selected_idx = null;
+                    } else if (maybe_unit_reference) |ref| {
+                        maybe_unit_reference = game.world.units.nextReference(ref);
+                    } else {
+                        maybe_unit_reference = game.world.units.firstReference(selected_idx);
+                    }
+                } else {
+                    maybe_selected_idx = mouse_idx;
+                    maybe_unit_reference = game.world.units.firstReference(mouse_idx);
                 }
 
-                const mouse_idx = camera.getMouseTile(
+                // BUILD IMPROVEMENTS MENU!
+                if (maybe_unit_reference) |ref| {
+                    improvement_window.clearItems();
+                    if (game.world.canDoImprovementWork(ref, .remove_vegetation, &game.rules)) {
+                        improvement_window.addItem(.remove_vegetation, "Clear Vegetation");
+                    }
+                    for (0..game.rules.building_count) |bi| {
+                        const b: Rules.Building = @enumFromInt(bi);
+
+                        if (game.world.canDoImprovementWork(ref, .{ .building = b }, &game.rules)) {
+                            var buf: [255]u8 = undefined;
+                            const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&game.rules)});
+                            improvement_window.addItem(.{ .building = b }, label);
+                        } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b }, &game.rules)) {
+                            var buf: [255]u8 = undefined;
+                            const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&game.rules)});
+                            improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
+                        }
+                    }
+                    if (game.world.canDoImprovementWork(ref, .{ .transport = .road }, &game.rules))
+                        improvement_window.addItem(.{ .transport = .road }, "Transport: \n Road");
+                    if (game.world.canDoImprovementWork(ref, .{ .transport = .rail }, &game.rules))
+                        improvement_window.addItem(.{ .transport = .rail }, "Transport: \n Rail");
+                }
+            }
+
+            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
+                const clicked_tile = camera.getMouseTile(
                     game.world.grid,
                     bounding_box,
                     texture_set,
                 );
 
-                // Check capture
-                if (unit_info_window.checkMouseCapture()) break :control_blk;
-                if (hex_info_window.checkMouseCapture()) break :control_blk;
-                if (promotion_window.checkMouseCapture()) break :control_blk;
-                if (palet_window.checkMouseCapture()) break :control_blk;
-                if (city_construction_window.checkMouseCapture()) break :control_blk;
-                if (edit_window.checkMouseCapture()) break :control_blk;
-                if (resource_window.checkMouseCapture()) break :control_blk;
-                if (improvement_window.checkMouseCapture()) break :control_blk;
+                for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
+                    if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world, &game.rules);
 
-                if (raylib.IsKeyPressed(raylib.KEY_T)) {
-                    const res = try game.world.resources.getOrPut(game.world.allocator, mouse_idx);
-                    if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
-                }
-
-                switch (edit_mode) {
-                    .draw => if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
-                        if (terrain_brush) |terrain| game.world.terrain[mouse_idx] = terrain;
-                    },
-                    .resource => if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                        if (resource_brush) |resource|
-                            try game.world.resources.put(game.world.allocator, mouse_idx, .{
-                                .type = resource,
-                            })
-                        else
-                            _ = game.world.resources.swapRemove(mouse_idx);
-                    },
-                    .rivers => if (edit_mode == .rivers and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                        if (camera.getMouseEdge(game.world.grid, bounding_box, texture_set)) |e| {
-                            if (game.world.rivers.contains(e)) {
-                                _ = game.world.rivers.swapRemove(e);
-                            } else {
-                                game.world.rivers.put(game.world.allocator, e, {}) catch unreachable;
-                            }
-                        }
-                    },
-                    .none => {},
-                }
-                if (edit_mode != .none) break :control_blk;
-
-                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    if (maybe_selected_idx) |selected_idx| {
-                        if (selected_idx != mouse_idx) blk: {
-                            if (maybe_unit_reference == null) {
-                                maybe_unit_reference = game.world.units.firstReference(selected_idx);
-                                if (maybe_unit_reference == null) {
-                                    maybe_selected_idx = mouse_idx;
-                                    maybe_unit_reference = game.world.units.firstReference(mouse_idx);
-                                    break :blk;
-                                }
-                            }
-
-                            var attacked: bool = false;
-                            if (game.world.units.firstReference(mouse_idx)) |ref| {
-                                const unit = game.world.units.deref(ref) orelse unreachable;
-                                if (unit.faction_id != game.civ_id.toFactionID()) {
-                                    _ = try game.attack(maybe_unit_reference.?, mouse_idx);
-                                    attacked = true;
-                                }
-                            }
-
-                            if (!attacked) _ = try game.move(maybe_unit_reference.?, mouse_idx);
-
-                            maybe_selected_idx = null;
-                        } else if (maybe_unit_reference) |ref| {
-                            maybe_unit_reference = game.world.units.nextReference(ref);
-                        } else {
-                            maybe_unit_reference = game.world.units.firstReference(selected_idx);
-                        }
-                    } else {
-                        maybe_selected_idx = mouse_idx;
-                        maybe_unit_reference = game.world.units.firstReference(mouse_idx);
-                    }
-
-                    // BUILD IMPROVEMENTS MENU!
-                    if (maybe_unit_reference) |ref| {
-                        improvement_window.clearItems();
-                        if (game.world.canDoImprovementWork(ref, .remove_vegetation, &game.rules)) {
-                            improvement_window.addItem(.remove_vegetation, "Clear Vegetation");
-                        }
-                        for (0..game.rules.building_count) |bi| {
-                            const b: Rules.Building = @enumFromInt(bi);
-
-                            if (game.world.canDoImprovementWork(ref, .{ .building = b }, &game.rules)) {
-                                var buf: [255]u8 = undefined;
-                                const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&game.rules)});
-                                improvement_window.addItem(.{ .building = b }, label);
-                            } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b }, &game.rules)) {
-                                var buf: [255]u8 = undefined;
-                                const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&game.rules)});
-                                improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
-                            }
-                        }
-                        if (game.world.canDoImprovementWork(ref, .{ .transport = .road }, &game.rules))
-                            improvement_window.addItem(.{ .transport = .road }, "Transport: \n Road");
-                        if (game.world.canDoImprovementWork(ref, .{ .transport = .rail }, &game.rules))
-                            improvement_window.addItem(.{ .transport = .rail }, "Transport: \n Rail");
-                    }
-                }
-
-                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
-                    const clicked_tile = camera.getMouseTile(
-                        game.world.grid,
-                        bounding_box,
-                        texture_set,
-                    );
-
-                    for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
-                        if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world, &game.rules);
-
-                        if (try game.unsetWorked(city_idx, clicked_tile)) |_| break;
-                        if (try game.setWorked(city_idx, clicked_tile)) |_| break;
-                    }
+                    if (try game.unsetWorked(city_idx, clicked_tile)) |_| break;
+                    if (try game.setWorked(city_idx, clicked_tile)) |_| break;
                 }
             }
         }
@@ -587,20 +558,39 @@ pub fn main() !void {
         raylib.EndMode2D();
 
         if (!hide_gui) {
-            // TODO: CAPTURE MOUSE TO DISSALLOW MULTI CLICKS
+            var accept_input = true;
 
-            palet_window.renderUpdate();
-            promotion_window.renderUpdate();
+            edit_window.renderUpdate(accept_input);
+            if (edit_window.checkMouseCapture()) accept_input = false;
 
-            unit_info_window.renderUpdate();
-            city_construction_window.renderUpdate();
-            edit_window.renderUpdate();
+            unit_info_window.renderUpdate(accept_input);
+            if (unit_info_window.checkMouseCapture()) accept_input = false;
 
-            resource_window.renderUpdate();
+            terrain_info_window.renderUpdate(accept_input);
+            if (terrain_info_window.checkMouseCapture()) accept_input = false;
 
-            hex_info_window.renderUpdate();
+            if (maybe_selected_idx) |selected_index| {
+                if (game.world.cities.get(selected_index)) |city| if (city.faction_id == game.civ_id.toFactionID()) {
+                    city_construction_window.renderUpdate(accept_input);
+                    if (city_construction_window.checkMouseCapture()) accept_input = false;
+                };
+            }
 
-            improvement_window.renderUpdate();
+            if (maybe_unit_reference) |ref| if (game.world.units.deref(ref)) |unit| {
+                if (unit.faction_id == game.civ_id.toFactionID()) {
+                    promotion_window.renderUpdate(accept_input);
+                    if (promotion_window.checkMouseCapture()) accept_input = false;
+
+                    improvement_window.renderUpdate(accept_input);
+                    if (improvement_window.checkMouseCapture()) accept_input = false;
+                }
+            };
+
+            switch (edit_window.getSelected()) {
+                .none, .river => {},
+                .draw => terrain_window.renderUpdate(accept_input),
+                .resource => resource_window.renderUpdate(accept_input),
+            }
         }
         raylib.EndDrawing();
 
