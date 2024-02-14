@@ -48,6 +48,10 @@ pub const Action = union(Type) {
         idx: Idx,
         faction_id: World.FactionID,
     },
+    add_city: struct {
+        idx: Idx,
+        faction_id: World.FactionID,
+    },
 
     pub const Type = enum(u8) {
         // Zero is reserved for ping packet
@@ -61,6 +65,7 @@ pub const Action = union(Type) {
         promote_unit = 8,
         tile_work = 9,
         add_unit = 10,
+        add_city = 11,
     };
 
     pub const Result = struct {
@@ -123,6 +128,7 @@ pub const Action = union(Type) {
                 return world.canDoImprovementWork(info.unit, info.work, rules);
             },
             .add_unit => |info| if (world.units.hasOtherFaction(info.idx, info.faction_id)) return false,
+            .add_city => |info| if (!world.canAddCity(info.idx, info.faction_id, rules)) return false,
         }
 
         return true;
@@ -180,6 +186,11 @@ pub const Action = union(Type) {
             },
             .add_unit => |info| {
                 if (!try world.addUnit(info.idx, info.unit_type, info.faction_id, rules)) unreachable;
+
+                result.view_change = true;
+            },
+            .add_city => |info| {
+                if (!try world.addCity(info.idx, info.faction_id, rules)) unreachable;
 
                 result.view_change = true;
             },
