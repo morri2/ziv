@@ -545,6 +545,9 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx, rules: *const Rul
             }
         }
         _ = try self.move(attacker, to, rules);
+        attacker_unit.movement = 0.0;
+    } else {
+        attacker_unit.movement = 0.0;
     }
 
     return true;
