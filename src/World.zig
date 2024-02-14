@@ -151,7 +151,7 @@ pub fn nextTurn(self: *Self, rules: *const Rules) !struct {
         switch (production_result) {
             .done => |project| switch (project) {
                 .unit => |unit_type| {
-                    try self.addUnit(idx, unit_type, city.faction_id, rules);
+                    if (!try self.addUnit(idx, unit_type, city.faction_id, rules)) unreachable;
                     view_change = true;
                 },
                 else => unreachable, // TODO
@@ -174,9 +174,9 @@ pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
     try self.cities.put(self.allocator, idx, city);
 }
 
-pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID, rules: *const Rules) !void {
+pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID, rules: *const Rules) !bool {
     const unit = Unit.new(unit_temp, faction, rules);
-    try self.units.putOrStackAutoSlot(idx, unit, rules);
+    return try self.units.putOrStackAutoSlot(idx, unit, rules);
 }
 
 pub fn claimed(self: *const Self, idx: Idx) bool {
@@ -433,9 +433,9 @@ pub fn move(self: *Self, reference: Units.Reference, to: Idx, rules: *const Rule
         .disallowed => unreachable,
         .allowed,
         .allowed_final,
-        => try self.units.putNoStack(to, unit, reference.slot),
-        .embarkation => try self.units.putNoStack(to, unit, .embarked),
-        .disembarkation => try self.units.putNoStackAutoSlot(to, unit, rules),
+        => if (!try self.units.putNoStack(to, unit, reference.slot)) unreachable,
+        .embarkation => if (!try self.units.putNoStack(to, unit, .embarked)) unreachable,
+        .disembarkation => if (!try self.units.putNoStackAutoSlot(to, unit, rules)) unreachable,
     }
     return true;
 }

@@ -123,28 +123,31 @@ pub fn getStacked(self: *const Self, idx: Idx, slot: Slot, stacked_key: Stacked.
     return stacked.storage.unit;
 }
 
-pub fn putNoStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !void {
+pub fn putNoStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !bool {
+    if (self.hasOtherFaction(idx, unit.faction_id)) return false;
     const gop = try self.maps[@intFromEnum(slot)].getOrPut(self.allocator, idx);
 
-    if (gop.found_existing) return error.AlreadyOccupied;
+    if (gop.found_existing) return false;
 
     gop.value_ptr.* = .{ .unit = unit };
+    return true;
 }
 
-pub fn putNoStackAutoSlot(self: *Self, idx: Idx, unit: Unit, rules: *const Rules) !void {
-    return self.putNoStack(
+pub fn putNoStackAutoSlot(self: *Self, idx: Idx, unit: Unit, rules: *const Rules) !bool {
+    return try self.putNoStack(
         idx,
         unit,
         slotFromUnitType(unit.type, rules),
     );
 }
 
-pub fn putOrStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !void {
+pub fn putOrStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !bool {
+    if (self.hasOtherFaction(idx, unit.faction_id)) return false;
     const gop = try self.maps[@intFromEnum(slot)].getOrPut(self.allocator, idx);
 
     if (!gop.found_existing) {
         gop.value_ptr.* = .{ .unit = unit };
-        return;
+        return true;
     }
 
     const stacked_key = self.nextStackedKey();
@@ -159,14 +162,25 @@ pub fn putOrStack(self: *Self, idx: Idx, unit: Unit, slot: Slot) !void {
         unit_storage = &(self.stacked.getPtr(unit_storage.stacked) orelse unreachable).storage;
     }
     unit_storage.stacked = stacked_key;
+    return true;
 }
 
-pub fn putOrStackAutoSlot(self: *Self, idx: Idx, unit: Unit, rules: *const Rules) !void {
-    try self.putOrStack(
+pub fn putOrStackAutoSlot(self: *Self, idx: Idx, unit: Unit, rules: *const Rules) !bool {
+    return try self.putOrStack(
         idx,
         unit,
         slotFromUnitType(unit.type, rules),
     );
+}
+
+pub fn hasOtherFaction(self: *const Self, idx: Idx, faction_id: World.FactionID) bool {
+    var slot = Slot.first();
+    while (true) {
+        if (self.maps[@intFromEnum(slot)].get(idx)) |unit|
+            if (slot != .trade and unit.unit.faction_id != faction_id) return true;
+        if (!slot.next()) break;
+    }
+    return false;
 }
 
 pub fn remove(self: *Self, idx: Idx, slot: Slot) void {
