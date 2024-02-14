@@ -169,9 +169,22 @@ pub fn nextTurn(self: *Self, rules: *const Rules) !struct {
     };
 }
 
-pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
+pub fn canAddCity(self: *const Self, idx: Idx, faction: FactionID, rules: *const Rules) bool {
+    if (self.claimedFaction(idx)) |claimed_by| {
+        if (claimed_by != faction) return false;
+    }
+    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
+    if (self.terrain[idx].attributes(rules).is_impassable) return false;
+    if (self.terrain[idx].attributes(rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(rules).is_water) return false;
+    return true;
+}
+
+pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID, rules: *const Rules) !bool {
+    if (!self.canAddCity(idx, faction_id, rules)) return false;
     const city = try City.new(idx, faction_id, self);
     try self.cities.put(self.allocator, idx, city);
+    return true;
 }
 
 pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID, rules: *const Rules) !bool {
@@ -190,25 +203,20 @@ pub fn claimedFaction(self: *const Self, idx: Idx) ?FactionID {
     return null;
 }
 
-pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: FactionID, rules: *const Rules) bool {
-    if (self.claimedFaction(idx)) |claimed_by| {
-        if (claimed_by != faction) return false;
-    }
-    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
-    if (self.terrain[idx].attributes(rules).is_impassable) return false;
-    if (self.terrain[idx].attributes(rules).is_wonder) return false;
-    if (self.terrain[idx].attributes(rules).is_water) return false;
+pub fn canSettleCity(self: *const Self, reference: Units.Reference, rules: *const Rules) bool {
+    const unit = self.units.deref(reference) orelse return false;
+    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, rules)) return false;
+    if (unit.movement <= 0) return false;
+    if (!self.canAddCity(reference.idx, unit.faction_id, rules)) return false;
     return true;
 }
 
 pub fn settleCity(self: *Self, reference: Units.Reference, rules: *const Rules) !bool {
-    const unit = self.units.deref(reference) orelse return false;
-    if (!self.canSettleCityAt(reference.idx, unit.faction_id, rules)) return false;
-    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, rules)) return false;
-    if (unit.movement <= 0) return false;
+    if (!self.canSettleCity(reference, rules)) return false;
+    const unit = self.units.deref(reference) orelse unreachable;
 
-    try self.addCity(reference.idx, unit.faction_id);
-    self.units.removeReference(reference); // will this fuck up the refrence held by controll?
+    if (!try self.addCity(reference.idx, unit.faction_id, rules)) unreachable;
+    self.units.removeReference(reference);
 
     return true;
 }

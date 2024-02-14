@@ -101,7 +101,7 @@ pub const Action = union(Type) {
 
                 if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, rules)) return false;
 
-                if (!world.canSettleCityAt(settler_ref.idx, faction_id, rules)) return false;
+                if (!world.canSettleCity(settler_ref, rules)) return false;
             },
             .unset_worked => |info| {
                 const city = world.cities.get(info.city_idx) orelse return false;

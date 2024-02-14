@@ -125,8 +125,8 @@ pub fn main() !void {
         _ = try game.addUnit(1139, @enumFromInt(3), @enumFromInt(1));
     }
 
-    try game.world.addCity(1089, @enumFromInt(0));
-    try game.world.addCity(485, @enumFromInt(1));
+    _ = try game.world.addCity(1089, @enumFromInt(0), &game.rules);
+    _ = try game.world.addCity(485, @enumFromInt(1), &game.rules);
 
     try game.updateViews();
 
