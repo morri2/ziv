@@ -289,9 +289,6 @@ pub fn main() !void {
             texture_set,
         );
 
-        // ////////////// //
-        // CONTROLL STUFF //
-        // ////////////// //
         control_blk: {
             if (raylib.IsKeyPressed(raylib.KEY_C)) {
                 var file = try std.fs.cwd().createFile("maps/last_saved.map", .{});
@@ -387,128 +384,133 @@ pub fn main() !void {
                     hex_info_window.addLineFormat("River: {}", .{attributes.has_river}, false);
                 }
 
-                // Check capture
-                if (unit_info_window.checkMouseCapture()) break :control_blk;
-                if (promotion_window.checkMouseCapture()) break :control_blk;
-                if (palet_window.checkMouseCapture()) break :control_blk;
-                if (city_construction_window.checkMouseCapture()) break :control_blk;
-                if (edit_window.checkMouseCapture()) break :control_blk;
-                if (resource_window.checkMouseCapture()) break :control_blk;
-                if (improvement_window.checkMouseCapture()) break :control_blk;
-            }
-
-            // OLD SCHOOL CONTROL STUFF
-            {
-                // EDIT MAP STUFF
-                const mouse_tile = camera.getMouseTile(game.world.grid, bounding_box, texture_set);
-                if (raylib.IsKeyPressed(raylib.KEY_T)) {
-                    const res = try game.world.resources.getOrPut(game.world.allocator, mouse_tile);
-                    if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
-                }
-
-                if (edit_mode == .draw and raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT) and terrain_brush != null) {
-                    game.world.terrain[mouse_tile] = terrain_brush.?;
-                }
-                if (edit_mode == .resource and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    if (resource_brush != null) try game.world.resources.put(game.world.allocator, mouse_tile, .{ .type = resource_brush.? }) else _ = game.world.resources.swapRemove(mouse_tile);
-                }
-                if (edit_mode == .rivers and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
-                    if (camera.getMouseEdge(game.world.grid, bounding_box, texture_set)) |e| {
-                        if (game.world.rivers.contains(e)) {
-                            _ = game.world.rivers.swapRemove(e);
-                        } else {
-                            game.world.rivers.put(game.world.allocator, e, {}) catch unreachable;
-                        }
+                // SETTLE CITY
+                if (raylib.IsKeyPressed(raylib.KEY_B)) {
+                    if (maybe_unit_reference) |unit_ref| {
+                        _ = try game.settleCity(unit_ref);
                     }
                 }
-            }
 
-            // SELECTION
-            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
                 const mouse_idx = camera.getMouseTile(
                     game.world.grid,
                     bounding_box,
                     texture_set,
                 );
 
-                if (maybe_selected_idx) |selected_idx| {
-                    if (selected_idx != mouse_idx) blk: {
-                        if (maybe_unit_reference == null) {
-                            maybe_unit_reference = game.world.units.firstReference(selected_idx);
+                // Check capture
+                if (unit_info_window.checkMouseCapture()) break :control_blk;
+                if (hex_info_window.checkMouseCapture()) break :control_blk;
+                if (promotion_window.checkMouseCapture()) break :control_blk;
+                if (palet_window.checkMouseCapture()) break :control_blk;
+                if (city_construction_window.checkMouseCapture()) break :control_blk;
+                if (edit_window.checkMouseCapture()) break :control_blk;
+                if (resource_window.checkMouseCapture()) break :control_blk;
+                if (improvement_window.checkMouseCapture()) break :control_blk;
+
+                if (raylib.IsKeyPressed(raylib.KEY_T)) {
+                    const res = try game.world.resources.getOrPut(game.world.allocator, mouse_idx);
+                    if (res.found_existing) res.value_ptr.amount = (res.value_ptr.amount % 12) + 1;
+                }
+
+                switch (edit_mode) {
+                    .draw => if (raylib.IsMouseButtonDown(raylib.MOUSE_BUTTON_LEFT)) {
+                        if (terrain_brush) |terrain| game.world.terrain[mouse_idx] = terrain;
+                    },
+                    .resource => if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                        if (resource_brush) |resource|
+                            try game.world.resources.put(game.world.allocator, mouse_idx, .{
+                                .type = resource,
+                            })
+                        else
+                            _ = game.world.resources.swapRemove(mouse_idx);
+                    },
+                    .rivers => if (edit_mode == .rivers and raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                        if (camera.getMouseEdge(game.world.grid, bounding_box, texture_set)) |e| {
+                            if (game.world.rivers.contains(e)) {
+                                _ = game.world.rivers.swapRemove(e);
+                            } else {
+                                game.world.rivers.put(game.world.allocator, e, {}) catch unreachable;
+                            }
+                        }
+                    },
+                    .none => {},
+                }
+                if (edit_mode != .none) break :control_blk;
+
+                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_LEFT)) {
+                    if (maybe_selected_idx) |selected_idx| {
+                        if (selected_idx != mouse_idx) blk: {
                             if (maybe_unit_reference == null) {
-                                maybe_selected_idx = mouse_idx;
-                                maybe_unit_reference = game.world.units.firstReference(mouse_idx);
-                                break :blk;
+                                maybe_unit_reference = game.world.units.firstReference(selected_idx);
+                                if (maybe_unit_reference == null) {
+                                    maybe_selected_idx = mouse_idx;
+                                    maybe_unit_reference = game.world.units.firstReference(mouse_idx);
+                                    break :blk;
+                                }
                             }
-                        }
 
-                        var attacked: bool = false;
-                        if (game.world.units.firstReference(mouse_idx)) |ref| {
-                            const unit = game.world.units.deref(ref) orelse unreachable;
-                            if (unit.faction_id != game.civ_id.toFactionID()) {
-                                _ = try game.attack(maybe_unit_reference.?, mouse_idx);
-                                attacked = true;
+                            var attacked: bool = false;
+                            if (game.world.units.firstReference(mouse_idx)) |ref| {
+                                const unit = game.world.units.deref(ref) orelse unreachable;
+                                if (unit.faction_id != game.civ_id.toFactionID()) {
+                                    _ = try game.attack(maybe_unit_reference.?, mouse_idx);
+                                    attacked = true;
+                                }
                             }
+
+                            if (!attacked) _ = try game.move(maybe_unit_reference.?, mouse_idx);
+
+                            maybe_selected_idx = null;
+                        } else if (maybe_unit_reference) |ref| {
+                            maybe_unit_reference = game.world.units.nextReference(ref);
+                        } else {
+                            maybe_unit_reference = game.world.units.firstReference(selected_idx);
                         }
-
-                        if (!attacked) _ = try game.move(maybe_unit_reference.?, mouse_idx);
-
-                        maybe_selected_idx = null;
-                    } else if (maybe_unit_reference) |ref| {
-                        maybe_unit_reference = game.world.units.nextReference(ref);
                     } else {
-                        maybe_unit_reference = game.world.units.firstReference(selected_idx);
+                        maybe_selected_idx = mouse_idx;
+                        maybe_unit_reference = game.world.units.firstReference(mouse_idx);
                     }
-                } else {
-                    maybe_selected_idx = mouse_idx;
-                    maybe_unit_reference = game.world.units.firstReference(mouse_idx);
-                }
 
-                // BUILD IMPROVEMENTS MENU!
-                if (maybe_unit_reference) |ref| {
-                    improvement_window.clearItems();
-                    if (game.world.canDoImprovementWork(ref, .remove_vegetation, &game.rules)) {
-                        improvement_window.addItem(.remove_vegetation, "Clear Vegetation");
-                    }
-                    for (0..game.rules.building_count) |bi| {
-                        const b: Rules.Building = @enumFromInt(bi);
-
-                        if (game.world.canDoImprovementWork(ref, .{ .building = b }, &game.rules)) {
-                            var buf: [255]u8 = undefined;
-                            const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&game.rules)});
-                            improvement_window.addItem(.{ .building = b }, label);
-                        } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b }, &game.rules)) {
-                            var buf: [255]u8 = undefined;
-                            const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&game.rules)});
-                            improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
+                    // BUILD IMPROVEMENTS MENU!
+                    if (maybe_unit_reference) |ref| {
+                        improvement_window.clearItems();
+                        if (game.world.canDoImprovementWork(ref, .remove_vegetation, &game.rules)) {
+                            improvement_window.addItem(.remove_vegetation, "Clear Vegetation");
                         }
+                        for (0..game.rules.building_count) |bi| {
+                            const b: Rules.Building = @enumFromInt(bi);
+
+                            if (game.world.canDoImprovementWork(ref, .{ .building = b }, &game.rules)) {
+                                var buf: [255]u8 = undefined;
+                                const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&game.rules)});
+                                improvement_window.addItem(.{ .building = b }, label);
+                            } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b }, &game.rules)) {
+                                var buf: [255]u8 = undefined;
+                                const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&game.rules)});
+                                improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
+                            }
+                        }
+                        if (game.world.canDoImprovementWork(ref, .{ .transport = .road }, &game.rules))
+                            improvement_window.addItem(.{ .transport = .road }, "Transport: \n Road");
+                        if (game.world.canDoImprovementWork(ref, .{ .transport = .rail }, &game.rules))
+                            improvement_window.addItem(.{ .transport = .rail }, "Transport: \n Rail");
                     }
-                    if (game.world.canDoImprovementWork(ref, .{ .transport = .road }, &game.rules))
-                        improvement_window.addItem(.{ .transport = .road }, "Transport: \n Road");
-                    if (game.world.canDoImprovementWork(ref, .{ .transport = .rail }, &game.rules))
-                        improvement_window.addItem(.{ .transport = .rail }, "Transport: \n Rail");
                 }
-            }
 
-            if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
-                const clicked_tile = camera.getMouseTile(
-                    game.world.grid,
-                    bounding_box,
-                    texture_set,
-                );
+                if (raylib.IsMouseButtonPressed(raylib.MOUSE_BUTTON_RIGHT)) {
+                    const clicked_tile = camera.getMouseTile(
+                        game.world.grid,
+                        bounding_box,
+                        texture_set,
+                    );
 
-                for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
-                    if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world, &game.rules);
+                    for (game.world.cities.keys(), game.world.cities.values()) |city_idx, *city| {
+                        if (city_idx == clicked_tile) _ = try city.expandBorder(&game.world, &game.rules);
 
-                    if (try game.unsetWorked(city_idx, clicked_tile)) |_| break;
-                    if (try game.setWorked(city_idx, clicked_tile)) |_| break;
+                        if (try game.unsetWorked(city_idx, clicked_tile)) |_| break;
+                        if (try game.setWorked(city_idx, clicked_tile)) |_| break;
+                    }
                 }
-            }
-        }
-        // SETTLE CITY
-        if (raylib.IsKeyPressed(raylib.KEY_B)) {
-            if (maybe_unit_reference) |unit_ref| {
-                _ = try game.settleCity(unit_ref);
             }
         }
 
@@ -529,7 +531,16 @@ pub fn main() !void {
             texture_set,
             &game.rules,
         );
+
         if (maybe_selected_idx) |selected_idx| {
+            render.renderTextureHex(
+                selected_idx,
+                game.world.grid,
+                texture_set.edge_textures[0],
+                .{ .tint = .{ .r = 250, .g = 100, .b = 100, .a = 150 } },
+                texture_set,
+            );
+
             if (raylib.IsKeyDown(raylib.KEY_M)) {
                 for (bounding_box.x_min..bounding_box.x_max) |x| {
                     for (bounding_box.y_min..bounding_box.y_max) |y| {
@@ -539,15 +550,6 @@ pub fn main() !void {
                 }
             }
 
-            render.renderTextureHex(
-                selected_idx,
-                game.world.grid,
-                texture_set.edge_textures[0],
-                .{ .tint = .{ .r = 250, .g = 100, .b = 100, .a = 150 } },
-                texture_set,
-            );
-        }
-        if (maybe_selected_idx) |selected_idx| {
             if (raylib.IsKeyDown(raylib.KEY_X)) {
                 var vision_set = hex_set.HexSet(0).init(gpa.allocator());
                 defer vision_set.deinit();
@@ -559,6 +561,7 @@ pub fn main() !void {
                         render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } }, texture_set);
                 }
             }
+
             if (raylib.IsKeyDown(raylib.KEY_Z)) {
                 for (bounding_box.x_min..bounding_box.x_max) |x| {
                     for (bounding_box.y_min..bounding_box.y_max) |y| {
