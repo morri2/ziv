@@ -15,7 +15,7 @@ pub fn create(port: u16) !Self {
     const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
     errdefer std.os.close(socket);
 
-    const address = std.net.Ip4Address.parse("127.0.0.1", port) catch unreachable;
+    const address = std.net.Ip4Address.parse("0.0.0.0", port) catch unreachable;
 
     try std.os.bind(socket, @ptrCast(&address.sa), address.getOsSockLen());
 
