@@ -38,6 +38,8 @@ pub const std_options = struct {
     };
 };
 
+const default_port: u16 = 27015;
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -45,8 +47,9 @@ pub fn main() !void {
     const clap_params = comptime clap.parseParamsComptime(
         \\-h, --help          Display this help and exit.
         \\-r, --rules <str>   Path to rules directory.
-        \\-c, --client        Start as client.
-        \\-h, --host <u8>  Start as host with x number of slots.
+        \\-c, --client <str>  Start as client connecting to address.
+        \\-h, --host <u8>     Start as host with x number of slots.
+        \\-p, --port <u16>    Set port to use
         \\
     );
 
@@ -59,9 +62,13 @@ pub fn main() !void {
         return clap.help(std.io.getStdErr().writer(), clap.Help, &clap_params, .{});
     }
 
-    var game = if (clap_res.args.client != 0) blk: {
-        const socket = try Socket.connect(try std.net.Ip4Address.parse("127.0.0.1", 2000));
+    var game = if (clap_res.args.client) |addr_str| blk: {
+        const socket = try Socket.connect(try std.net.Ip4Address.parse(
+            addr_str,
+            clap_res.args.port orelse default_port,
+        ));
         errdefer socket.close();
+
         break :blk try Game.connect(
             socket,
             gpa.allocator(),
@@ -69,7 +76,7 @@ pub fn main() !void {
     } else blk: {
         const connections = clap_res.args.host orelse 0;
 
-        const socket = try Socket.create(2000);
+        const socket = try Socket.create(clap_res.args.port orelse default_port);
         defer socket.close();
 
         const players = try gpa.allocator().alloc(Game.Player, connections);
