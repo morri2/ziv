@@ -35,13 +35,13 @@ pub fn renderWorld(
     rules: *const Rules,
 ) void {
     renderTerrainLayer(world, bbox, maybe_view, ts, rules);
+    renderTerraIncognita(world.grid, bbox, maybe_view, ts);
 
-    renderCities(world, bbox, ts);
+    renderCities(world, bbox, maybe_view, ts);
     renderUnits(world, bbox, maybe_view, maybe_unit_reference, zoom, ts);
     renderYields(world, bbox, maybe_view, ts, rules);
 
     renderResources(world, bbox, maybe_view, ts);
-    renderTerraIncognita(world.grid, bbox, maybe_view, ts);
 }
 
 pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
@@ -117,13 +117,14 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
     }
 }
 
-pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void {
+pub fn renderCities(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
     for (world.cities.keys(), world.cities.values()) |idx, city| {
         const x = world.grid.xFromIdx(idx);
         const y = world.grid.yFromIdx(idx);
         if (!bbox.contains(x, y)) continue;
 
         for (city.claimed.indices()) |claimed| {
+            if (maybe_view) |view| if (!view.in_view.contains(claimed)) continue;
             render.renderTextureInHex(claimed, world.grid, ts.city_border_texture, 0, 0, .{
                 .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
                 .scale = 0.95,
@@ -135,6 +136,8 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
                 }, ts);
             }
         }
+
+        if (maybe_view) |view| if (!view.in_view.contains(idx)) return;
 
         render.renderTextureInHex(idx, world.grid, ts.city_border_texture, 0, 0, .{
             .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
