@@ -170,7 +170,7 @@ pub fn HexSet(comptime bits: u16) type {
         }
 
         pub fn floodFillFrom(self: *Self, idx: Idx, steps: u32, grid: *const Grid) !void {
-            comptime std.debug.assert(self.count() == 0);
+            std.debug.assert(self.count() == 0);
             try self.add(idx);
             var current_set_index: usize = self.count() - 1;
             for (0..steps) |_| {
