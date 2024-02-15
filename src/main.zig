@@ -541,13 +541,10 @@ pub fn main() !void {
             edit_window.renderUpdate(accept_input);
             if (edit_window.checkMouseCapture()) accept_input = false;
 
-            unit_info_window.renderUpdate(accept_input);
-            if (unit_info_window.checkMouseCapture()) accept_input = false;
-
-            terrain_info_window.renderUpdate(accept_input);
-            if (terrain_info_window.checkMouseCapture()) accept_input = false;
-
             if (maybe_selected_idx) |selected_index| {
+                terrain_info_window.renderUpdate(accept_input);
+                if (terrain_info_window.checkMouseCapture()) accept_input = false;
+
                 if (game.world.cities.get(selected_index)) |city| if (city.faction_id == game.civ_id.toFactionID()) {
                     city_construction_window.renderUpdate(accept_input);
                     if (city_construction_window.checkMouseCapture()) accept_input = false;
@@ -555,6 +552,9 @@ pub fn main() !void {
             }
 
             if (maybe_unit_reference) |ref| if (game.world.units.deref(ref)) |unit| {
+                unit_info_window.renderUpdate(accept_input);
+                if (unit_info_window.checkMouseCapture()) accept_input = false;
+
                 if (unit.faction_id == game.civ_id.toFactionID()) {
                     promotion_window.renderUpdate(accept_input);
                     if (promotion_window.checkMouseCapture()) accept_input = false;
