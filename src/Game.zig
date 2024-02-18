@@ -9,83 +9,51 @@ const Units = @import("Units.zig");
 const City = @import("City.zig");
 const View = @import("View.zig");
 
+const Action = @import("action.zig").Action;
+
 const Socket = @import("Socket.zig");
 
+const hex_set = @import("hex_set.zig");
+const serialization = @import("serialization.zig");
+
 const Self = @This();
-
-pub const Action = union(Type) {
-    next_turn: void,
-    move_unit: struct {
-        ref: Units.Reference,
-        to: Idx,
-    },
-    attack: struct {
-        attacker: Units.Reference,
-        to: Idx,
-    },
-    set_city_production: struct {
-        city_idx: Idx,
-        production: City.ProductionTarget,
-    },
-    settle_city: Units.Reference,
-    unset_worked: struct {
-        city_idx: Idx,
-        idx: Idx,
-    },
-    set_worked: struct {
-        city_idx: Idx,
-        idx: Idx,
-    },
-
-    promote_unit: struct {
-        unit: Units.Reference,
-        promotion: Rules.Promotion,
-    },
-
-    tile_work: struct {
-        unit: Units.Reference,
-        work: World.TileWork,
-    },
-
-    pub const Type = enum(u8) {
-        // Zero is reserved for ping packet
-        next_turn = 1,
-        move_unit = 2,
-        attack = 3,
-        set_city_production = 4,
-        settle_city = 5,
-        unset_worked = 6,
-        set_worked = 7,
-        promote_unit = 8,
-        tile_work = 9,
-    };
-};
 
 pub const Player = struct {
     civ_id: World.CivilizationID,
     socket: Socket,
 };
 
+pub const Map = union(enum) {
+    new: struct {
+        width: u32,
+        height: u32,
+        wrap_around: bool,
+    },
+    new_load_terrain: std.fs.File,
+};
+
 // Host specific
 is_host: bool,
 players: []Player,
+
+views: []View,
 
 // Client specific
 socket: Socket,
 
 civ_id: World.CivilizationID,
+
+rules: Rules,
 world: World,
 
 allocator: std.mem.Allocator,
 
 pub fn host(
-    width: u32,
-    height: u32,
-    wrap_around: bool,
+    map: Map,
     civ_id: World.CivilizationID,
     civ_count: u8,
     players: []Player,
-    rules: *const Rules,
+    rules_dir: std.fs.Dir,
     allocator: std.mem.Allocator,
 ) !Self {
     std.debug.assert(@intFromEnum(civ_id) < civ_count);
@@ -97,31 +65,40 @@ pub fn host(
 
     self.players = players;
 
-    self.world = try World.init(
-        allocator,
-        width,
-        height,
-        wrap_around,
-        civ_count,
-        rules,
-    );
+    self.rules = try Rules.parse(rules_dir, allocator);
+    errdefer self.rules.deinit();
+
+    self.world = switch (map) {
+        .new => |grid| try World.init(
+            allocator,
+            grid.width,
+            grid.height,
+            grid.wrap_around,
+        ),
+        .new_load_terrain => |file| try World.deserializeTerrain(file.reader(), allocator),
+    };
     errdefer self.world.deinit();
+
+    self.views = try allocator.alloc(View, civ_count);
+    errdefer allocator.free(self.views);
+
+    for (self.views) |*view| view.* = try View.init(allocator, &self.world.grid);
+    errdefer for (self.views) |*view| view.deinit();
 
     for (self.players) |player| {
         try player.socket.setBlocking(true);
         const writer = player.socket.writer();
-        try writer.writeInt(u32, width, .little);
-        try writer.writeInt(u32, height, .little);
-        try writer.writeByte(@intFromBool(wrap_around));
         try writer.writeByte(civ_count);
         try writer.writeByte(@intFromEnum(player.civ_id));
+        try self.rules.serialize(writer);
+        try self.world.serializeTerrain(writer);
         try player.socket.setBlocking(false);
     }
 
     return self;
 }
 
-pub fn connect(socket: Socket, rules: *const Rules, allocator: std.mem.Allocator) !Self {
+pub fn connect(socket: Socket, allocator: std.mem.Allocator) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
     self.is_host = false;
@@ -131,22 +108,22 @@ pub fn connect(socket: Socket, rules: *const Rules, allocator: std.mem.Allocator
 
     try self.socket.setBlocking(true);
     const reader = self.socket.reader();
-    const width = try reader.readInt(u32, .little);
-    const height = try reader.readInt(u32, .little);
-    const wrap_around: bool = @bitCast(@as(u1, @intCast(try reader.readByte())));
     const civ_count = try reader.readByte();
     self.civ_id = @enumFromInt(try reader.readByte());
+
+    self.rules = try Rules.deserialize(reader, allocator);
+    errdefer self.rules.deinit();
+
+    self.world = try World.deserializeTerrain(reader, allocator);
+    errdefer self.world.deinit();
+
     try self.socket.setBlocking(false);
 
-    self.world = try World.init(
-        allocator,
-        width,
-        height,
-        wrap_around,
-        civ_count,
-        rules,
-    );
-    errdefer self.world.deinit();
+    self.views = try allocator.alloc(View, civ_count);
+    errdefer allocator.free(self.views);
+
+    for (self.views) |*view| view.* = try View.init(allocator, &self.world.grid);
+    errdefer for (self.views) |*view| view.deinit();
 
     return self;
 }
@@ -160,24 +137,27 @@ pub fn deinit(self: *Self) void {
     } else {
         self.socket.close();
     }
+    for (self.views) |*view| view.deinit();
+    self.allocator.free(self.views);
     self.world.deinit();
+    self.rules.deinit();
 }
 
 pub fn getView(self: *const Self) *const View {
-    return &self.world.views[@intFromEnum(self.civ_id)];
+    return &self.views[@intFromEnum(self.civ_id)];
 }
 
 // Debug function to test using different players
 pub fn nextPlayer(self: *Self) void {
     const next_int_id = @intFromEnum(self.civ_id) + 1;
-    self.civ_id = if (next_int_id == self.world.views.len) @enumFromInt(0) else @enumFromInt(next_int_id);
+    self.civ_id = if (next_int_id == self.views.len) @enumFromInt(0) else @enumFromInt(next_int_id);
 }
 
-pub fn nextTurn(self: *Self) !bool {
+pub fn nextTurn(self: *Self) !?Action.Result {
     return try self.performAction(.next_turn);
 }
 
-pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
+pub fn move(self: *Self, reference: Units.Reference, to: Idx) !?Action.Result {
     return try self.performAction(.{
         .move_unit = .{
             .ref = reference,
@@ -186,7 +166,7 @@ pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
     });
 }
 
-pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
+pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !?Action.Result {
     return try self.performAction(.{
         .attack = .{
             .attacker = attacker,
@@ -195,7 +175,7 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
     });
 }
 
-pub fn setCityProduction(self: *Self, city_idx: Idx, production: City.ProductionTarget) !bool {
+pub fn setCityProduction(self: *Self, city_idx: Idx, production: City.ProductionTarget) !?Action.Result {
     return try self.performAction(.{
         .set_city_production = .{
             .city_idx = city_idx,
@@ -204,11 +184,11 @@ pub fn setCityProduction(self: *Self, city_idx: Idx, production: City.Production
     });
 }
 
-pub fn settleCity(self: *Self, settler_reference: Units.Reference) !bool {
+pub fn settleCity(self: *Self, settler_reference: Units.Reference) !?Action.Result {
     return try self.performAction(.{ .settle_city = settler_reference });
 }
 
-pub fn unsetWorked(self: *Self, city_idx: Idx, idx: Idx) !bool {
+pub fn unsetWorked(self: *Self, city_idx: Idx, idx: Idx) !?Action.Result {
     return try self.performAction(.{
         .unset_worked = .{
             .city_idx = city_idx,
@@ -217,7 +197,7 @@ pub fn unsetWorked(self: *Self, city_idx: Idx, idx: Idx) !bool {
     });
 }
 
-pub fn setWorked(self: *Self, city_idx: Idx, idx: Idx) !bool {
+pub fn setWorked(self: *Self, city_idx: Idx, idx: Idx) !?Action.Result {
     return try self.performAction(.{
         .set_worked = .{
             .city_idx = city_idx,
@@ -226,253 +206,133 @@ pub fn setWorked(self: *Self, city_idx: Idx, idx: Idx) !bool {
     });
 }
 
-pub fn promoteUnit(self: *Self, unit_ref: Units.Reference, promotion: Rules.Promotion) !bool {
+pub fn promoteUnit(self: *Self, unit_ref: Units.Reference, promotion: Rules.Promotion) !?Action.Result {
     return try self.performAction(.{ .promote_unit = .{ .unit = unit_ref, .promotion = promotion } });
 }
 
-fn canPerformAction(self: *const Self, faction_id: World.FactionID, action: Action) bool {
-    switch (action) {
-        .next_turn => {},
-        .move_unit => |info| {
-            const unit = self.world.units.deref(info.ref) orelse return false;
-
-            if (unit.faction_id != faction_id) return false;
-
-            if (self.world.moveCost(info.ref, info.to) == .disallowed) return false;
+pub fn tileWork(self: *Self, ref: Units.Reference, work: World.TileWork) !?Action.Result {
+    return try self.performAction(.{
+        .tile_work = .{
+            .unit = ref,
+            .work = work,
         },
-        .attack => |info| {
-            const unit = self.world.units.deref(info.attacker) orelse return false;
-
-            if (unit.faction_id != faction_id) return false;
-
-            if (!try self.world.canAttack(info.attacker, info.to)) return false;
-        },
-        .set_city_production => |info| {
-            const city = self.world.cities.get(info.city_idx) orelse return false;
-            if (city.faction_id != faction_id) return false;
-        },
-        .settle_city => |settler_ref| {
-            const unit = self.world.units.deref(settler_ref) orelse return false;
-
-            if (unit.faction_id != faction_id) return false;
-
-            if (!Rules.Promotion.Effect.settle_city.in(unit.promotions, self.world.rules)) return false;
-
-            if (!self.world.canSettleCityAt(settler_ref.idx, faction_id)) return false;
-        },
-        .unset_worked => |info| {
-            const city = self.world.cities.get(info.city_idx) orelse return false;
-            if (!city.worked.contains(info.idx)) return false;
-        },
-        .set_worked => |info| {
-            const city = self.world.cities.get(info.city_idx) orelse return false;
-
-            if (city.unassignedPopulation() == 0) return false;
-
-            if (!city.claimed.contains(info.idx)) return false;
-
-            if (city.worked.contains(info.idx)) return false;
-        },
-        .promote_unit => |info| {
-            _ = self.world.units.deref(info.unit) orelse return false;
-        },
-        .tile_work => |info| {
-            return self.world.canDoImprovementWork(info.unit, info.work);
-        },
-    }
-
-    return true;
+    });
 }
 
-fn execAction(self: *Self, faction_id: World.FactionID, action: Action) !bool {
-    if (!self.canPerformAction(faction_id, action)) return false;
-
-    var view_update: bool = false;
-    switch (action) {
-        .next_turn => try self.world.nextTurn(),
-        .move_unit => |info| {
-            if (!try self.world.move(info.ref, info.to)) unreachable;
-
-            view_update = true;
+pub fn addUnit(self: *Self, idx: Idx, unit_type: Rules.UnitType, faction_id: World.FactionID) !?Action.Result {
+    return try self.performAction(.{
+        .add_unit = .{
+            .idx = idx,
+            .unit_type = unit_type,
+            .faction_id = faction_id,
         },
-        .attack => |info| {
-            if (!try self.world.attack(info.attacker, info.to)) unreachable;
-
-            view_update = true;
-        },
-        .set_city_production => |info| {
-            const city = self.world.cities.getPtr(info.city_idx) orelse unreachable;
-
-            _ = city.startConstruction(info.production, self.world.rules);
-        },
-        .settle_city => |settler_ref| {
-            if (!try self.world.settleCity(settler_ref)) unreachable;
-
-            view_update = true;
-        },
-        .unset_worked => |info| {
-            const city = self.world.cities.getPtr(info.city_idx) orelse unreachable;
-
-            if (!city.unsetWorked(info.idx)) unreachable;
-        },
-        .set_worked => |info| {
-            const city = self.world.cities.getPtr(info.city_idx) orelse unreachable;
-
-            if (!try city.setWorkedWithAutoReassign(info.idx, &self.world)) unreachable;
-        },
-        .promote_unit => |info| {
-            var unit = self.world.units.derefToPtr(info.unit) orelse unreachable;
-            unit.promotions.set(@intFromEnum(info.promotion));
-
-            view_update = true;
-        },
-        .tile_work => |info| {
-            if (!self.world.doImprovementWork(info.unit, info.work)) unreachable;
-
-            view_update = true;
-        },
-    }
-
-    if (view_update) try self.world.fullUpdateViews();
-
-    return true;
+    });
 }
 
-pub fn performAction(self: *Self, action: Action) !bool {
+pub fn addCity(self: *Self, idx: Idx, faction_id: World.FactionID) !?Action.Result {
+    return try self.performAction(.{
+        .add_city = .{
+            .idx = idx,
+            .faction_id = faction_id,
+        },
+    });
+}
+
+pub fn update(self: *Self) !Action.Result {
+    const result = if (self.is_host) try self.hostUpdate() else try self.clientUpdate();
+    if (result.view_change) try self.updateViews();
+    return result;
+}
+
+pub fn updateViews(self: *Self) !void {
+    for (self.views) |*view| view.unsetAllVisible(&self.world, &self.rules);
+
+    // Add unit vision
+    {
+        var vision_set = hex_set.HexSet(0).init(self.allocator);
+        defer vision_set.deinit();
+
+        var iter = self.world.units.iterator();
+        while (iter.next()) |item| {
+            if (item.unit.faction_id.toCivilizationID()) |civ_id| {
+                try self.world.unitFov(&item.unit, item.idx, &vision_set, &self.rules);
+                try self.views[@intFromEnum(civ_id)].addVisionSet(vision_set);
+                vision_set.clear();
+            }
+        }
+    }
+
+    for (self.world.cities.values()) |city| {
+        if (city.faction_id.toCivilizationID()) |civ_id| {
+            try self.views[@intFromEnum(civ_id)].addVision(city.position);
+            try self.views[@intFromEnum(civ_id)].addVisionSet(city.claimed);
+            try self.views[@intFromEnum(civ_id)].addVisionSet(city.adjacent);
+        }
+    }
+}
+
+fn performAction(self: *Self, action: Action) !?Action.Result {
+    var result: ?Action.Result = Action.Result{};
     if (self.is_host) {
         const faction_id = self.civ_id.toFactionID();
-        if (!try self.execAction(faction_id, action)) return false;
+        result = try action.exec(faction_id, &self.world, &self.rules) orelse return null;
+
+        if (result.?.view_change) try self.updateViews();
 
         // Broadcast action to all players
         for (self.players) |player| {
             const writer = player.socket.writer();
             try writer.writeByte(@intFromEnum(faction_id));
-            try sendAction(writer, action);
+            try serialization.serializeValue(writer, action);
         }
     } else {
-        if (!self.canPerformAction(self.civ_id.toFactionID(), action)) return false;
-        try sendAction(self.socket.writer(), action);
+        if (!action.possible(self.civ_id.toFactionID(), &self.world, &self.rules)) return null;
+        try serialization.serializeValue(self.socket.writer(), action);
     }
-    return true;
+    return result;
 }
 
-pub fn update(self: *Self) !void {
-    if (self.is_host) try self.hostUpdate() else try self.clientUpdate();
-}
-
-fn hostUpdate(self: *Self) !void {
+fn hostUpdate(self: *Self) !Action.Result {
+    var result = Action.Result{};
     for (self.players) |player| {
         const faction_id = player.civ_id.toFactionID();
         while (try player.socket.hasData()) {
             try player.socket.setBlocking(true);
-            const action = try recieveAction(player.socket.reader());
-            if (try self.execAction(faction_id, action)) {
+            const action = try serialization.deserializeValue(player.socket.reader(), Action);
+            if (try action.exec(faction_id, &self.world, &self.rules)) |exec_result| {
                 for (self.players) |p| {
                     const writer = p.socket.writer();
                     try writer.writeByte(@intFromEnum(faction_id));
-                    try sendAction(writer, action);
+                    try serialization.serializeValue(writer, action);
                 }
+                result = result.unionWith(exec_result);
+            } else {
+                // TODO: Resync
+                std.debug.panic("Failed to execute action: {s}", .{@tagName(std.meta.activeTag(action))});
             }
 
             try player.socket.setBlocking(false);
         }
     }
+    return result;
 }
 
-fn clientUpdate(self: *Self) !void {
+fn clientUpdate(self: *Self) !Action.Result {
+    var result = Action.Result{};
     while (try self.socket.hasData()) {
         try self.socket.setBlocking(true);
         const reader = self.socket.reader();
         const faction_id: World.FactionID = @enumFromInt(try reader.readByte());
 
-        const action = try recieveAction(self.socket.reader());
+        const action = try serialization.deserializeValue(self.socket.reader(), Action);
+        if (try action.exec(faction_id, &self.world, &self.rules)) |exec_result| {
+            result = result.unionWith(exec_result);
+        } else {
+            // TODO: Resync
+            std.debug.panic("Failed to execute action: {s}", .{@tagName(std.meta.activeTag(action))});
+        }
 
-        if (!try self.execAction(faction_id, action)) unreachable;
         try self.socket.setBlocking(false);
     }
-}
-
-fn sendAction(writer: Socket.Writer, action: Action) !void {
-    try serialize(writer, action);
-}
-
-fn recieveAction(reader: Socket.Reader) !Action {
-    return try deserialize(reader, Action);
-}
-
-fn serialize(writer: Socket.Writer, value: anytype) !void {
-    const Value = @TypeOf(value);
-    switch (@typeInfo(Value)) {
-        .Void => {},
-        .Bool => try writer.writeByte(@intFromBool(value)),
-        .Int => try writer.writeInt(getAlignedInt(Value), value, .little),
-        .Enum => |info| try writer.writeInt(getAlignedInt(info.tag_type), @intFromEnum(value), .little),
-        .Union => |info| {
-            const TagType = info.tag_type orelse unreachable;
-            try writer.writeInt(
-                getAlignedInt(std.meta.Tag(TagType)),
-                @intFromEnum(std.meta.activeTag(value)),
-                .little,
-            );
-            inline for (info.fields) |field| {
-                if (value == @field(TagType, field.name)) try serialize(writer, @field(value, field.name));
-            }
-        },
-        .Struct => |info| {
-            if (info.backing_integer) |backing_integer| {
-                const Int = getAlignedInt(backing_integer);
-                const struct_int: Int = @bitCast(value);
-                try writer.writeInt(Int, struct_int, .little);
-            } else {
-                inline for (info.fields) |field| {
-                    try serialize(writer, @field(value, field.name));
-                }
-            }
-        },
-        else => @compileError("Unimplemented serialization type: " ++ @typeName(Value)),
-    }
-}
-
-fn deserialize(reader: Socket.Reader, comptime Value: type) !Value {
-    return switch (@typeInfo(Value)) {
-        .Void => {},
-        .Bool => blk: {
-            const bool_int: u1 = @intCast(try reader.readByte());
-            break :blk @bitCast(bool_int);
-        },
-        .Int => @intCast(try reader.readInt(getAlignedInt(Value), .little)),
-        .Enum => |info| @enumFromInt(try reader.readInt(getAlignedInt(info.tag_type), .little)),
-        .Union => |info| blk: {
-            const TagType = info.tag_type orelse unreachable;
-            const tag: TagType = @enumFromInt(try reader.readInt(
-                getAlignedInt(std.meta.Tag(TagType)),
-                .little,
-            ));
-            inline for (info.fields) |field| {
-                if (@field(TagType, field.name) == tag) break :blk @unionInit(Value, field.name, try deserialize(reader, field.type));
-            }
-            unreachable;
-        },
-        .Struct => |info| blk: {
-            if (info.backing_integer) |backing_integer| {
-                const Int = getAlignedInt(backing_integer);
-                const struct_int: backing_integer = @intCast(try reader.readInt(Int, .little));
-                break :blk @bitCast(struct_int);
-            } else {
-                var value: Value = undefined;
-                inline for (info.fields) |field| {
-                    @field(value, field.name) = try deserialize(reader, field.type);
-                }
-                break :blk value;
-            }
-        },
-        else => @compileError("Unimplemented deserialization type: " ++ @typeName(Value)),
-    };
-}
-
-fn getAlignedInt(comptime Int: type) type {
-    return switch (@typeInfo(Int)) {
-        .Int => |info| std.meta.Int(info.signedness, std.mem.alignForward(u16, info.bits, 8)),
-        else => unreachable,
-    };
+    return result;
 }

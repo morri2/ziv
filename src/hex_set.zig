@@ -19,13 +19,7 @@ pub fn HexSet(comptime bits: u16) type {
         pub fn initFloodFill(idx: Idx, steps: u32, grid: *const Grid, allocator: std.mem.Allocator) !Self {
             var self = Self.init(allocator);
             errdefer self.deinit();
-            try self.set(idx, 0);
-            var current_set_index: usize = 0;
-            for (0..steps) |_| {
-                const next_set_index = self.count();
-                try self.addAdjacentInner(current_set_index, grid);
-                current_set_index = next_set_index;
-            }
+            try self.floodFillFrom(idx, steps, grid);
             return self;
         }
 
@@ -175,6 +169,17 @@ pub fn HexSet(comptime bits: u16) type {
             }
         }
 
+        pub fn floodFillFrom(self: *Self, idx: Idx, steps: u32, grid: *const Grid) !void {
+            std.debug.assert(self.count() == 0);
+            try self.add(idx);
+            var current_set_index: usize = self.count() - 1;
+            for (0..steps) |_| {
+                const next_set_index = self.count();
+                try self.addAdjacentInner(current_set_index, grid);
+                current_set_index = next_set_index;
+            }
+        }
+
         pub fn addAdjacent(self: *Self, grid: *const Grid) !void {
             if (self.count() == 0) return;
             try self.addAdjacentInner(0, grid);
@@ -184,7 +189,7 @@ pub fn HexSet(comptime bits: u16) type {
             for (other.indices()) |idx| {
                 const neighbours = grid.neighbours(idx);
                 for (neighbours) |maybe_neighbour_idx| {
-                    if (maybe_neighbour_idx) |neighbour_index| try self.set(neighbour_index, 0);
+                    if (maybe_neighbour_idx) |neighbour_index| try self.add(neighbour_index);
                 }
             }
         }
@@ -195,7 +200,7 @@ pub fn HexSet(comptime bits: u16) type {
                 const current_idx = self.indices()[i];
                 const neighbours = grid.neighbours(current_idx);
                 for (neighbours) |maybe_neighbour_idx| {
-                    if (maybe_neighbour_idx) |neighbour_index| try self.set(neighbour_index, 0);
+                    if (maybe_neighbour_idx) |neighbour_index| try self.add(neighbour_index);
                 }
             }
         }

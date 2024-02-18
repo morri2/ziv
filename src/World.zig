@@ -10,7 +10,6 @@ const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
 
 const City = @import("City.zig");
-const View = @import("View.zig");
 
 const Grid = @import("Grid.zig");
 const Edge = Grid.Edge;
@@ -43,11 +42,11 @@ pub const CivilizationID = enum(u5) {
     }
 };
 
-/// The lowest index is always in low :))
 pub const WorkInProgress = struct {
     work_type: TileWork,
     progress: u8,
 };
+
 pub const TileWork = union(TileWorkType) {
     building: Building,
     remove_vegetation_building: Building,
@@ -66,112 +65,6 @@ pub const TileWork = union(TileWorkType) {
     };
 };
 
-pub fn workAllowedOn(self: *const Self, idx: Idx, work: TileWork) bool {
-    if (self.cities.contains(idx)) return false;
-    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
-    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
-
-    switch (work) {
-        .building => |b| {
-            const a = Rules.Building.allowedOn(b, self.terrain[idx], self.rules);
-            switch (a) {
-                .allowed_if_resource => {
-                    return b.connectsResource((self.resources.get(idx) orelse return false).type, self.rules);
-                },
-                .allowed => return true,
-                else => return false,
-            }
-        },
-        .remove_vegetation_building => |b| {
-            if (!self.workAllowedOn(idx, .remove_vegetation)) return false;
-            switch (Rules.Building.allowedOn(b, self.terrain[idx], self.rules)) {
-                .allowed_after_clear_if_resource => {
-                    return b.connectsResource((self.resources.get(idx) orelse return false).type, self.rules);
-                },
-                .allowed_after_clear => return true,
-                else => return false,
-            }
-        },
-        .transport => |_| {
-            return !self.terrain[idx].attributes(self.rules).is_water;
-        },
-        .remove_vegetation => {
-            if (self.terrain[idx].vegetation(self.rules) == .none) return false;
-            return true;
-        },
-
-        else => return false,
-    }
-}
-
-pub fn canDoImprovementWork(self: *const Self, unit_ref: Units.Reference, work: TileWork) bool {
-    if (!self.workAllowedOn(unit_ref.idx, work)) return false;
-
-    const unit = self.units.deref(unit_ref) orelse return false;
-    if (unit.movement <= 0) return false;
-
-    switch (work) {
-        .building,
-        .remove_vegetation_building,
-        .remove_vegetation,
-        => if (!Rules.Promotion.Effect.in(.build_improvement, unit.promotions, self.rules)) return false,
-        .transport => |t| {
-            if (t == .road and !Rules.Promotion.Effect.in(.build_roads, unit.promotions, self.rules)) return false;
-            if (t == .rail and !Rules.Promotion.Effect.in(.build_rail, unit.promotions, self.rules)) return false;
-        },
-        else => return false, // TODO
-    }
-    return true;
-}
-
-pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork) bool {
-    if (!self.canDoImprovementWork(unit_ref, work)) return false;
-    const unit = self.units.derefToPtr(unit_ref) orelse return false;
-
-    progress_blk: {
-        if (self.work_in_progress.getPtr(unit_ref.idx)) |wip| {
-            if (@intFromEnum(wip.work_type) == @intFromEnum(work)) {
-                if (switch (wip.work_type) {
-                    .building => |b| b == work.building,
-                    .transport => |t| t == work.transport,
-                    .remove_vegetation_building => |b| b == work.remove_vegetation_building,
-                    else => true,
-                }) {
-                    wip.progress += 1;
-                    break :progress_blk;
-                }
-            }
-        }
-
-        self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = work, .progress = 1 }) catch undefined;
-    }
-    if (self.work_in_progress.get(unit_ref.idx)) |wip| {
-        if (wip.progress >= 3) // TODO progress needed should be dependent on project
-        {
-            _ = self.work_in_progress.swapRemove(unit_ref.idx);
-            switch (wip.work_type) {
-                .building => |b| self.improvements[unit_ref.idx].building = b,
-                .remove_vegetation => self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(self.rules),
-                .remove_vegetation_building => |b| {
-                    self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(self.rules);
-                    self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = .{ .building = b }, .progress = 0 }) catch unreachable;
-                },
-                .transport => |t| self.improvements[unit_ref.idx].transport = t,
-                else => {
-                    std.debug.print("UNIMPLEMENTED!\n", .{});
-                },
-            }
-        }
-    } else unreachable;
-    unit.movement = 0;
-    // YEET EM BOATS
-    if (Rules.Promotion.Effect.charge_to_improve.in(unit.promotions, self.rules)) {
-        if (unit.useCharge(self.rules)) self.units.removeReference(unit_ref);
-    }
-
-    return true;
-}
-
 pub const ResourceAndAmount = packed struct {
     type: Resource,
     amount: u8 = 1,
@@ -179,11 +72,7 @@ pub const ResourceAndAmount = packed struct {
 
 allocator: std.mem.Allocator,
 
-rules: *const Rules,
-
 grid: Grid,
-
-views: []View,
 
 turn: u32,
 
@@ -207,10 +96,7 @@ pub fn init(
     width: u32,
     height: u32,
     wrap_around: bool,
-    civ_count: u8,
-    rules: *const Rules,
 ) !Self {
-    std.debug.assert(civ_count >= 1);
     const grid = Grid.init(width, height, wrap_around);
 
     const terrain = try allocator.alloc(Terrain, grid.len);
@@ -221,12 +107,7 @@ pub fn init(
     errdefer allocator.free(improvements);
     @memset(improvements, std.mem.zeroes(Improvements));
 
-    const views = try allocator.alloc(View, civ_count);
-    errdefer allocator.free(views);
-    for (views) |*view| view.* = try View.init(allocator, &grid);
-
     return Self{
-        .views = views,
         .allocator = allocator,
         .grid = grid,
         .terrain = terrain,
@@ -236,8 +117,7 @@ pub fn init(
         .rivers = .{},
         .turn = 1,
         .cities = .{},
-        .rules = rules,
-        .units = Units.init(rules, allocator),
+        .units = Units.init(allocator),
     };
 }
 
@@ -251,52 +131,65 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.improvements);
     self.allocator.free(self.terrain);
 
-    for (self.cities.keys()) |city_key| self.cities.getPtr(city_key).?.deinit();
-    for (self.views) |*view| view.deinit();
-
-    self.allocator.free(self.views);
+    for (self.cities.values()) |*city| city.deinit();
     self.cities.deinit(self.allocator);
 }
 
-pub fn nextTurn(self: *Self) !void {
+pub fn nextTurn(self: *Self, rules: *const Rules) !struct {
+    view_change: bool,
+} {
+    var view_change = false;
     for (self.cities.keys(), self.cities.values()) |idx, *city| {
-        const ya = city.getWorkedTileYields(self);
+        const ya = city.getWorkedTileYields(self, rules);
 
         _ = city.processYields(&ya);
-        const growth_res = try city.checkGrowth(self);
+        const growth_res = try city.checkGrowth(self, rules);
         _ = growth_res;
 
-        var update_view = city.checkExpansion();
+        view_change = view_change or city.checkExpansion();
         const production_result = try city.checkProduction();
         switch (production_result) {
             .done => |project| switch (project) {
                 .unit => |unit_type| {
-                    try self.addUnit(idx, unit_type, city.faction_id);
-                    update_view = true;
+                    if (!try self.addUnit(idx, unit_type, city.faction_id, rules)) unreachable;
+                    view_change = true;
                 },
                 else => unreachable, // TODO
             },
             else => {},
         }
-
-        if (update_view) try self.fullUpdateViews();
     }
 
-    self.units.refresh();
+    self.units.refresh(rules);
 
     self.turn += 1;
+
+    return .{
+        .view_change = view_change,
+    };
 }
 
-pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
+pub fn canAddCity(self: *const Self, idx: Idx, faction: FactionID, rules: *const Rules) bool {
+    if (self.claimedFaction(idx)) |claimed_by| {
+        if (claimed_by != faction) return false;
+    }
+    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
+    if (self.terrain[idx].attributes(rules).is_impassable) return false;
+    if (self.terrain[idx].attributes(rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(rules).is_water) return false;
+    return true;
+}
+
+pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID, rules: *const Rules) !bool {
+    if (!self.canAddCity(idx, faction_id, rules)) return false;
     const city = try City.new(idx, faction_id, self);
-    self.terrain[idx] = self.terrain[idx].withoutVegetation(self.rules);
-    self.improvements[idx] = .{};
     try self.cities.put(self.allocator, idx, city);
+    return true;
 }
 
-pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID) !void {
-    const unit = Unit.new(unit_temp, faction, self.rules);
-    try self.units.putOrStackAutoSlot(idx, unit);
+pub fn addUnit(self: *Self, idx: Idx, unit_temp: Rules.UnitType, faction: FactionID, rules: *const Rules) !bool {
+    const unit = Unit.new(unit_temp, faction, rules);
+    return try self.units.putOrStackAutoSlot(idx, unit, rules);
 }
 
 pub fn claimed(self: *const Self, idx: Idx) bool {
@@ -305,42 +198,39 @@ pub fn claimed(self: *const Self, idx: Idx) bool {
 }
 
 pub fn claimedFaction(self: *const Self, idx: Idx) ?FactionID {
-    for (self.cities.values()) |city| if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
+    for (self.cities.values()) |city|
+        if (city.claimed.contains(idx) or city.position == idx) return city.faction_id;
     return null;
 }
 
-pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: FactionID) bool {
-    if (self.claimedFaction(idx)) |claimed_by| if (claimed_by != faction) return false;
-
-    for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
-    if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
-    if (self.terrain[idx].attributes(self.rules).is_wonder) return false;
-    if (self.terrain[idx].attributes(self.rules).is_water) return false;
-    return true;
-}
-
-pub fn settleCity(self: *Self, reference: Units.Reference) !bool {
+pub fn canSettleCity(self: *const Self, reference: Units.Reference, rules: *const Rules) bool {
     const unit = self.units.deref(reference) orelse return false;
-    if (!self.canSettleCityAt(reference.idx, unit.faction_id)) return false;
-    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, self.rules)) return false;
+    if (!Rules.Promotion.Effect.in(.settle_city, unit.promotions, rules)) return false;
     if (unit.movement <= 0) return false;
+    if (!self.canAddCity(reference.idx, unit.faction_id, rules)) return false;
+    return true;
+}
 
-    try self.addCity(reference.idx, unit.faction_id);
-    self.units.removeReference(reference); // will this fuck up the refrence held by controll?
+pub fn settleCity(self: *Self, reference: Units.Reference, rules: *const Rules) !bool {
+    if (!self.canSettleCity(reference, rules)) return false;
+    const unit = self.units.deref(reference) orelse unreachable;
+
+    if (!try self.addCity(reference.idx, unit.faction_id, rules)) unreachable;
+    self.units.removeReference(reference);
 
     return true;
 }
 
-pub fn recalculateWaterAccess(self: *Self) !void {
+pub fn recalculateWaterAccess(self: *Self, rules: *const Rules) !void {
     var new_terrain = try self.allocator.alloc(Rules.Terrain.Unpacked, self.grid.len);
     defer self.allocator.free(new_terrain);
 
     for (0..self.grid.len) |idx| {
         const terrain = self.terrain[idx];
         new_terrain[idx] = .{
-            .base = terrain.base(self.rules),
-            .feature = terrain.feature(self.rules),
-            .vegetation = terrain.vegetation(self.rules),
+            .base = terrain.base(rules),
+            .feature = terrain.feature(rules),
+            .vegetation = terrain.vegetation(rules),
             .has_freshwater = false,
             .has_river = false,
         };
@@ -350,7 +240,7 @@ pub fn recalculateWaterAccess(self: *Self) !void {
         const idx: u32 = @intCast(idx_us);
 
         const terrain = self.terrain[idx];
-        if (terrain.attributes(self.rules).is_freshwater) {
+        if (terrain.attributes(rules).is_freshwater) {
             new_terrain[idx].has_freshwater = true;
             for (self.grid.neighbours(idx)) |maybe_n_idx|
                 if (maybe_n_idx) |n_idx| {
@@ -368,28 +258,27 @@ pub fn recalculateWaterAccess(self: *Self) !void {
 
     for (0..self.grid.len) |idx_us| {
         const idx: u32 = @intCast(idx_us);
-        if (self.terrain[idx].attributes(self.rules).is_water) {
+        if (self.terrain[idx].attributes(rules).is_water) {
             new_terrain[idx].has_freshwater = false;
         }
     }
 
-    for (0..self.grid.len) |idx| self.terrain[idx] = new_terrain[idx].pack(self.rules) orelse
-        std.debug.panic("Failed to pack tile", .{});
+    for (0..self.grid.len) |idx|
+        self.terrain[idx] = new_terrain[idx].pack(rules) orelse std.debug.panic("Failed to pack tile", .{});
 }
 
-pub fn tileYield(self: *const Self, idx: Idx) Yield {
+pub fn tileYield(self: *const Self, idx: Idx, rules: *const Rules) Yield {
     const terrain = self.terrain[idx];
     const maybe_resource: ?Rules.Resource = if (self.resources.get(idx)) |r| r.type else null;
 
-    var yield = terrain.yield(self.rules);
+    var yield = terrain.yield(rules);
 
-    if (maybe_resource) |resource| yield = yield.add(resource.yield(self.rules));
+    if (maybe_resource) |resource| yield = yield.add(resource.yield(rules));
 
-    const imp_y = self.improvements[idx].building.yield(maybe_resource, self.rules);
-    // std.debug.print("IMP Y: {}\n", .{imp_y.food});
+    const imp_y = self.improvements[idx].building.yield(maybe_resource, rules);
     yield = yield.add(imp_y);
 
-    // city yeilds
+    // City yields
     if (self.cities.contains(idx)) {
         yield.production = @max(yield.production, 1);
         yield.food = @max(yield.food, 2);
@@ -398,10 +287,116 @@ pub fn tileYield(self: *const Self, idx: Idx) Yield {
     return yield;
 }
 
+pub fn workAllowedOn(self: *const Self, idx: Idx, work: TileWork, rules: *const Rules) bool {
+    if (self.cities.contains(idx)) return false;
+    if (self.terrain[idx].attributes(rules).is_wonder) return false;
+    if (self.terrain[idx].attributes(rules).is_impassable) return false;
+
+    switch (work) {
+        .building => |b| {
+            const a = Rules.Building.allowedOn(b, self.terrain[idx], rules);
+            switch (a) {
+                .allowed_if_resource => {
+                    return b.connectsResource((self.resources.get(idx) orelse return false).type, rules);
+                },
+                .allowed => return true,
+                else => return false,
+            }
+        },
+        .remove_vegetation_building => |b| {
+            if (!self.workAllowedOn(idx, .remove_vegetation, rules)) return false;
+            switch (Rules.Building.allowedOn(b, self.terrain[idx], rules)) {
+                .allowed_after_clear_if_resource => {
+                    return b.connectsResource((self.resources.get(idx) orelse return false).type, rules);
+                },
+                .allowed_after_clear => return true,
+                else => return false,
+            }
+        },
+        .transport => |_| {
+            return !self.terrain[idx].attributes(rules).is_water;
+        },
+        .remove_vegetation => {
+            if (self.terrain[idx].vegetation(rules) == .none) return false;
+            return true;
+        },
+
+        else => return false,
+    }
+}
+
+pub fn canDoImprovementWork(self: *const Self, unit_ref: Units.Reference, work: TileWork, rules: *const Rules) bool {
+    if (!self.workAllowedOn(unit_ref.idx, work, rules)) return false;
+
+    const unit = self.units.deref(unit_ref) orelse return false;
+    if (unit.movement <= 0) return false;
+
+    switch (work) {
+        .building,
+        .remove_vegetation_building,
+        .remove_vegetation,
+        => if (!Rules.Promotion.Effect.in(.build_improvement, unit.promotions, rules)) return false,
+        .transport => |t| {
+            if (t == .road and !Rules.Promotion.Effect.in(.build_roads, unit.promotions, rules)) return false;
+            if (t == .rail and !Rules.Promotion.Effect.in(.build_rail, unit.promotions, rules)) return false;
+        },
+        else => return false, // TODO
+    }
+    return true;
+}
+
+pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork, rules: *const Rules) bool {
+    if (!self.canDoImprovementWork(unit_ref, work, rules)) return false;
+    const unit = self.units.derefToPtr(unit_ref) orelse return false;
+    progress_blk: {
+        if (self.work_in_progress.getPtr(unit_ref.idx)) |wip| {
+            if (@intFromEnum(wip.work_type) == @intFromEnum(work)) {
+                if (switch (wip.work_type) {
+                    .building => |b| b == work.building,
+                    .transport => |t| t == work.transport,
+                    .remove_vegetation_building => |b| b == work.remove_vegetation_building,
+                    else => true,
+                }) {
+                    wip.progress += 1;
+                    break :progress_blk;
+                }
+            }
+        }
+
+        self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = work, .progress = 1 }) catch undefined;
+    }
+    if (self.work_in_progress.get(unit_ref.idx)) |wip| {
+        if (wip.progress >= 3) // TODO progress needed should be dependent on project
+        {
+            _ = self.work_in_progress.swapRemove(unit_ref.idx);
+            switch (wip.work_type) {
+                .building => |b| self.improvements[unit_ref.idx].building = b,
+                .remove_vegetation => self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(rules),
+                .remove_vegetation_building => |b| {
+                    self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(rules);
+                    self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = .{ .building = b }, .progress = 0 }) catch unreachable;
+                },
+                .transport => |t| self.improvements[unit_ref.idx].transport = t,
+                else => {
+                    std.debug.print("UNIMPLEMENTED!\n", .{});
+                },
+            }
+        }
+    } else unreachable;
+    unit.movement = 0;
+    // YEET EM BOATS
+    if (Rules.Promotion.Effect.charge_to_improve.in(unit.promotions, rules)) {
+        if (unit.useCharge(rules)) self.units.removeReference(unit_ref);
+    }
+
+    return true;
+}
+
 pub fn moveCost(
     self: *const Self,
     reference: Units.Reference,
     to: Idx,
+    rules: *const Rules,
 ) Unit.MoveCost {
     if (!self.grid.isNeighbour(reference.idx, to)) return .disallowed;
 
@@ -433,11 +428,11 @@ pub fn moveCost(
         .transport = if (improvements.pillaged_transport) .none else improvements.transport,
         .embarked = reference.slot == .embarked,
         .city = self.cities.contains(to),
-    }, self.rules);
+    }, rules);
 }
 
-pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
-    const cost = self.moveCost(reference, to);
+pub fn move(self: *Self, reference: Units.Reference, to: Idx, rules: *const Rules) !bool {
+    const cost = self.moveCost(reference, to, rules);
 
     if (cost == .disallowed) return false;
 
@@ -451,14 +446,14 @@ pub fn move(self: *Self, reference: Units.Reference, to: Idx) !bool {
         .disallowed => unreachable,
         .allowed,
         .allowed_final,
-        => try self.units.putNoStack(to, unit, reference.slot),
-        .embarkation => try self.units.putNoStack(to, unit, .embarked),
-        .disembarkation => try self.units.putNoStackAutoSlot(to, unit),
+        => if (!try self.units.putNoStack(to, unit, reference.slot)) unreachable,
+        .embarkation => if (!try self.units.putNoStack(to, unit, .embarked)) unreachable,
+        .disembarkation => if (!try self.units.putNoStackAutoSlot(to, unit, rules)) unreachable,
     }
     return true;
 }
 
-pub fn canAttack(self: *const Self, attacker: Units.Reference, to: Idx) !bool {
+pub fn canAttack(self: *const Self, attacker: Units.Reference, to: Idx, rules: *const Rules) !bool {
     if (!self.grid.isNeighbour(attacker.idx, to)) return false;
 
     const attacker_unit = self.units.deref(attacker) orelse return false;
@@ -473,11 +468,11 @@ pub fn canAttack(self: *const Self, attacker: Units.Reference, to: Idx) !bool {
         .transport = if (improvements.pillaged_transport) .none else improvements.transport,
         .embarked = attacker.slot == .embarked,
         .city = self.cities.contains(to),
-    }, self.rules);
+    }, rules);
 
     if (!cost.allowsAttack()) return false;
 
-    if (Rules.Promotion.Effect.cannot_melee.in(attacker_unit.promotions, self.rules)) return false;
+    if (Rules.Promotion.Effect.cannot_melee.in(attacker_unit.promotions, rules)) return false;
 
     const defender = self.units.firstReference(to) orelse return false;
     const defender_unit = self.units.deref(defender) orelse return false;
@@ -487,8 +482,8 @@ pub fn canAttack(self: *const Self, attacker: Units.Reference, to: Idx) !bool {
     return true;
 }
 
-pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
-    if (!try self.canAttack(attacker, to)) return false;
+pub fn attack(self: *Self, attacker: Units.Reference, to: Idx, rules: *const Rules) !bool {
+    if (!try self.canAttack(attacker, to, rules)) return false;
 
     const attacker_unit = self.units.derefToPtr(attacker) orelse return false;
 
@@ -498,7 +493,7 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
     // Check if this is a capture
     if (attacker.slot.isMilitary() and defender.slot.isCivilian()) {
         defender_unit.faction_id = attacker_unit.faction_id;
-        _ = try self.move(attacker, to);
+        _ = try self.move(attacker, to, rules);
         return true;
     }
 
@@ -511,14 +506,14 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
         .target_terrain = terrain,
         .river_crossing = river_crossing,
         .is_ranged = false,
-    }, self.rules);
+    }, rules);
 
     const defender_strength = defender_unit.strength(.{
         .is_attacker = false,
         .target_terrain = terrain,
         .river_crossing = river_crossing,
         .is_ranged = false,
-    }, self.rules);
+    }, rules);
 
     const ratio = attacker_strength.total / defender_strength.total;
     const attacker_damage: u8 = @intFromFloat(1.0 / ratio * 35.0);
@@ -554,29 +549,32 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx) !bool {
                 => unreachable,
             }
         }
-        _ = try self.move(attacker, to);
+        _ = try self.move(attacker, to, rules);
+        attacker_unit.movement = 0.0;
+    } else {
+        attacker_unit.movement = 0.0;
     }
 
     return true;
 }
 
-pub fn unitFOV(self: *const Self, unit: *const Unit, src: Idx) !hex_set.HexSet(0) {
-    const vision_range = Rules.Promotion.Effect.promotionsSum(.modify_sight_range, unit.promotions, self.rules);
-    return try self.fov(@intCast(vision_range + 2), src);
+pub fn unitFov(self: *const Self, unit: *const Unit, src: Idx, set: *hex_set.HexSet(0), rules: *const Rules) !void {
+    const vision_range = Rules.Promotion.Effect.promotionsSum(.modify_sight_range, unit.promotions, rules);
+    try self.fov(@intCast(vision_range + 2), src, set, rules);
 }
 
-/// Gets FOV from a tile as HexSet, caller must DEINIT! TODO double check behaviour with civ proper. Diagonals might be impact
+/// TODO double check behaviour with civ proper. Diagonals might be impact
 /// fov too much and axials might have too small an impact. works great as vision range 2, ok at 3, poor at 4+,
 /// TODO check if land is obscuring for embarked/naval units...
-pub fn fov(self: *const Self, vision_range: u8, src: Idx) !hex_set.HexSet(0) {
-    const elevated = self.terrain[src].attributes(self.rules).is_elevated;
+pub fn fov(self: *const Self, vision_range: u8, src: Idx, set: *hex_set.HexSet(0), rules: *const Rules) !void {
+    const elevated = self.terrain[src].attributes(rules).is_elevated;
 
-    var fov_set = try hex_set.HexSet(0).initFloodFill(src, 1, &self.grid, self.allocator);
+    try set.floodFillFrom(src, 1, &self.grid);
 
     var spiral_iter = Grid.SpiralIterator.newFrom(src, 2, vision_range, self.grid);
     while (spiral_iter.next(self.grid)) |idx| {
         var max_off_axial: u8 = 0;
-        var visable = false;
+        var visible = false;
 
         for (self.grid.neighbours(idx)) |maybe_n_idx| {
             const n_idx = maybe_n_idx orelse continue;
@@ -585,105 +583,44 @@ pub fn fov(self: *const Self, vision_range: u8, src: Idx) !hex_set.HexSet(0) {
             const off_axial = self.grid.distanceOffAxial(n_idx, src);
             if (off_axial < max_off_axial) continue;
 
-            if (off_axial > max_off_axial) visable = false; // previous should be ignored (equals -> both are viable)
+            if (off_axial > max_off_axial) visible = false; // previous should be ignored (equals -> both are viable)
             max_off_axial = off_axial;
 
-            if (!fov_set.contains(n_idx)) continue;
-            if (self.terrain[n_idx].attributes(self.rules).is_obscuring and !elevated) continue;
-            if (self.terrain[n_idx].attributes(self.rules).is_impassable) continue; // impassible ~= mountain
-            visable = true;
+            if (!set.contains(n_idx)) continue;
+            if (self.terrain[n_idx].attributes(rules).is_obscuring and !elevated) continue;
+            if (self.terrain[n_idx].attributes(rules).is_impassable) continue; // impassible ~= mountain
+            visible = true;
         }
-        if (visable) try fov_set.add(idx);
-    }
-    return fov_set;
-}
-
-pub fn fullUpdateViews(self: *Self) !void {
-    var iter //
-        = self.units.iterator();
-
-    for (self.views) |*view| {
-        view.unsetAllVisable(self);
-    }
-
-    while (iter.next()) |item| {
-        var vision = try self.unitFOV(&item.unit, item.idx);
-        defer vision.deinit();
-
-        if (item.unit.faction_id.toCivilizationID()) |civ_id| {
-            try self.views[@intFromEnum(civ_id)].addVisionSet(vision);
-        }
-    }
-
-    for (self.cities.values()) |city| {
-        var vision = hex_set.HexSet(0).init(self.allocator);
-        defer vision.deinit();
-        try vision.add(city.position);
-        try vision.addOther(&city.claimed);
-        try vision.addOther(&city.adjacent);
-
-        if (city.faction_id.toCivilizationID()) |civ_id| {
-            try self.views[@intFromEnum(civ_id)].addVisionSet(vision);
-        }
+        if (visible) try set.add(idx);
     }
 }
 
-pub fn saveToFile(self: *Self, path: []const u8) !void {
-    var file = try std.fs.cwd().createFile(path, .{});
-    var writer = file.writer();
+const terrain_serialization = @import("serialization.zig").customSerialization(&.{
+    .{ .name = "grid" },
+    .{ .name = "terrain" },
+    .{ .name = "resources", .ty = .hash_map },
+    .{ .name = "rivers", .ty = .hash_set },
+}, Self);
 
-    for (0..self.grid.len) |i| {
-        const terrain_bytes: [@sizeOf(Terrain)]u8 = std.mem.asBytes(&self.terrain[i]).*;
-        _ = try file.write(&terrain_bytes);
-    }
-
-    _ = try writer.writeInt(u32, @intCast(self.resources.count()), .little); // write len
-    for (self.resources.keys()) |key| {
-        const value = self.resources.get(key) orelse unreachable;
-        _ = try writer.writeInt(Idx, key, .little);
-        _ = try writer.writeStruct(value);
-    }
-
-    _ = try writer.writeInt(u32, @intCast(self.rivers.count()), .little);
-    for (self.rivers.keys()) |edge| {
-        try writer.writeStruct(edge);
-    }
-
-    file.close();
+pub fn serializeTerrain(self: Self, writer: anytype) !void {
+    try terrain_serialization.serialize(writer, self);
 }
 
-pub fn loadFromFile(self: *Self, path: []const u8) !void {
-    var file = try std.fs.cwd().openFile(path, .{});
-    var reader = file.reader();
-    for (0..self.grid.len) |i| {
-        const terrain_bytes = try reader.readBytesNoEof(@sizeOf(Terrain));
-
-        const terrain: *const Terrain = @ptrCast(&terrain_bytes);
-        self.terrain[i] = terrain.*;
+pub fn deserializeTerrain(reader: anytype, allocator: std.mem.Allocator) !Self {
+    var self = try terrain_serialization.deserializeAlloc(reader, allocator);
+    errdefer {
+        self.resources.deinit(allocator);
+        self.rivers.deinit(allocator);
+        allocator.free(self.terrain);
     }
-    blk: {
-        const len = reader.readInt(u32, .little) catch {
-            std.debug.print("\nEarly return in loadFromFile\n", .{});
-            break :blk;
-        };
-        for (0..len) |_| {
-            const k = try reader.readInt(Idx, .little);
+    self.allocator = allocator;
+    self.improvements = try allocator.alloc(Improvements, self.grid.len);
+    errdefer allocator.free(self.improvements);
+    @memset(self.improvements, std.mem.zeroes(Improvements));
 
-            const v = try reader.readStruct(ResourceAndAmount);
-            try self.resources.put(self.allocator, @intCast(k), v);
-        }
-    }
-
-    blk: {
-        const len = reader.readInt(u32, .little) catch {
-            std.debug.print("\nEarly return in loadFromFile\n", .{});
-            break :blk;
-        };
-        for (0..len) |_| {
-            const edge = try reader.readStruct(Grid.Edge);
-            try self.rivers.put(self.allocator, edge, {});
-        }
-    }
-
-    file.close();
+    self.work_in_progress = .{};
+    self.cities = .{};
+    self.turn = 1;
+    self.units = Units.init(allocator);
+    return self;
 }

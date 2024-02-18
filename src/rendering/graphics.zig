@@ -32,25 +32,26 @@ pub fn renderWorld(
     zoom: f32,
     maybe_unit_reference: ?Units.Reference,
     ts: TextureSet,
+    rules: *const Rules,
 ) void {
-    renderTerrainLayer(world, bbox, maybe_view, ts);
+    renderTerrainLayer(world, bbox, maybe_view, ts, rules);
+    renderTerraIncognita(world.grid, bbox, maybe_view, ts);
 
-    renderCities(world, bbox, ts);
+    renderCities(world, bbox, maybe_view, ts);
     renderUnits(world, bbox, maybe_view, maybe_unit_reference, zoom, ts);
-    renderYields(world, bbox, maybe_view, ts);
+    renderYields(world, bbox, maybe_view, ts, rules);
 
     renderResources(world, bbox, maybe_view, ts);
-    renderTerraIncognita(world.grid, bbox, maybe_view, ts);
 }
 
 pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
-    if (maybe_view == null) return;
+    const view = maybe_view orelse return;
 
     const fow_color = .{ .a = 90, .r = 150, .g = 150, .b = 150 };
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
             const idx = grid.idxFromCoords(@intCast(x), @intCast(y));
-            switch (maybe_view.?.visability(idx)) {
+            switch (view.visibility(idx)) {
                 .fov => render.renderTextureHex(idx, grid, ts.smoke_texture, .{ .tint = fow_color }, ts),
                 .hidden => render.renderTextureHex(idx, grid, ts.smoke_texture, .{}, ts),
                 else => {},
@@ -60,7 +61,7 @@ pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const V
 }
 
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
-pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
+pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet, rules: *const Rules) void {
     const outline_color = .{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
     for (bbox.y_min..bbox.y_max) |y| {
         for (bbox.x_min..bbox.x_max) |x| {
@@ -76,7 +77,7 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
                 improvement = view.viewImprovements(idx, world) orelse unreachable;
             }
 
-            renderTerrain(terrain, idx, world.grid, ts, world.rules);
+            renderTerrain(terrain, idx, world.grid, ts, rules);
 
             if (improvement.transport != .none) {
                 var flag = false;
@@ -116,13 +117,14 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
     }
 }
 
-pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void {
+pub fn renderCities(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
     for (world.cities.keys(), world.cities.values()) |idx, city| {
         const x = world.grid.xFromIdx(idx);
         const y = world.grid.yFromIdx(idx);
         if (!bbox.contains(x, y)) continue;
 
         for (city.claimed.indices()) |claimed| {
+            if (maybe_view) |view| if (!view.in_view.contains(claimed)) continue;
             render.renderTextureInHex(claimed, world.grid, ts.city_border_texture, 0, 0, .{
                 .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
                 .scale = 0.95,
@@ -134,6 +136,8 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
                 }, ts);
             }
         }
+
+        if (maybe_view) |view| if (!view.in_view.contains(idx)) return;
 
         render.renderTextureInHex(idx, world.grid, ts.city_border_texture, 0, 0, .{
             .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
@@ -233,14 +237,14 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, ts: TextureSet) void
     }
 }
 
-pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
+pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet, rules: *const Rules) void {
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
             const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
 
-            var yield = world.tileYield(idx);
+            var yield = world.tileYield(idx, rules);
             if (maybe_view) |view| {
-                switch (view.visability(idx)) {
+                switch (view.visibility(idx)) {
                     .fov => yield = view.last_seen_yields[idx],
                     .hidden => continue,
                     else => {},
@@ -336,7 +340,7 @@ pub fn renderResources(world: *const World, bbox: BoundingBox, maybe_view: ?*con
         if (!bbox.contains(x, y)) continue;
 
         if (maybe_view) |view| {
-            if (view.visability(idx) == .hidden) continue;
+            if (view.visibility(idx) == .hidden) continue;
         }
 
         const icon = ts.resource_icons[@intFromEnum(res.type)];

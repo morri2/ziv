@@ -24,12 +24,21 @@ last_seen_improvements: []Improvements,
 allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator, grid: *const Grid) !Self {
+    const last_seen_yields = try allocator.alloc(Yield, grid.len);
+    errdefer allocator.free(last_seen_yields);
+
+    const last_seen_terrain = try allocator.alloc(Terrain, grid.len);
+    errdefer allocator.free(last_seen_terrain);
+
+    const last_seen_improvements = try allocator.alloc(Improvements, grid.len);
+    errdefer allocator.free(last_seen_improvements);
+
     return .{
         .in_view = InViewHexSet.init(allocator),
         .explored = ExploredHexSet.init(allocator),
-        .last_seen_yields = try allocator.alloc(Yield, grid.len),
-        .last_seen_terrain = try allocator.alloc(Terrain, grid.len),
-        .last_seen_improvements = try allocator.alloc(Improvements, grid.len),
+        .last_seen_yields = last_seen_yields,
+        .last_seen_terrain = last_seen_terrain,
+        .last_seen_improvements = last_seen_improvements,
         .allocator = allocator,
     };
 }
@@ -48,8 +57,8 @@ pub fn addVision(self: *Self, idx: Idx) !void {
     try self.explored.add(idx);
 }
 
-pub fn removeVision(self: *Self, idx: Idx, world: *const World) !void {
-    self.update(idx, world);
+pub fn removeVision(self: *Self, idx: Idx, world: *const World, rules: *const Rules) !void {
+    self.update(idx, world, rules);
     try self.in_view.dec(idx);
 }
 
@@ -61,10 +70,10 @@ pub fn removeVisionSet(self: *Self, vision: hex_set.HexSet(0), world: *const Wor
     for (vision.indices()) |idx| self.removeVision(idx, world);
 }
 
-pub fn viewYield(self: *const Self, idx: Idx, world: *const World) ?Yield {
+pub fn viewYield(self: *const Self, idx: Idx, world: *const World, rules: *const Rules) ?Yield {
     if (!self.explored.contains(idx)) return null;
     if (!self.in_view.contains(idx)) return self.last_seen_yields[idx];
-    return world.tileYield(idx);
+    return world.tileYield(idx, rules);
 }
 
 pub fn viewTerrain(self: *const Self, idx: Idx, world: *const World) ?Terrain {
@@ -79,24 +88,24 @@ pub fn viewImprovements(self: *const Self, idx: Idx, world: *const World) ?Impro
     return world.improvements[idx];
 }
 
-pub fn update(self: *Self, idx: Idx, world: *const World) void {
+pub fn update(self: *Self, idx: Idx, world: *const World, rules: *const Rules) void {
     self.last_seen_terrain[idx] = world.terrain[idx];
     self.last_seen_improvements[idx] = world.improvements[idx];
-    self.last_seen_yields[idx] = world.tileYield(idx);
+    self.last_seen_yields[idx] = world.tileYield(idx, rules);
 }
 
-pub fn unsetAllVisable(self: *Self, world: *const World) void {
+pub fn unsetAllVisible(self: *Self, world: *const World, rules: *const Rules) void {
     for (0..world.grid.len) |idx| {
         if (!self.in_view.contains(@intCast(idx))) continue;
-        self.update(@intCast(idx), world);
+        self.update(@intCast(idx), world, rules);
         self.in_view.remove(@intCast(idx));
     }
 }
 
-pub fn visability(self: *const Self, idx: Idx) enum { visable, hidden, fov } {
+pub fn visibility(self: *const Self, idx: Idx) enum { visible, hidden, fov } {
     if (!self.explored.contains(idx)) return .hidden;
     if (!self.in_view.contains(idx)) return .fov;
-    return .visable;
+    return .visible;
 }
 
 pub fn newResource(self: *Self, resource: Resource, world: *const World) void {

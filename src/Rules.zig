@@ -1,5 +1,4 @@
 const std = @import("std");
-const flag_index_map = @import("flag_index_map.zig");
 
 const Rules = @This();
 
@@ -74,6 +73,8 @@ pub fn deinit(self: *Rules) void {
 }
 
 pub const Yield = packed struct {
+    pub const Integer = @typeInfo(Yield).Struct.backing_integer.?;
+
     food: u5 = 0,
     production: u5 = 0,
     gold: u5 = 0,
@@ -462,3 +463,100 @@ pub const UnitType = enum(u8) {
         return rules.unit_type_strings[start..end];
     }
 };
+
+const rules_serialization = @import("serialization.zig").customSerialization(&.{
+    // Terrain
+    .{ .name = "base_count" },
+    .{ .name = "base_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "base_count",
+        .extra = 1,
+    } } },
+    .{ .name = "feature_count" },
+    .{ .name = "feature_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "feature_count",
+        .extra = 1,
+    } } },
+    .{ .name = "vegetation_count" },
+    .{ .name = "vegetation_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "vegetation_count",
+        .extra = 1,
+    } } },
+
+    .{ .name = "terrain_count" },
+    .{ .name = "terrain_bases", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_features", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_vegetation", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_attributes", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_yields", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_happiness", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_combat_bonus", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_no_vegetation", .ty = .{ .slice_with_len = "terrain_count" } },
+    .{ .name = "terrain_unpacked_map", .ty = .{ .hash_map_with_len = "terrain_count" } },
+    .{ .name = "terrain_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "terrain_count",
+        .extra = 1,
+    } } },
+    .{ .name = "terrain_strings" },
+
+    // Resources
+    .{ .name = "resource_count" },
+    .{ .name = "resource_kinds", .ty = .{ .slice_with_len = "resource_count" } },
+    .{ .name = "resource_yields", .ty = .{ .slice_with_len = "resource_count" } },
+    .{ .name = "resource_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "resource_count",
+        .extra = 1,
+    } } },
+    .{ .name = "resource_strings" },
+
+    // Buildings
+    .{ .name = "building_count" },
+    .{ .name = "building_yields", .ty = .{ .slice_with_len = "building_count" } },
+    .{ .name = "building_allowed_map", .ty = .hash_map },
+    .{ .name = "building_resource_connectors", .ty = .hash_set },
+    .{ .name = "building_resource_yields", .ty = .hash_map },
+    .{ .name = "building_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "building_count",
+        .extra = 1,
+    } } },
+    .{ .name = "building_strings" },
+
+    // Promotions
+    .{ .name = "promotion_count" },
+    .{ .name = "promotion_prerequisites", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "promotion_count",
+        .extra = 1,
+    } } },
+    .{ .name = "promotion_storage" },
+    .{ .name = "promotion_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "promotion_count",
+        .extra = 1,
+    } } },
+    .{ .name = "promotion_strings" },
+
+    // Effects
+    .{ .name = "effects" },
+    .{ .name = "effect_promotions" },
+    .{ .name = "effect_values" },
+
+    // Unit types
+    .{ .name = "unit_type_count" },
+    .{ .name = "unit_type_stats", .ty = .{ .slice_with_len = "unit_type_count" } },
+    .{ .name = "unit_type_is_military", .ty = .dynamic_bit_set_unmanaged },
+    .{ .name = "unit_type_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "unit_type_count",
+        .extra = 1,
+    } } },
+    .{ .name = "unit_type_strings" },
+}, Rules);
+
+pub fn serialize(self: Rules, writer: anytype) !void {
+    try rules_serialization.serialize(writer, self);
+}
+
+pub fn deserialize(reader: anytype, allocator: std.mem.Allocator) !Rules {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    errdefer arena.deinit();
+    var self = try rules_serialization.deserializeAlloc(reader, arena.allocator());
+    self.arena = arena;
+    return self;
+}
