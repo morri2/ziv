@@ -1,6 +1,24 @@
 {
 	"promotions": [
 		{
+			"name": "FishingBoat",
+			"requires": [
+				"FishingBoat"
+			],
+			"effects": [
+				{
+					"effect": "build_improvement"
+				},
+				{
+					"effect": "charge",
+					"value": 1
+				},
+				{
+					"effect": "charge_to_improve"
+				}
+			]
+		},
+		{
 			"name": "CannotMelee",
 			"requires": [
 				"CannotMelee"

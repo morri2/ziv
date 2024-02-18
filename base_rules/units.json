@@ -31,7 +31,7 @@
 			"domain": "sea",
 			"starting_promotions": [
 				"CannotMelee",
-				"BuildImprovements"
+				"FishingBoat"
 			]
 		}
 	],

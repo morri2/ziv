@@ -126,6 +126,7 @@ pub fn canDoImprovementWork(self: *const Self, unit_ref: Units.Reference, work: 
 
 pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork) bool {
     if (!self.canDoImprovementWork(unit_ref, work)) return false;
+    const unit = self.units.derefToPtr(unit_ref) orelse return false;
 
     progress_blk: {
         if (self.work_in_progress.getPtr(unit_ref.idx)) |wip| {
@@ -162,7 +163,12 @@ pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork)
             }
         }
     } else unreachable;
-    self.units.derefToPtr(unit_ref).?.movement = 0;
+    unit.movement = 0;
+    // YEET EM BOATS
+    if (Rules.Promotion.Effect.charge_to_improve.in(unit.promotions, self.rules)) {
+        if (unit.useCharge(self.rules)) self.units.removeReference(unit_ref);
+    }
+
     return true;
 }
 
@@ -283,6 +289,8 @@ pub fn nextTurn(self: *Self) !void {
 
 pub fn addCity(self: *Self, idx: Idx, faction_id: FactionID) !void {
     const city = try City.new(idx, faction_id, self);
+    self.terrain[idx] = self.terrain[idx].withoutVegetation(self.rules);
+    self.improvements[idx] = .{};
     try self.cities.put(self.allocator, idx, city);
 }
 
@@ -302,9 +310,8 @@ pub fn claimedFaction(self: *const Self, idx: Idx) ?FactionID {
 }
 
 pub fn canSettleCityAt(self: *const Self, idx: Idx, faction: FactionID) bool {
-    if (self.claimedFaction(idx)) |claimed_by| {
-        if (claimed_by != faction) return false;
-    }
+    if (self.claimedFaction(idx)) |claimed_by| if (claimed_by != faction) return false;
+
     for (self.cities.keys()) |city_idx| if (self.grid.distance(idx, city_idx) < 3) return false;
     if (self.terrain[idx].attributes(self.rules).is_impassable) return false;
     if (self.terrain[idx].attributes(self.rules).is_wonder) return false;

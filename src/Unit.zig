@@ -57,6 +57,7 @@ fortified: bool = false,
 promotions: Promotion.Set = Promotion.Set.initEmpty(),
 faction_id: World.FactionID,
 movement: f32 = 0,
+consumed_charges: u8 = 0,
 
 pub fn new(unit_type: UnitType, player_id: World.FactionID, rules: *const Rules) Self {
     var unit = Self{
@@ -68,9 +69,23 @@ pub fn new(unit_type: UnitType, player_id: World.FactionID, rules: *const Rules)
     return unit;
 }
 
-pub fn maxMovement(self: Self, rules: *const Rules) f32 {
+pub fn maxMovement(self: *const Self, rules: *const Rules) f32 {
     const move_mod = Promotion.Effect.modify_movement.promotionsSum(self.promotions, rules);
     return @as(f32, @floatFromInt(move_mod)) + @as(f32, @floatFromInt(self.type.stats(rules).moves));
+}
+
+pub fn maxCharges(self: *const Self, rules: *const Rules) u8 {
+    return @intCast(Promotion.Effect.charge.promotionsSum(self.promotions, rules));
+}
+
+pub fn remainingCharges(self: *const Self, rules: *const Rules) u8 {
+    return self.maxCharges(rules) -| self.consumed_charges;
+}
+
+/// returns true if unit should be removed
+pub fn useCharge(self: *Self, rules: *const Rules) bool {
+    self.consumed_charges += 1;
+    return self.remainingCharges(rules) == 0;
 }
 
 pub fn refresh(self: *Self, rules: *const Rules) void {

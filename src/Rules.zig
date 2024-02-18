@@ -334,6 +334,8 @@ pub const Promotion = enum(u8) {
         can_cross_ocean = 17,
         rough_terrain_penalty = 18,
         no_terrain_defense = 19,
+        charge = 20, // #charges
+        charge_to_improve = 21,
 
         pub const Iterator = struct {
             effect: Effect,
