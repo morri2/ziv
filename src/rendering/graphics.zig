@@ -52,8 +52,8 @@ pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const V
         for (bbox.y_min..bbox.y_max) |y| {
             const idx = grid.idxFromCoords(@intCast(x), @intCast(y));
             switch (view.visibility(idx)) {
-                .fov => render.renderTextureHex(idx, grid, ts.smoke_texture, .{ .tint = fow_color }, ts),
-                .hidden => render.renderTextureHex(idx, grid, ts.smoke_texture, .{}, ts),
+                .fov => render.renderTextureHex(idx, grid, ts.fog, .{ .tint = fow_color }, ts),
+                .hidden => render.renderTextureHex(idx, grid, ts.fog, .{}, ts),
                 else => {},
             }
         }
@@ -97,7 +97,7 @@ pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*
             render.renderTextureInHex(
                 idx,
                 world.grid,
-                ts.edge_textures[idx % 3],
+                ts.edge,
                 0,
                 0,
                 outline_color,
@@ -125,7 +125,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
 
         for (city.claimed.indices()) |claimed| {
             if (maybe_view) |view| if (!view.in_view.contains(claimed)) continue;
-            render.renderTextureInHex(claimed, world.grid, ts.city_border_texture, 0, 0, .{
+            render.renderTextureInHex(claimed, world.grid, ts.city_border, 0, 0, .{
                 .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
                 .scale = 0.95,
             }, ts);
@@ -139,7 +139,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
 
         if (maybe_view) |view| if (!view.in_view.contains(idx)) return;
 
-        render.renderTextureInHex(idx, world.grid, ts.city_border_texture, 0, 0, .{
+        render.renderTextureInHex(idx, world.grid, ts.city_border, 0, 0, .{
             .tint = ts.player_primary_color[@intFromEnum(city.faction_id)],
             .scale = 0.95,
         }, ts);
@@ -316,7 +316,7 @@ pub fn renderUnit(idx: Idx, grid: Grid, unit: Unit, context: RenderUnitContext, 
     }
 
     const bg_color: raylib.Color = ts.player_primary_color[@intFromEnum(context.faction_id)];
-    const fg_color: raylib.Color = ts.player_secoundary_color[@intFromEnum(context.faction_id)];
+    const fg_color: raylib.Color = ts.player_secondary_color[@intFromEnum(context.faction_id)];
     const glow_color = raylib.YELLOW;
     const scale: f32 = @max(ZOOM_MIN_SCALE, @min(ZOOM_MAX_SCALE, ZOOM_FACTOR * 1 / context.zoom));
     if (context.glow) render.renderTextureInHex(idx, grid, glow_texture, off_x, off_y, .{ .tint = glow_color, .scale = scale }, ts);

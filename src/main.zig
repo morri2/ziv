@@ -485,7 +485,7 @@ pub fn main() !void {
             render.renderTextureHex(
                 selected_idx,
                 game.world.grid,
-                texture_set.edge_textures[0],
+                texture_set.edge,
                 .{ .tint = .{ .r = 250, .g = 100, .b = 100, .a = 150 } },
                 texture_set,
             );
@@ -496,18 +496,6 @@ pub fn main() !void {
                         const idx = game.world.grid.idxFromCoords(@intCast(x), @intCast(y));
                         render.renderFormatHexAuto(idx, game.world.grid, "{}", .{game.world.grid.distance(selected_idx, idx)}, 0.0, 0.0, .{ .font_size = 25 }, texture_set);
                     }
-                }
-            }
-
-            if (raylib.IsKeyDown(raylib.KEY_X)) {
-                var vision_set = hex_set.HexSet(0).init(gpa.allocator());
-                defer vision_set.deinit();
-                try game.world.fov(3, selected_idx, &vision_set, &game.rules);
-
-                for (vision_set.indices()) |index| {
-                    render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 250, .g = 10, .b = 10, .a = 100 } }, texture_set);
-                    if (game.world.terrain[index].attributes(&game.rules).is_obscuring)
-                        render.renderTextureHex(index, game.world.grid, texture_set.base_textures[6], .{ .tint = .{ .r = 0, .g = 0, .b = 200, .a = 50 } }, texture_set);
                 }
             }
 
