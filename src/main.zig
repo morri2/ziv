@@ -36,13 +36,13 @@ const EditMode = enum {
     resource,
 };
 
-pub const std_options = struct {
-    pub const log_scope_levels = &[_]std.log.ScopeLevel{
+pub const std_options = std.Options{
+    .log_scope_levels = &.{
         .{
             .scope = .texture_set,
             .level = .err,
         },
-    };
+    },
 };
 
 const default_port: u16 = 27015;

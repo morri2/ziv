@@ -3,29 +3,29 @@ const builtin = @import("builtin");
 
 const Self = @This();
 
-pub const SendError = (std.os.SendError || std.os.SendToError);
-pub const ReceiveError = std.os.RecvFromError;
+pub const SendError = (std.posix.SendError || std.posix.SendToError);
+pub const ReceiveError = std.posix.RecvFromError;
 
 pub const Reader = std.io.Reader(Self, ReceiveError, receive);
 pub const Writer = std.io.Writer(Self, SendError, send);
 
-socket: std.os.socket_t,
+socket: std.posix.socket_t,
 
 pub fn create(port: u16) !Self {
-    const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
-    errdefer std.os.close(socket);
+    const socket = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
+    errdefer std.posix.close(socket);
 
     const address = std.net.Ip4Address.parse("0.0.0.0", port) catch unreachable;
 
-    try std.os.bind(socket, @ptrCast(&address.sa), address.getOsSockLen());
+    try std.posix.bind(socket, @ptrCast(&address.sa), address.getOsSockLen());
 
     return .{ .socket = socket };
 }
 
 pub fn listenForConnection(self: Self) !Self {
-    try std.os.listen(self.socket, 1);
+    try std.posix.listen(self.socket, 1);
 
-    const new_socket = try std.os.accept(self.socket, null, null, 0);
+    const new_socket = try std.posix.accept(self.socket, null, null, 0);
 
     return .{
         .socket = new_socket,
@@ -33,14 +33,18 @@ pub fn listenForConnection(self: Self) !Self {
 }
 
 pub fn connect(address: std.net.Ip4Address) !Self {
-    const socket = try std.os.socket(std.os.AF.INET, std.os.SOCK.STREAM, 0);
-    errdefer std.os.close(socket);
-    try std.os.connect(socket, @ptrCast(&address.sa), address.getOsSockLen());
+    const socket = try std.posix.socket(
+        std.posix.AF.INET,
+        std.posix.SOCK.STREAM,
+        0,
+    );
+    errdefer std.posix.close(socket);
+    try std.posix.connect(socket, @ptrCast(&address.sa), address.getOsSockLen());
     return .{ .socket = socket };
 }
 
 pub fn close(self: Self) void {
-    std.os.close(self.socket);
+    std.posix.close(self.socket);
 }
 
 pub fn reader(self: Self) Reader {
@@ -53,14 +57,14 @@ pub fn writer(self: Self) Writer {
 
 pub fn receive(self: Self, data: []u8) ReceiveError!usize {
     return switch (builtin.os.tag) {
-        .linux => try std.os.recvfrom(
+        .linux => try std.posix.recvfrom(
             self.socket,
             data,
-            std.os.MSG.NOSIGNAL,
+            std.posix.MSG.NOSIGNAL,
             null,
             null,
         ),
-        .windows => try std.os.recvfrom(
+        .windows => try std.posix.recvfrom(
             self.socket,
             data,
             0,
@@ -73,12 +77,12 @@ pub fn receive(self: Self, data: []u8) ReceiveError!usize {
 
 pub fn send(self: Self, data: []const u8) SendError!usize {
     return switch (builtin.os.tag) {
-        .linux => try std.os.send(
+        .linux => try std.posix.send(
             self.socket,
             data,
-            std.os.MSG.NOSIGNAL,
+            std.posix.MSG.NOSIGNAL,
         ),
-        .windows => try std.os.send(
+        .windows => try std.posix.send(
             self.socket,
             data,
             0,
@@ -91,10 +95,10 @@ pub fn hasData(self: Self) !bool {
     switch (builtin.os.tag) {
         .linux => {
             var buf: [1]u8 = undefined;
-            const len = std.os.recvfrom(
+            const len = std.posix.recvfrom(
                 self.socket,
                 &buf,
-                std.os.MSG.PEEK,
+                std.posix.MSG.PEEK,
                 null,
                 null,
             ) catch |err| switch (err) {
@@ -105,7 +109,7 @@ pub fn hasData(self: Self) !bool {
         },
         .windows => {
             var buf: [1]u8 = undefined;
-            const len = std.os.recvfrom(
+            const len = std.posix.recvfrom(
                 self.socket,
                 &buf,
                 0x2,
@@ -126,18 +130,18 @@ pub fn hasData(self: Self) !bool {
 pub fn setBlocking(self: Self, blocking: bool) !void {
     switch (builtin.os.tag) {
         .linux => {
-            var flags = try std.os.fcntl(self.socket, std.os.F.GETFL, 0);
+            var flags = try std.posix.fcntl(self.socket, std.posix.F.GETFL, 0);
 
             if (blocking) {
-                flags &= ~@as(usize, std.os.SOCK.NONBLOCK);
+                flags &= ~@as(usize, std.posix.SOCK.NONBLOCK);
             } else {
-                flags |= std.os.SOCK.NONBLOCK;
+                flags |= std.posix.SOCK.NONBLOCK;
             }
-            _ = try std.os.fcntl(self.socket, std.os.F.SETFL, flags);
+            _ = try std.posix.fcntl(self.socket, std.posix.F.SETFL, flags);
         },
         .windows => {
             var mode: u32 = if (blocking) 0 else 1;
-            _ = std.os.windows.ws2_32.ioctlsocket(self.socket, std.os.windows.ws2_32.FIONBIO, &mode);
+            _ = std.posix.windows.ws2_32.ioctlsocket(self.socket, std.posix.windows.ws2_32.FIONBIO, &mode);
         },
         else => unreachable,
     }

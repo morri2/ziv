@@ -4,16 +4,16 @@
 
     .dependencies = .{
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/0932cd3059a181f637cd80c09534d609f1ea3ed1.tar.gz",
-            .hash = "122015503635b39fc821120bd771faf93953f089fc2597bc8a9356d4d913de5d006d",
+            .url = "https://github.com/raysan5/raylib/archive/ec95ee85a386db29f059b9738cd5ec9329f1661e.tar.gz",
+            .hash = "1220ef5d947d0bb41d19fe32f4308143bdd650038f9f439e4366bca9e97e7e46ec84",
         },
         .raygui = .{
             .url = "https://github.com/raysan5/raygui/archive/7fe39be75af7d166c50afb6e6b9013398d66a7e1.tar.gz",
             .hash = "12205b5293d62a48e0c111011f5832f72d4dad0594097eeae10a3a9edcda5bf17612",
         },
         .@"zig-clap" = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/4267b0b60ef6f87cccf3ee6ed481e6d0759180c6.tar.gz",
-            .hash = "12202fa30d679d821292bcd953458b9e76097a5d16999489125a206db63a53392833",
+            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.9.0.tar.gz",
+            .hash = "12207ee987ce045596cb992cfb15b0d6d9456e50d4721c3061c69dabc2962053644d",
         },
     },
 
