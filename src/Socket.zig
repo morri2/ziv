@@ -141,7 +141,7 @@ pub fn setBlocking(self: Self, blocking: bool) !void {
         },
         .windows => {
             var mode: u32 = if (blocking) 0 else 1;
-            _ = std.posix.windows.ws2_32.ioctlsocket(self.socket, std.posix.windows.ws2_32.FIONBIO, &mode);
+            _ = std.os.windows.ws2_32.ioctlsocket(self.socket, std.os.windows.ws2_32.FIONBIO, &mode);
         },
         else => unreachable,
     }
