@@ -1,35 +1,18 @@
 const std = @import("std");
+const raylib_dep = @import("raylib");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const raylib_dep = b.dependency("raylib", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    const raylib_lib = raylib_dep.artifact("raylib");
-
-    const raygui_dep = b.dependency("raygui", .{});
-    const raygui_lib = b.addStaticLibrary(.{
-        .name = "raygui",
-        .optimize = optimize,
-        .target = target,
-    });
-    const wf = b.addWriteFiles();
-    const raygui_c = wf.addCopyFile(raygui_dep.path("src/raygui.h"), "raygui.c");
-    raygui_lib.addCSourceFile(.{
-        .file = raygui_c,
-        .flags = &.{
-            "-std=gnu99",
-            "-D_GNU_SOURCE",
-            "-DRAYGUI_IMPLEMENTATION",
+    const raylib_lib = try raylib_dep.addRaylib(
+        b,
+        target,
+        optimize,
+        .{
+            .raygui = true,
         },
-    });
-    raygui_lib.linkLibrary(raylib_lib);
-    raygui_lib.addIncludePath(raylib_dep.path("src"));
-    raygui_lib.addIncludePath(raygui_dep.path("src"));
-    raygui_lib.linkLibC();
+    );
 
     const zig_clap_dep = b.dependency("zig-clap", .{
         .target = target,
@@ -47,12 +30,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    exe.root_module.addImport("clap", zig_clap_dep.module("clap"));
     b.installArtifact(exe);
     exe.linkLibrary(raylib_lib);
-    exe.linkLibrary(raygui_lib);
-    exe.addIncludePath(raylib_dep.path("src"));
-    exe.addIncludePath(raygui_dep.path("src"));
-    exe.root_module.addImport("clap", zig_clap_dep.module("clap"));
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
