@@ -392,12 +392,12 @@ pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork,
     return true;
 }
 
-pub fn moveCost(
+pub fn stepCost(
     self: *const Self,
     reference: Units.Reference,
     to: Idx,
     rules: *const Rules,
-) Unit.MoveCost {
+) Unit.StepCost {
     if (!self.grid.isNeighbour(reference.idx, to)) return .disallowed;
 
     if (self.units.get(to, reference.slot) != null) return .disallowed;
@@ -422,7 +422,7 @@ pub fn moveCost(
     const terrain = self.terrain[to];
     const improvements = self.improvements[to];
 
-    return unit.moveCost(.{
+    return unit.stepCost(.{
         .target_terrain = terrain,
         .river_crossing = if (self.grid.edgeBetween(reference.idx, to)) |edge| self.rivers.contains(edge) else false,
         .transport = if (improvements.pillaged_transport) .none else improvements.transport,
@@ -431,8 +431,8 @@ pub fn moveCost(
     }, rules);
 }
 
-pub fn move(self: *Self, reference: Units.Reference, to: Idx, rules: *const Rules) !bool {
-    const cost = self.moveCost(reference, to, rules);
+pub fn step(self: *Self, reference: Units.Reference, to: Idx, rules: *const Rules) !bool {
+    const cost = self.stepCost(reference, to, rules);
 
     if (cost == .disallowed) return false;
 
@@ -440,7 +440,7 @@ pub fn move(self: *Self, reference: Units.Reference, to: Idx, rules: *const Rule
 
     self.units.removeReference(reference);
 
-    unit.performMove(cost);
+    unit.step(cost);
 
     switch (cost) {
         .disallowed => unreachable,
@@ -462,7 +462,7 @@ pub fn canAttack(self: *const Self, attacker: Units.Reference, to: Idx, rules: *
     const river_crossing = if (self.grid.edgeBetween(attacker.idx, to)) |edge| self.rivers.contains(edge) else false;
     const improvements = self.improvements[to];
 
-    const cost = attacker_unit.moveCost(.{
+    const cost = attacker_unit.stepCost(.{
         .target_terrain = terrain,
         .river_crossing = river_crossing,
         .transport = if (improvements.pillaged_transport) .none else improvements.transport,
@@ -493,7 +493,7 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx, rules: *const Rul
     // Check if this is a capture
     if (attacker.slot.isMilitary() and defender.slot.isCivilian()) {
         defender_unit.faction_id = attacker_unit.faction_id;
-        _ = try self.move(attacker, to, rules);
+        _ = try self.step(attacker, to, rules);
         return true;
     }
 
@@ -549,7 +549,7 @@ pub fn attack(self: *Self, attacker: Units.Reference, to: Idx, rules: *const Rul
                 => unreachable,
             }
         }
-        _ = try self.move(attacker, to, rules);
+        _ = try self.step(attacker, to, rules);
         attacker_unit.movement = 0.0;
     } else {
         attacker_unit.movement = 0.0;

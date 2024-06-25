@@ -27,7 +27,7 @@ pub const StrengthSummary = struct {
     open_terrain_bonus: u32,
 };
 
-pub const MoveContext = struct {
+pub const StepContext = struct {
     target_terrain: Terrain,
     river_crossing: bool,
     transport: Transport,
@@ -35,14 +35,14 @@ pub const MoveContext = struct {
     city: bool,
 };
 
-pub const MoveCost = union(enum) {
+pub const StepCost = union(enum) {
     disallowed: void,
     allowed: f32,
     allowed_final: void, // ends move after
     embarkation: void,
     disembarkation: void,
 
-    pub fn allowsAttack(self: MoveCost) bool {
+    pub fn allowsAttack(self: StepCost) bool {
         return switch (self) {
             .allowed, .allowed_final, .disembarkation => true,
             else => false,
@@ -141,7 +141,7 @@ pub fn strength(
     };
 }
 
-pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost {
+pub fn stepCost(self: Self, context: StepContext, rules: *const Rules) StepCost {
     const stats = self.type.stats(rules);
     const terrain_attributes = context.target_terrain.attributes(rules);
 
@@ -159,7 +159,7 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
 
     if (context.city) return .{ .allowed = 1 }; // obs! should be after river crossing check
 
-    const cost: MoveCost = switch (stats.domain) {
+    const cost: StepCost = switch (stats.domain) {
         .sea => blk: {
             if (!terrain_attributes.is_water) break :blk .disallowed;
 
@@ -195,7 +195,7 @@ pub fn moveCost(self: Self, context: MoveContext, rules: *const Rules) MoveCost 
     return cost;
 }
 
-pub fn performMove(self: *Self, cost: MoveCost) void {
+pub fn step(self: *Self, cost: StepCost) void {
     switch (cost) {
         .allowed => |c| self.movement = @max(0.0, self.movement - c),
         .allowed_final,

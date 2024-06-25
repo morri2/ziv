@@ -86,7 +86,7 @@ pub const Action = union(Type) {
 
                 if (unit.faction_id != faction_id) return false;
 
-                if (world.moveCost(info.ref, info.to, rules) == .disallowed) return false;
+                if (world.stepCost(info.ref, info.to, rules) == .disallowed) return false;
             },
             .attack => |info| {
                 const unit = world.units.deref(info.attacker) orelse return false;
@@ -144,7 +144,7 @@ pub const Action = union(Type) {
                 result.view_change = turn_result.view_change;
             },
             .move_unit => |info| {
-                if (!try world.move(info.ref, info.to, rules)) unreachable;
+                if (!try world.step(info.ref, info.to, rules)) unreachable;
 
                 result.view_change = true;
             },
