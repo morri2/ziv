@@ -4,7 +4,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const raylib_dep = b.dependency("raylib", .{});
+    const raylib_dep = b.dependency("raylib", .{
+        .target = target,
+        .optimize = optimize,
+    });
     const raylib_lib = raylib_dep.artifact("raylib");
 
     const raygui_dep = b.dependency("raygui", .{});
@@ -28,7 +31,10 @@ pub fn build(b: *std.Build) void {
     raygui_lib.addIncludePath(raygui_dep.path("src"));
     raygui_lib.linkLibC();
 
-    const zig_clap_dep = b.dependency("zig-clap", .{});
+    const zig_clap_dep = b.dependency("zig-clap", .{
+        .target = target,
+        .optimize = optimize,
+    });
 
     const exe = b.addExecutable(.{
         .name = "ziv",
