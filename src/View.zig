@@ -3,6 +3,7 @@ const Self = @This();
 const World = @import("World.zig");
 const Grid = @import("Grid.zig");
 const Idx = Grid.Idx;
+const Edge = Grid.Edge;
 
 const Rules = @import("Rules.zig");
 const Yield = Rules.Yield;
@@ -86,6 +87,17 @@ pub fn viewImprovements(self: *const Self, idx: Idx, world: *const World) ?Impro
     if (!self.explored.contains(idx)) return null;
     if (!self.in_view.contains(idx)) return self.last_seen_improvements[idx];
     return world.improvements[idx];
+}
+
+pub fn viewRiver(self: *const Self, edge: Edge, world: *const World) bool {
+    blk: {
+        if (self.explored.contains(edge.low)) break :blk;
+        if (self.explored.contains(edge.high)) break :blk;
+
+        return false;
+    }
+
+    return world.rivers.contains(edge);
 }
 
 pub fn update(self: *Self, idx: Idx, world: *const World, rules: *const Rules) void {

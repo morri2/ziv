@@ -371,7 +371,7 @@ pub fn main() !void {
                         if (!attacked) {
                             var unit_ref = maybe_unit_reference.?;
                             path.clearRetainingCapacity();
-                            if (try game.world.movePath(unit_ref, mouse_idx, &game.rules, &path)) {
+                            if (try game.world.movePath(unit_ref, mouse_idx, &game.rules, &path, game.getView())) {
                                 for (path.items) |step| {
                                     _ = try game.move(unit_ref, step.idx) orelse break;
                                     unit_ref.idx = step.idx;

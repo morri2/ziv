@@ -28,7 +28,7 @@ pub const StrengthSummary = struct {
 };
 
 pub const StepContext = struct {
-    target_terrain: Terrain,
+    target_terrain: ?Terrain,
     river_crossing: bool,
     transport: Transport,
     embarked: bool,
@@ -143,7 +143,7 @@ pub fn strength(
 
 pub fn stepCost(self: Self, context: StepContext, rules: *const Rules) StepCost {
     const stats = self.type.stats(rules);
-    const terrain_attributes = context.target_terrain.attributes(rules);
+    const terrain_attributes = if (context.target_terrain) |target_terrain| target_terrain.attributes(rules) else Terrain.Attributes{};
 
     if (self.movement <= 0) return .disallowed;
 

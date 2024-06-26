@@ -411,7 +411,14 @@ pub fn stepCost(
 
     const unit = self.units.deref(reference) orelse return .disallowed;
 
-    return self.stepCostFrom(reference.idx, to, unit, reference.slot, rules);
+    return self.stepCostFrom(
+        reference.idx,
+        to,
+        unit,
+        reference.slot,
+        rules,
+        null,
+    );
 }
 
 pub fn stepCostFrom(
@@ -421,6 +428,7 @@ pub fn stepCostFrom(
     unit: Unit,
     slot: Units.Slot,
     rules: *const Rules,
+    maybe_view: ?*const View,
 ) Unit.StepCost {
     // Check if tile is already occupied
     {
@@ -437,12 +445,19 @@ pub fn stepCostFrom(
         }
     }
 
-    const terrain = self.terrain[to];
-    const improvements = self.improvements[to];
+    const terrain, const improvements, const river_crossing = if (maybe_view) |view| .{
+        view.viewTerrain(to, self),
+        view.viewImprovements(to, self) orelse Improvements{},
+        if (self.grid.edgeBetween(from, to)) |edge| view.viewRiver(edge, self) else false,
+    } else .{
+        self.terrain[to],
+        self.improvements[to],
+        if (self.grid.edgeBetween(from, to)) |edge| self.rivers.contains(edge) else false,
+    };
 
     return unit.stepCost(.{
         .target_terrain = terrain,
-        .river_crossing = if (self.grid.edgeBetween(from, to)) |edge| self.rivers.contains(edge) else false,
+        .river_crossing = river_crossing,
         .transport = if (improvements.pillaged_transport) .none else improvements.transport,
         .embarked = slot == .embarked,
         .city = self.cities.contains(to),
@@ -477,6 +492,7 @@ pub fn movePath(
     to: Idx,
     rules: *const Rules,
     path: *std.ArrayList(Step),
+    maybe_view: ?*const View,
 ) !bool {
     if (reference.idx == to) return true;
 
@@ -526,6 +542,7 @@ pub fn movePath(
                     unit,
                     node.slot,
                     rules,
+                    maybe_view,
                 )) {
                     .allowed => |cost| .{
                         node.weight + cost,
