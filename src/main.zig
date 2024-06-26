@@ -233,7 +233,7 @@ pub fn main() !void {
         .width = 150,
         .columns = 1,
         .entry_height = 25,
-        .keep_highlight = false,
+        .keep_highlight = true,
         .spacing = 2,
     }).newEmpty(true, null);
     city_construction_window.bounds.y += 150;
