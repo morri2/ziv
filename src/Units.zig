@@ -365,7 +365,7 @@ fn nextStackedKey(self: *Self) Stacked.Key {
     return key;
 }
 
-fn slotFromUnitType(unit_type: UnitType, rules: *const Rules) Slot {
+pub fn slotFromUnitType(unit_type: UnitType, rules: *const Rules) Slot {
     const stats = unit_type.stats(rules);
     return switch (unit_type.ty(rules)) {
         .civilian => switch (stats.domain) {

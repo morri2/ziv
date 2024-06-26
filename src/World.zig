@@ -22,6 +22,8 @@ const Unit = @import("Unit.zig");
 
 const hex_set = @import("hex_set.zig");
 
+const View = @import("View.zig");
+
 pub const FactionID = enum(u8) {
     civilization_0 = 0,
     city_state_0 = 32,
@@ -68,6 +70,11 @@ pub const TileWork = union(TileWorkType) {
 pub const ResourceAndAmount = packed struct {
     type: Resource,
     amount: u8 = 1,
+};
+
+pub const Step = struct {
+    idx: Idx,
+    cost: f32,
 };
 
 allocator: std.mem.Allocator,
@@ -404,6 +411,17 @@ pub fn stepCost(
 
     const unit = self.units.deref(reference) orelse return .disallowed;
 
+    return self.stepCostFrom(reference.idx, to, unit, reference.slot, rules);
+}
+
+pub fn stepCostFrom(
+    self: *const Self,
+    from: Idx,
+    to: Idx,
+    unit: Unit,
+    slot: Units.Slot,
+    rules: *const Rules,
+) Unit.StepCost {
     // Check if tile is already occupied
     {
         var maybe_ref = self.units.firstReference(to);
@@ -411,7 +429,7 @@ pub fn stepCost(
         loop: while (maybe_ref) |ref| {
             const to_unit = self.units.deref(ref) orelse unreachable;
             switch (ref.slot) {
-                .trade => if (reference.slot == .trade) return .disallowed,
+                .trade => if (slot == .trade) return .disallowed,
                 else => if (to_unit.faction_id != unit.faction_id) return .disallowed,
             }
             maybe_ref = self.units.nextReference(ref);
@@ -424,9 +442,9 @@ pub fn stepCost(
 
     return unit.stepCost(.{
         .target_terrain = terrain,
-        .river_crossing = if (self.grid.edgeBetween(reference.idx, to)) |edge| self.rivers.contains(edge) else false,
+        .river_crossing = if (self.grid.edgeBetween(from, to)) |edge| self.rivers.contains(edge) else false,
         .transport = if (improvements.pillaged_transport) .none else improvements.transport,
-        .embarked = reference.slot == .embarked,
+        .embarked = slot == .embarked,
         .city = self.cities.contains(to),
     }, rules);
 }
@@ -450,6 +468,117 @@ pub fn step(self: *Self, reference: Units.Reference, to: Idx, rules: *const Rule
         .embarkation => if (!try self.units.putNoStack(to, unit, .embarked)) unreachable,
         .disembarkation => if (!try self.units.putNoStackAutoSlot(to, unit, rules)) unreachable,
     }
+    return true;
+}
+
+pub fn movePath(
+    self: *Self,
+    reference: Units.Reference,
+    to: Idx,
+    rules: *const Rules,
+    path: *std.ArrayList(Step),
+) !bool {
+    if (reference.idx == to) return true;
+
+    const unit = self.units.deref(reference) orelse return false;
+    const max_movement = unit.maxMovement(rules);
+
+    var visited_set = std.AutoHashMap(Idx, f32).init(self.allocator);
+    defer visited_set.deinit();
+    try visited_set.ensureUnusedCapacity(150);
+
+    var prev = std.AutoHashMap(Idx, struct {
+        from: Idx,
+        cost: f32,
+    }).init(self.allocator);
+    defer prev.deinit();
+    try prev.ensureUnusedCapacity(150);
+
+    const Node = struct {
+        weight: f32,
+        idx: Idx,
+        slot: Units.Slot,
+    };
+
+    var queue = std.PriorityQueue(Node, void, struct {
+        fn cmp(context: void, a: Node, b: Node) std.math.Order {
+            _ = context;
+            return std.math.order(a.weight, b.weight);
+        }
+    }.cmp).init(self.allocator, {});
+    defer queue.deinit();
+    try queue.ensureUnusedCapacity(100);
+
+    try queue.add(.{
+        .weight = 0.0,
+        .idx = reference.idx,
+        .slot = reference.slot,
+    });
+
+    while (queue.removeOrNull()) |node| {
+        if (node.idx == to) break;
+        const neighbours = self.grid.neighbours(node.idx);
+        for (neighbours) |maybe_neighbour| {
+            if (maybe_neighbour) |neighbour| {
+                const new_weight, const new_slot = switch (self.stepCostFrom(
+                    node.idx,
+                    neighbour,
+                    unit,
+                    node.slot,
+                    rules,
+                )) {
+                    .allowed => |cost| .{
+                        node.weight + cost,
+                        node.slot,
+                    },
+                    .allowed_final => .{
+                        node.weight + max_movement - @mod(node.weight, max_movement),
+                        node.slot,
+                    },
+                    .embarkation => .{
+                        node.weight + max_movement - @mod(node.weight, max_movement),
+                        .embarked,
+                    },
+                    .disembarkation => .{
+                        node.weight + max_movement - @mod(node.weight, max_movement),
+                        Units.slotFromUnitType(unit.type, rules),
+                    },
+                    .disallowed => continue,
+                };
+
+                const old_weight = visited_set.get(neighbour) orelse std.math.inf(f32);
+
+                if (new_weight < old_weight) {
+                    try queue.add(.{
+                        .idx = neighbour,
+                        .weight = new_weight,
+                        .slot = new_slot,
+                    });
+                    try prev.put(neighbour, .{
+                        .from = node.idx,
+                        .cost = new_weight - node.weight,
+                    });
+                    try visited_set.put(neighbour, node.weight);
+                }
+            }
+        }
+    }
+
+    // Reconstruct path
+    {
+        var current = to;
+        while (current != reference.idx) {
+            const next_step = prev.get(current) orelse return false;
+            try path.append(.{
+                .idx = current,
+                .cost = next_step.cost,
+            });
+            current = next_step.from;
+        }
+    }
+
+    std.mem.reverse(Step, path.items);
+
     return true;
 }
 

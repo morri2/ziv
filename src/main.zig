@@ -256,6 +256,10 @@ pub fn main() !void {
     }).newEmpty(true, null);
     improvement_window.bounds.y += 800;
 
+    var path = std.ArrayList(World.Step).init(gpa.allocator());
+    defer path.deinit();
+    try path.ensureUnusedCapacity(16);
+
     while (!raylib.WindowShouldClose()) {
         const bounding_box = camera.boundingBox(
             game.world.grid.width,
@@ -363,9 +367,22 @@ pub fn main() !void {
                             }
                         }
 
-                        if (!attacked) _ = try game.move(maybe_unit_reference.?, mouse_idx);
+                        var moved: bool = false;
+                        if (!attacked) {
+                            var unit_ref = maybe_unit_reference.?;
+                            path.clearRetainingCapacity();
+                            if (try game.world.movePath(unit_ref, mouse_idx, &game.rules, &path)) {
+                                for (path.items) |step| {
+                                    _ = try game.move(unit_ref, step.idx) orelse break;
+                                    unit_ref.idx = step.idx;
+                                    moved = true;
+                                }
+                            }
+                            maybe_unit_reference.?.idx = unit_ref.idx;
+                            maybe_selected_idx = unit_ref.idx;
+                        }
 
-                        maybe_selected_idx = null;
+                        if (!moved) maybe_selected_idx = null;
                     } else if (maybe_unit_reference) |ref| {
                         maybe_unit_reference = game.world.units.nextReference(ref);
                     } else {
