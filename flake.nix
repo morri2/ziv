@@ -19,33 +19,35 @@
     };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    zig-overlay,
-    zls,
-    ...
-  }:
+  outputs =
+    { self
+    , nixpkgs
+    , flake-utils
+    , zig-overlay
+    , zls
+    , ...
+    }:
     flake-utils.lib.eachDefaultSystem (
-      system: let
-        pkgs = import nixpkgs {inherit system;};
+      system:
+      let
+        pkgs = import nixpkgs { inherit system; };
         zigpkg = zig-overlay.packages.${system}."0.13.0";
         zlspkg = zls.packages.${system}.zls;
-      in {
+      in
+      {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
-              zigpkg
-              zlspkg
-              libGL
-              xorg.libX11
-              xorg.libXcursor
-              xorg.libXrandr
-              xorg.libXinerama
-              xorg.libXi
+            zigpkg
+            zlspkg
+            libGL
+            xorg.libX11
+            xorg.libXcursor
+            xorg.libXrandr
+            xorg.libXinerama
+            xorg.libXi
           ];
 
-          hardeningDisable = ["all"];
+          hardeningDisable = [ "all" ];
         };
 
         devShell = self.devShells.${system}.default;
