@@ -275,7 +275,8 @@ pub fn loadTerrainTextures(
         } else {
             name = std.fmt.bufPrintZ(name_buf[0..], "nw_mountain", .{}) catch unreachable;
 
-            if (e.attributes(rules).is_water) // WTF IS WATER MAKES SHIT CRASH....
+            if (e.attributes(rules).is_water) // WTF IS WATER MAKES SHIT CRASH.... -1 year later- I DONT UNDERSTAND?!!
+                // note: as soon as a wonder has the is_water property shit crash :(
                 name = std.fmt.bufPrintZ(name_buf[0..], "nw_lake", .{}) catch unreachable;
             j = name.len;
         }
