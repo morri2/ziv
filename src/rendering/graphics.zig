@@ -256,20 +256,20 @@ pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
             var yield_type_count: u8 = 0;
 
             if (yield.food > 0) {
-                yield_textures[yield_type_count] = ts.food_yield_icons[yield.food];
+                yield_textures[yield_type_count] = ts.food_yield_icons[@min(10, yield.food)];
                 yield_type_count += 1;
             }
             if (yield.production > 0) {
-                yield_textures[yield_type_count] = ts.production_yield_icons[yield.production];
+                yield_textures[yield_type_count] = ts.production_yield_icons[@min(10, yield.production)];
                 yield_type_count += 1;
             }
             if (yield.gold > 0) {
-                yield_textures[yield_type_count] = ts.gold_yield_icons[yield.gold];
+                yield_textures[yield_type_count] = ts.gold_yield_icons[@min(10, yield.gold)];
                 yield_type_count += 1;
             }
 
             // if (yield.culture> 0) {
-            //     yield_textures[yield_type_count] = ts.culture_yield_icons[yield.culture];
+            //     yield_textures[yield_type_count] = ts.culture_yield_icons[@min(10, yield.culture)];
             //     yield_type_count += 1;
             // }
 

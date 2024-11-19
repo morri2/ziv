@@ -140,37 +140,37 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
         .food_yield_icons = try loadNumberedTextures(
             "textures/yields/food-{}.png",
             loadTexture("textures/yields/food-X.png", null),
-            10,
+            11,
             allocator,
         ),
         .production_yield_icons = try loadNumberedTextures(
             "textures/yields/prod-{}.png",
             loadTexture("textures/yields/prod-X.png", null),
-            10,
+            11,
             allocator,
         ),
         .gold_yield_icons = try loadNumberedTextures(
             "textures/yields/gold-{}.png",
             loadTexture("textures/yields/gold-X.png", null),
-            10,
+            11,
             allocator,
         ),
         .culture_yield_icons = try loadNumberedTextures(
             "textures/yields/culture-{}.png",
             loadTexture("textures/yields/culture-X.png", null),
-            10,
+            11,
             allocator,
         ),
         .faith_yield_icons = try loadNumberedTextures(
             "textures/yields/faith-{}.png",
             loadTexture("textures/yields/faith-X.png", null),
-            10,
+            11,
             allocator,
         ),
         .science_yield_icons = try loadNumberedTextures(
             "textures/yields/science-{}.png",
             loadTexture("textures/yields/science-X.png", null),
-            10,
+            11,
             allocator,
         ),
 
