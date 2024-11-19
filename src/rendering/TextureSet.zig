@@ -47,6 +47,13 @@ unit_slot_frame_glow: []const raylib.Texture2D,
 player_primary_color: []const raylib.Color,
 player_secondary_color: []const raylib.Color,
 
+production_yield_icons: []const raylib.Texture2D,
+food_yield_icons: []const raylib.Texture2D,
+gold_yield_icons: []const raylib.Texture2D,
+culture_yield_icons: []const raylib.Texture2D,
+faith_yield_icons: []const raylib.Texture2D,
+science_yield_icons: []const raylib.Texture2D,
+
 pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
     const font = raylib.LoadFont("textures/misc/custom_alagard.png");
     const universal_fallback = loadTexture("textures/misc/blank.png", null);
@@ -130,6 +137,43 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
         .red_pop = loadTexture("textures/misc/redpop.png", null),
         .city_border = loadTexture("textures/misc/outline_dashed.png", null),
 
+        .food_yield_icons = try loadNumberedTextures(
+            "textures/yields/food-{}.png",
+            loadTexture("textures/yields/food-X.png", null),
+            10,
+            allocator,
+        ),
+        .production_yield_icons = try loadNumberedTextures(
+            "textures/yields/prod-{}.png",
+            loadTexture("textures/yields/prod-X.png", null),
+            10,
+            allocator,
+        ),
+        .gold_yield_icons = try loadNumberedTextures(
+            "textures/yields/gold-{}.png",
+            loadTexture("textures/yields/gold-X.png", null),
+            10,
+            allocator,
+        ),
+        .culture_yield_icons = try loadNumberedTextures(
+            "textures/yields/culture-{}.png",
+            loadTexture("textures/yields/culture-X.png", null),
+            10,
+            allocator,
+        ),
+        .faith_yield_icons = try loadNumberedTextures(
+            "textures/yields/faith-{}.png",
+            loadTexture("textures/yields/faith-X.png", null),
+            10,
+            allocator,
+        ),
+        .science_yield_icons = try loadNumberedTextures(
+            "textures/yields/science-{}.png",
+            loadTexture("textures/yields/science-X.png", null),
+            10,
+            allocator,
+        ),
+
         .player_primary_color = &[_]raylib.Color{
             raylib.DARKPURPLE,
             raylib.DARKBLUE,
@@ -185,6 +229,13 @@ pub fn deinit(self: *Self) void {
     self.allocator.free(self.resource_icons);
     self.allocator.free(self.river_textures);
     self.allocator.free(self.terrain_textures);
+
+    self.allocator.free(self.food_yield_icons);
+    self.allocator.free(self.production_yield_icons);
+    self.allocator.free(self.gold_yield_icons);
+    self.allocator.free(self.culture_yield_icons);
+    self.allocator.free(self.faith_yield_icons);
+    self.allocator.free(self.science_yield_icons);
 }
 
 /// For loading textures for full terrain, eg not components

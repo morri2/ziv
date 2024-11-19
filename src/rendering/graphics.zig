@@ -250,8 +250,35 @@ pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
                     else => {},
                 }
             }
-            const fmt_args = .{ yield.production, yield.food, yield.gold };
-            render.renderFormatHexAuto(idx, world.grid, "{}P  {}F  {}G", fmt_args, 0.0, 0.5, .{ .font_size = 6 }, ts);
+
+            var yield_textures: [8]raylib.Texture2D = undefined;
+
+            var yield_type_count: u8 = 0;
+
+            if (yield.food > 0) {
+                yield_textures[yield_type_count] = ts.food_yield_icons[yield.food];
+                yield_type_count += 1;
+            }
+            if (yield.production > 0) {
+                yield_textures[yield_type_count] = ts.production_yield_icons[yield.production];
+                yield_type_count += 1;
+            }
+            if (yield.gold > 0) {
+                yield_textures[yield_type_count] = ts.gold_yield_icons[yield.gold];
+                yield_type_count += 1;
+            }
+
+            // if (yield.culture> 0) {
+            //     yield_textures[yield_type_count] = ts.culture_yield_icons[yield.culture];
+            //     yield_type_count += 1;
+            // }
+
+            const x_step: f32 = 0.35;
+            const x_start: f32 = -(x_step * (@as(f32, @floatFromInt(yield_type_count)) - 1.0) / 2.0);
+
+            for (0..yield_type_count) |i| {
+                render.renderTextureInHex(idx, world.grid, yield_textures[i], x_start + x_step * @as(f32, @floatFromInt(i)), 0.5, .{ .scale = 0.075 }, ts);
+            }
         }
     }
 }
