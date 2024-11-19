@@ -268,10 +268,20 @@ pub fn renderYields(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
                 yield_type_count += 1;
             }
 
-            // if (yield.culture> 0) {
-            //     yield_textures[yield_type_count] = ts.culture_yield_icons[@min(10, yield.culture)];
-            //     yield_type_count += 1;
-            // }
+            if (yield.culture > 0) {
+                yield_textures[yield_type_count] = ts.culture_yield_icons[@min(10, yield.culture)];
+                yield_type_count += 1;
+            }
+
+            if (yield.faith > 0) {
+                yield_textures[yield_type_count] = ts.faith_yield_icons[@min(10, yield.faith)];
+                yield_type_count += 1;
+            }
+
+            if (yield.science > 0) {
+                yield_textures[yield_type_count] = ts.science_yield_icons[@min(10, yield.science)];
+                yield_type_count += 1;
+            }
 
             const x_step: f32 = 0.35;
             const x_start: f32 = -(x_step * (@as(f32, @floatFromInt(yield_type_count)) - 1.0) / 2.0);
