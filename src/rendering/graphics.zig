@@ -209,7 +209,7 @@ pub fn renderCities(world: *const World, bbox: BoundingBox, maybe_view: ?*const 
             //TODO fix Perpetual icons and Building
             const icon = switch (project.project) {
                 .unit => |unit_type| ts.unit_symbols[@intFromEnum(unit_type)],
-                .building => unreachable,
+                .improvement => unreachable,
                 .perpetual_money => unreachable,
                 .perpetual_research => unreachable,
             };
@@ -421,8 +421,8 @@ pub fn renderTerrain(terrain: Terrain, idx: Idx, grid: Grid, ts: TextureSet, rul
 }
 
 pub fn renderImprovements(improvement: Rules.Improvements, tile_idx: Idx, grid: Grid, ts: TextureSet) void {
-    if (improvement.building != .none) {
-        const improvement_texture = ts.improvement_textures[@intFromEnum(improvement.building)];
+    if (improvement.improvement != .none) {
+        const improvement_texture = ts.improvement_textures[@intFromEnum(improvement.improvement)];
         render.renderTextureHex(tile_idx, grid, improvement_texture, .{}, ts);
     }
 }

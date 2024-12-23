@@ -6,7 +6,7 @@ const Rules = @import("Rules.zig");
 const Yield = Rules.Yield;
 const Terrain = Rules.Terrain;
 const Resource = Rules.Resource;
-const Building = Rules.Building;
+const Improvement = Rules.Improvement;
 const Improvements = Rules.Improvements;
 const Promotion = Rules.Promotion;
 const UnitType = Rules.UnitType;
@@ -556,7 +556,7 @@ fn parseImprovements(
     resource_map: *const std.StringArrayHashMap(Resource),
     allocator: std.mem.Allocator,
 ) !void {
-    const JsonBuilding = struct {
+    const JsonImprovement = struct {
         name: []const u8,
         build_turns: u8,
         allow_on: struct {
@@ -587,94 +587,94 @@ fn parseImprovements(
     defer allocator.free(json_text);
 
     const parsed = try std.json.parseFromSlice(struct {
-        buildings: []const JsonBuilding,
+        improvements: []const JsonImprovement,
     }, allocator, json_text, .{});
     defer parsed.deinit();
 
-    const buildings = parsed.value.buildings;
+    const improvements = parsed.value.improvements;
 
     const arena_allocator = rules.arena.allocator();
 
-    std.debug.assert(buildings.len <= 256);
+    std.debug.assert(improvements.len <= 256);
 
-    rules.building_count = @intCast(buildings.len + 1);
+    rules.improvement_count = @intCast(improvements.len + 1);
 
-    const building_yields = try arena_allocator.alloc(Yield, rules.building_count);
-    const building_names = try arena_allocator.alloc(u16, rules.building_count + 1);
+    const improvement_yields = try arena_allocator.alloc(Yield, rules.improvement_count);
+    const improvement_names = try arena_allocator.alloc(u16, rules.improvement_count + 1);
 
-    building_yields[0] = .{};
+    improvement_yields[0] = .{};
     const strings_len = blk: {
         var strings_len: usize = 0;
-        for (buildings) |building| {
-            strings_len += building.name.len;
+        for (improvements) |improvement| {
+            strings_len += improvement.name.len;
         }
         break :blk strings_len;
     };
 
     std.debug.assert(strings_len <= std.math.maxInt(u16));
-    const building_strings = try arena_allocator.alloc(u8, strings_len);
+    const improvement_strings = try arena_allocator.alloc(u8, strings_len);
 
     var num_resource_connectors: u32 = 0;
     {
         var string_index: usize = 0;
-        building_names[0] = @truncate(string_index);
-        for (buildings, 1..) |building, building_index| {
+        improvement_names[0] = @truncate(string_index);
+        for (improvements, 1..) |improvement, improvement_index| {
             std.mem.copyForwards(
                 u8,
-                building_strings[string_index..(string_index + building.name.len)],
-                building.name,
+                improvement_strings[string_index..(string_index + improvement.name.len)],
+                improvement.name,
             );
-            building_names[building_index] = @truncate(string_index);
-            string_index += building.name.len;
+            improvement_names[improvement_index] = @truncate(string_index);
+            string_index += improvement.name.len;
 
-            building_yields[building_index] = building.yield;
+            improvement_yields[improvement_index] = improvement.yield;
 
-            num_resource_connectors += @intCast(building.allow_on.resources.len);
+            num_resource_connectors += @intCast(improvement.allow_on.resources.len);
         }
-        building_names[building_names.len - 1] = @truncate(string_index);
+        improvement_names[improvement_names.len - 1] = @truncate(string_index);
     }
 
-    var resource_connectors: @TypeOf(rules.building_resource_connectors) = .{};
+    var resource_connectors: @TypeOf(rules.improvement_resource_connectors) = .{};
     try resource_connectors.ensureUnusedCapacity(arena_allocator, num_resource_connectors);
-    for (buildings, 1..) |building, building_index| {
-        for (building.allow_on.resources) |resource_name| {
+    for (improvements, 1..) |improvement, improvement_index| {
+        for (improvement.allow_on.resources) |resource_name| {
             const resource = resource_map.get(resource_name) orelse return error.UnknownResource;
             resource_connectors.putAssumeCapacity(.{
-                .building = @enumFromInt(building_index),
+                .improvement = @enumFromInt(improvement_index),
                 .resource = resource,
             }, {});
         }
     }
 
-    var building_resource_yields: @TypeOf(rules.building_resource_yields) = .{};
-    try building_resource_yields.ensureUnusedCapacity(arena_allocator, 255); // TODO
-    for (buildings, 1..) |building, building_index| {
-        for (building.resource_yields) |resources_yield| {
+    var improvement_resource_yields: @TypeOf(rules.improvement_resource_yields) = .{};
+    try improvement_resource_yields.ensureUnusedCapacity(arena_allocator, 255); // TODO
+    for (improvements, 1..) |improvement, improvement_index| {
+        for (improvement.resource_yields) |resources_yield| {
             for (resources_yield.resources) |resource_name| {
                 const resource = resource_map.get(resource_name) orelse return error.UnknownResource;
-                building_resource_yields.putAssumeCapacity(.{
-                    .building = @enumFromInt(building_index),
+                improvement_resource_yields.putAssumeCapacity(.{
+                    .improvement = @enumFromInt(improvement_index),
                     .resource = resource,
                 }, resources_yield.yield);
             }
         }
     }
 
-    rules.building_strings = building_strings;
-    rules.building_yields = building_yields;
-    rules.building_names = building_names;
-    rules.building_resource_connectors = resource_connectors;
-    rules.building_resource_yields = building_resource_yields;
+    rules.improvement_strings = improvement_strings;
+    rules.improvement_yields = improvement_yields;
+    rules.improvement_names = improvement_names;
+    rules.improvement_resource_connectors = resource_connectors;
+    rules.improvement_resource_yields = improvement_resource_yields;
 
-    var allowed_on_map: @TypeOf(rules.building_allowed_map) = .{};
+    var allowed_on_map: @TypeOf(rules.improvement_allowed_map) = .{};
     defer allowed_on_map.deinit(allocator);
 
-    for (buildings, 0..) |building, building_index| {
-        const building_enum: Building = @enumFromInt(building_index + 1);
+    for (improvements, 0..) |improvement, improvement_index| {
+        const improvement_enum: Improvement = @enumFromInt(improvement_index + 1);
 
         const veg_flags = blk: {
             var flags = TerrainMaps.FlagIndexMap.Flags.initEmpty();
-            for (building.allow_on.vegetation) |vegetation| {
+            for (improvement.allow_on.vegetation) |vegetation| {
                 flags.set(terrain_maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation);
             }
             break :blk flags;
@@ -683,10 +683,10 @@ fn parseImprovements(
         terrain_loop: for (terrain_tiles, 0..) |tile, terrain_index| {
             const terrain: Terrain = @enumFromInt(terrain_index);
 
-            const tag: Building.Allowed = if (veg_flags.isSet(@intFromEnum(tile.unpacked.vegetation))) .allowed else .allowed_after_clear;
+            const tag: Improvement.Allowed = if (veg_flags.isSet(@intFromEnum(tile.unpacked.vegetation))) .allowed else .allowed_after_clear;
             _ = tag; // autofix
 
-            for (building.allow_on.bases) |base| {
+            for (improvement.allow_on.bases) |base| {
                 const base_enum: Terrain.Base = @enumFromInt(
                     terrain_maps.base.get(base.name) orelse return error.UnknownBase,
                 );
@@ -697,14 +697,14 @@ fn parseImprovements(
                 if (!tile.attributes.intersectWith(base.required_attributes).eql(base.required_attributes)) continue;
 
                 try allowed_on_map.put(allocator, .{
-                    .building = building_enum,
+                    .improvement = improvement_enum,
                     .terrain = terrain,
-                }, if (tile.unpacked.vegetation == .none or building.keep_vegetation) .allowed else .allowed_after_clear);
+                }, if (tile.unpacked.vegetation == .none or improvement.keep_vegetation) .allowed else .allowed_after_clear);
 
                 continue :terrain_loop;
             }
 
-            for (building.allow_on.features) |feature| {
+            for (improvement.allow_on.features) |feature| {
                 if (tile.unpacked.feature == .none) continue;
 
                 const feature_enum: Terrain.Feature = @enumFromInt(
@@ -715,13 +715,13 @@ fn parseImprovements(
                 if (!tile.attributes.intersectWith(feature.required_attributes).eql(feature.required_attributes)) continue;
 
                 try allowed_on_map.put(allocator, .{
-                    .building = building_enum,
+                    .improvement = improvement_enum,
                     .terrain = terrain,
-                }, if (tile.unpacked.vegetation == .none or building.keep_vegetation) .allowed else .allowed_after_clear);
+                }, if (tile.unpacked.vegetation == .none or improvement.keep_vegetation) .allowed else .allowed_after_clear);
                 continue :terrain_loop;
             }
 
-            for (building.allow_on.vegetation) |vegetation| {
+            for (improvement.allow_on.vegetation) |vegetation| {
                 const vegetation_enum: Terrain.Vegetation = @enumFromInt(
                     terrain_maps.vegetation.get(vegetation.name) orelse return error.UnknownVegetation,
                 );
@@ -731,30 +731,30 @@ fn parseImprovements(
                 if (!tile.attributes.intersectWith(vegetation.required_attributes).eql(vegetation.required_attributes)) continue;
 
                 try allowed_on_map.put(allocator, .{
-                    .building = building_enum,
+                    .improvement = improvement_enum,
                     .terrain = terrain,
                 }, .allowed);
 
                 continue :terrain_loop;
             }
 
-            if (building.allow_on.resources.len != 0) {
-                if (tile.unpacked.vegetation == .none or building.keep_vegetation) {
+            if (improvement.allow_on.resources.len != 0) {
+                if (tile.unpacked.vegetation == .none or improvement.keep_vegetation) {
                     try allowed_on_map.put(allocator, .{
-                        .building = building_enum,
+                        .improvement = improvement_enum,
                         .terrain = terrain,
                     }, .allowed_if_resource);
                 } else {
                     try allowed_on_map.put(allocator, .{
-                        .building = building_enum,
+                        .improvement = improvement_enum,
                         .terrain = terrain,
                     }, .allowed_after_clear_if_resource);
                 }
             }
 
-            // if (tile.unpacked.vegetation != .none and building.allow_on.resources.len != 0) {
+            // if (tile.unpacked.vegetation != .none and improvement.allow_on.resources.len != 0) {
             //     try allowed_on_map.put(allocator, .{
-            //         .building = building_enum,
+            //         .improvement = improvement_enum,
             //         .terrain = terrain,
             //     }, switch (tag) {
             //         .allowed => .allowed_if_resource,
@@ -765,7 +765,7 @@ fn parseImprovements(
         }
     }
 
-    rules.building_allowed_map = try allowed_on_map.clone(arena_allocator);
+    rules.improvement_allowed_map = try allowed_on_map.clone(arena_allocator);
 }
 
 fn parsePromotions(

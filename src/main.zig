@@ -419,17 +419,17 @@ pub fn main() !void {
                     if (game.world.canDoImprovementWork(ref, .remove_vegetation, &game.rules)) {
                         improvement_window.addItem(.remove_vegetation, "Clear Vegetation");
                     }
-                    for (0..game.rules.building_count) |bi| {
-                        const b: Rules.Building = @enumFromInt(bi);
+                    for (0..game.rules.improvement_count) |bi| {
+                        const b: Rules.Improvement = @enumFromInt(bi);
 
-                        if (game.world.canDoImprovementWork(ref, .{ .building = b }, &game.rules)) {
+                        if (game.world.canDoImprovementWork(ref, .{ .improvement = b }, &game.rules)) {
                             var buf: [255]u8 = undefined;
                             const label = try std.fmt.bufPrint(&buf, "Build: \n {s}", .{b.name(&game.rules)});
-                            improvement_window.addItem(.{ .building = b }, label);
-                        } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_building = b }, &game.rules)) {
+                            improvement_window.addItem(.{ .improvement = b }, label);
+                        } else if (game.world.canDoImprovementWork(ref, .{ .remove_vegetation_improvement = b }, &game.rules)) {
                             var buf: [255]u8 = undefined;
                             const label = try std.fmt.bufPrint(&buf, "Clear & Build: \n {s}", .{b.name(&game.rules)});
-                            improvement_window.addItem(.{ .remove_vegetation_building = b }, label);
+                            improvement_window.addItem(.{ .remove_vegetation_improvement = b }, label);
                         }
                     }
 

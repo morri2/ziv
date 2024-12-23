@@ -89,9 +89,9 @@ pub fn init(rules: *const Rules, allocator: std.mem.Allocator) !Self {
         .improvement_textures = try loadTexturesEnum(
             "textures/improvements/{s}.png",
             universal_fallback,
-            Rules.Building,
+            Rules.Improvement,
             rules,
-            rules.building_count,
+            rules.improvement_count,
             allocator,
         ),
         .city_textures = try loadNumberedTextures("textures/improvements/city_{}.png", universal_fallback, 6, allocator),

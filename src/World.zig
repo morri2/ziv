@@ -5,7 +5,7 @@ const Rules = @import("Rules.zig");
 const Yield = Rules.Yield;
 const Terrain = Rules.Terrain;
 const Resource = Rules.Resource;
-const Building = Rules.Building;
+const Improvement = Rules.Improvement;
 const Transport = Rules.Transport;
 const Improvements = Rules.Improvements;
 
@@ -50,16 +50,16 @@ pub const WorkInProgress = struct {
 };
 
 pub const TileWork = union(TileWorkType) {
-    building: Building,
-    remove_vegetation_building: Building,
+    improvement: Improvement,
+    remove_vegetation_improvement: Improvement,
     transport: Transport,
     remove_fallout,
     repair,
     remove_vegetation,
 
     pub const TileWorkType = enum(u8) {
-        building = 0,
-        remove_vegetation_building = 1,
+        improvement = 0,
+        remove_vegetation_improvement = 1,
         transport = 2,
         remove_fallout = 3,
         repair = 4,
@@ -282,7 +282,7 @@ pub fn tileYield(self: *const Self, idx: Idx, rules: *const Rules) Yield {
 
     if (maybe_resource) |resource| yield = yield.add(resource.yield(rules));
 
-    const imp_y = self.improvements[idx].building.yield(maybe_resource, rules);
+    const imp_y = self.improvements[idx].improvement.yield(maybe_resource, rules);
     yield = yield.add(imp_y);
 
     // City yields
@@ -300,8 +300,8 @@ pub fn workAllowedOn(self: *const Self, idx: Idx, work: TileWork, rules: *const 
     if (self.terrain[idx].attributes(rules).is_impassable) return false;
 
     switch (work) {
-        .building => |b| {
-            const a = Rules.Building.allowedOn(b, self.terrain[idx], rules);
+        .improvement => |b| {
+            const a = Rules.Improvement.allowedOn(b, self.terrain[idx], rules);
             switch (a) {
                 .allowed_if_resource => {
                     return b.connectsResource((self.resources.get(idx) orelse return false).type, rules);
@@ -310,9 +310,9 @@ pub fn workAllowedOn(self: *const Self, idx: Idx, work: TileWork, rules: *const 
                 else => return false,
             }
         },
-        .remove_vegetation_building => |b| {
+        .remove_vegetation_improvement => |b| {
             if (!self.workAllowedOn(idx, .remove_vegetation, rules)) return false;
-            switch (Rules.Building.allowedOn(b, self.terrain[idx], rules)) {
+            switch (Rules.Improvement.allowedOn(b, self.terrain[idx], rules)) {
                 .allowed_after_clear_if_resource => {
                     return b.connectsResource((self.resources.get(idx) orelse return false).type, rules);
                 },
@@ -339,8 +339,8 @@ pub fn canDoImprovementWork(self: *const Self, unit_ref: Units.Reference, work: 
     if (unit.movement <= 0) return false;
 
     switch (work) {
-        .building,
-        .remove_vegetation_building,
+        .improvement,
+        .remove_vegetation_improvement,
         .remove_vegetation,
         => if (!Rules.Promotion.Effect.in(.build_improvement, unit.promotions, rules)) return false,
         .transport => |t| {
@@ -359,9 +359,9 @@ pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork,
         if (self.work_in_progress.getPtr(unit_ref.idx)) |wip| {
             if (@intFromEnum(wip.work_type) == @intFromEnum(work)) {
                 if (switch (wip.work_type) {
-                    .building => |b| b == work.building,
+                    .improvement => |b| b == work.improvement,
                     .transport => |t| t == work.transport,
-                    .remove_vegetation_building => |b| b == work.remove_vegetation_building,
+                    .remove_vegetation_improvement => |b| b == work.remove_vegetation_improvement,
                     else => true,
                 }) {
                     wip.progress += 1;
@@ -377,11 +377,11 @@ pub fn doImprovementWork(self: *Self, unit_ref: Units.Reference, work: TileWork,
         {
             _ = self.work_in_progress.swapRemove(unit_ref.idx);
             switch (wip.work_type) {
-                .building => |b| self.improvements[unit_ref.idx].building = b,
+                .improvement => |b| self.improvements[unit_ref.idx].improvement = b,
                 .remove_vegetation => self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(rules),
-                .remove_vegetation_building => |b| {
+                .remove_vegetation_improvement => |b| {
                     self.terrain[unit_ref.idx] = self.terrain[unit_ref.idx].withoutVegetation(rules);
-                    self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = .{ .building = b }, .progress = 0 }) catch unreachable;
+                    self.work_in_progress.put(self.allocator, unit_ref.idx, .{ .work_type = .{ .improvement = b }, .progress = 0 }) catch unreachable;
                 },
                 .transport => |t| self.improvements[unit_ref.idx].transport = t,
                 else => {

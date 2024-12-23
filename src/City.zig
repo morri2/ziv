@@ -37,13 +37,13 @@ const GrowthResult = enum {
 };
 
 pub const ProductionTarget = union(Type) {
-    building: Rules.Building,
+    improvement: Rules.Improvement,
     unit: Rules.UnitType,
     perpetual_money: void,
     perpetual_research: void,
 
     pub const Type = enum(u8) {
-        building = 0,
+        improvement = 0,
         unit = 1,
         perpetual_money = 2,
         perpetual_research = 3,

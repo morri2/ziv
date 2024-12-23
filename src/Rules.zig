@@ -30,23 +30,23 @@ resource_yields: []const Yield,
 resource_names: []const u16,
 resource_strings: []const u8,
 
-building_count: u32,
-building_yields: []const Yield,
-building_allowed_map: std.AutoHashMapUnmanaged(struct {
-    building: Building,
+improvement_count: u32,
+improvement_yields: []const Yield,
+improvement_allowed_map: std.AutoHashMapUnmanaged(struct {
+    improvement: Improvement,
     terrain: Terrain,
-}, Building.Allowed),
-building_resource_connectors: std.AutoHashMapUnmanaged(struct {
-    building: Building,
+}, Improvement.Allowed),
+improvement_resource_connectors: std.AutoHashMapUnmanaged(struct {
+    improvement: Improvement,
     resource: Resource,
 }, void),
 
-building_resource_yields: std.AutoHashMapUnmanaged(struct {
-    building: Building,
+improvement_resource_yields: std.AutoHashMapUnmanaged(struct {
+    improvement: Improvement,
     resource: Resource,
 }, Yield),
-building_names: []const u16,
-building_strings: []const u8,
+improvement_names: []const u16,
+improvement_strings: []const u8,
 
 promotion_count: u32,
 promotion_prerequisites: []const u16,
@@ -242,7 +242,7 @@ pub const Resource = enum(u6) {
     }
 };
 
-pub const Building = enum(u8) {
+pub const Improvement = enum(u8) {
     none = 0,
     _,
 
@@ -254,45 +254,45 @@ pub const Building = enum(u8) {
         allowed_after_clear_if_resource = 4,
     };
 
-    pub fn yield(self: Building, resource: ?Resource, rules: *const Rules) Yield {
+    pub fn yield(self: Improvement, resource: ?Resource, rules: *const Rules) Yield {
         var y = self.improvementYield(rules);
         if (resource) |r| y = y.add(self.improvedResourceYield(r, rules));
         return y;
     }
 
-    pub fn improvementYield(self: Building, rules: *const Rules) Yield {
-        return rules.building_yields[@intFromEnum(self)];
+    pub fn improvementYield(self: Improvement, rules: *const Rules) Yield {
+        return rules.improvement_yields[@intFromEnum(self)];
     }
 
-    pub fn improvedResourceYield(self: Building, resource: Resource, rules: *const Rules) Yield {
-        return rules.building_resource_yields.get(.{
-            .building = self,
+    pub fn improvedResourceYield(self: Improvement, resource: Resource, rules: *const Rules) Yield {
+        return rules.improvement_resource_yields.get(.{
+            .improvement = self,
             .resource = resource,
         }) orelse .{};
     }
 
     pub fn allowedOn(
-        self: Building,
+        self: Improvement,
         terrain: Terrain,
         rules: *const Rules,
     ) Allowed {
-        return rules.building_allowed_map.get(.{
+        return rules.improvement_allowed_map.get(.{
             .terrain = terrain,
-            .building = self,
+            .improvement = self,
         }) orelse .not_allowed;
     }
 
-    pub fn connectsResource(self: Building, resource: Resource, rules: *const Rules) bool {
-        return rules.building_resource_connectors.contains(.{
-            .building = self,
+    pub fn connectsResource(self: Improvement, resource: Resource, rules: *const Rules) bool {
+        return rules.improvement_resource_connectors.contains(.{
+            .improvement = self,
             .resource = resource,
         });
     }
 
-    pub fn name(self: Building, rules: *const Rules) []const u8 {
-        const start = rules.building_names[@intFromEnum(self)];
-        const end = rules.building_names[@intFromEnum(self) + 1];
-        return rules.building_strings[start..end];
+    pub fn name(self: Improvement, rules: *const Rules) []const u8 {
+        const start = rules.improvement_names[@intFromEnum(self)];
+        const end = rules.improvement_names[@intFromEnum(self) + 1];
+        return rules.improvement_strings[start..end];
     }
 };
 
@@ -303,7 +303,7 @@ pub const Transport = enum(u2) {
 };
 
 pub const Improvements = packed struct(u12) {
-    building: Building = .none,
+    improvement: Improvement = .none,
     transport: Transport = .none,
     pillaged_improvements: bool = false,
     pillaged_transport: bool = false,
@@ -508,17 +508,17 @@ const rules_serialization = @import("serialization.zig").customSerialization(&.{
     } } },
     .{ .name = "resource_strings" },
 
-    // Buildings
-    .{ .name = "building_count" },
-    .{ .name = "building_yields", .ty = .{ .slice_with_len = "building_count" } },
-    .{ .name = "building_allowed_map", .ty = .hash_map },
-    .{ .name = "building_resource_connectors", .ty = .hash_set },
-    .{ .name = "building_resource_yields", .ty = .hash_map },
-    .{ .name = "building_names", .ty = .{ .slice_with_len_extra = .{
-        .len_name = "building_count",
+    // Improvements
+    .{ .name = "improvement_count" },
+    .{ .name = "improvement_yields", .ty = .{ .slice_with_len = "improvement_count" } },
+    .{ .name = "improvement_allowed_map", .ty = .hash_map },
+    .{ .name = "improvement_resource_connectors", .ty = .hash_set },
+    .{ .name = "improvement_resource_yields", .ty = .hash_map },
+    .{ .name = "improvement_names", .ty = .{ .slice_with_len_extra = .{
+        .len_name = "improvement_count",
         .extra = 1,
     } } },
-    .{ .name = "building_strings" },
+    .{ .name = "improvement_strings" },
 
     // Promotions
     .{ .name = "promotion_count" },
