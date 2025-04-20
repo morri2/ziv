@@ -90,14 +90,14 @@ pub const Serializable = struct {
             .default => child.* = try deserializeValueAlloc(reader, Child, allocator),
             .slice_with_len => |len_name| {
                 const len = @field(parent, len_name);
-                const ChildType = @typeInfo(Child).Pointer.child;
+                const ChildType = @typeInfo(Child).pointer.child;
                 const slice = try allocator.alloc(ChildType, len);
                 for (slice) |*e| e.* = try deserializeValueAlloc(reader, ChildType, allocator);
                 child.* = slice;
             },
             .slice_with_len_extra => |info| {
                 const len = @field(parent, info.len_name) + info.extra;
-                const ChildType = @typeInfo(Child).Pointer.child;
+                const ChildType = @typeInfo(Child).pointer.child;
                 const slice = try allocator.alloc(ChildType, len);
                 for (slice) |*e| e.* = try deserializeValueAlloc(reader, ChildType, allocator);
                 child.* = slice;
@@ -203,11 +203,11 @@ pub fn customSerialization(comptime serializables: []const Serializable, comptim
 pub fn serializeValue(writer: anytype, value: anytype) !void {
     const Value = @TypeOf(value);
     switch (@typeInfo(Value)) {
-        .Void => {},
-        .Bool => try writer.writeByte(@intFromBool(value)),
-        .Int => try writer.writeInt(getAlignedInt(Value), value, .little),
-        .Enum => |info| try writer.writeInt(getAlignedInt(info.tag_type), @intFromEnum(value), .little),
-        .Union => |info| {
+        .void => {},
+        .bool => try writer.writeByte(@intFromBool(value)),
+        .int => try writer.writeInt(getAlignedInt(Value), value, .little),
+        .@"enum" => |info| try writer.writeInt(getAlignedInt(info.tag_type), @intFromEnum(value), .little),
+        .@"union" => |info| {
             const TagType = info.tag_type orelse unreachable;
             try writer.writeInt(
                 getAlignedInt(std.meta.Tag(TagType)),
@@ -218,7 +218,7 @@ pub fn serializeValue(writer: anytype, value: anytype) !void {
                 if (value == @field(TagType, field.name)) try serializeValue(writer, @field(value, field.name));
             }
         },
-        .Struct => |info| {
+        .@"struct" => |info| {
             if (info.backing_integer) |backing_integer| {
                 const Int = getAlignedInt(backing_integer);
                 const struct_int: backing_integer = @bitCast(value);
@@ -233,11 +233,11 @@ pub fn serializeValue(writer: anytype, value: anytype) !void {
                 }
             }
         },
-        .Array => {
+        .array => {
             for (value) |e| try serializeValue(writer, e);
         },
-        .Pointer => |info| switch (info.size) {
-            .Slice => {
+        .pointer => |info| switch (info.size) {
+            .slice => {
                 try writer.writeInt(u32, @intCast(value.len), .little);
                 for (value) |e| try serializeValue(writer, e);
             },
@@ -253,14 +253,14 @@ pub fn deserializeValue(reader: anytype, comptime Value: type) !Value {
 
 pub fn deserializeValueAlloc(reader: anytype, comptime Value: type, maybe_allocator: ?std.mem.Allocator) !Value {
     return switch (@typeInfo(Value)) {
-        .Void => {},
-        .Bool => blk: {
+        .void => {},
+        .bool => blk: {
             const bool_int: u1 = @intCast(try reader.readByte());
             break :blk @bitCast(bool_int);
         },
-        .Int => @intCast(try reader.readInt(getAlignedInt(Value), .little)),
-        .Enum => |info| @enumFromInt(try reader.readInt(getAlignedInt(info.tag_type), .little)),
-        .Union => |info| blk: {
+        .int => @intCast(try reader.readInt(getAlignedInt(Value), .little)),
+        .@"enum" => |info| @enumFromInt(try reader.readInt(getAlignedInt(info.tag_type), .little)),
+        .@"union" => |info| blk: {
             const TagType = info.tag_type orelse unreachable;
             const tag: TagType = @enumFromInt(try reader.readInt(
                 getAlignedInt(std.meta.Tag(TagType)),
@@ -272,7 +272,7 @@ pub fn deserializeValueAlloc(reader: anytype, comptime Value: type, maybe_alloca
             }
             unreachable;
         },
-        .Struct => |info| blk: {
+        .@"struct" => |info| blk: {
             if (info.backing_integer) |backing_integer| {
                 const Int = getAlignedInt(backing_integer);
                 const struct_int: backing_integer = @intCast(try reader.readInt(Int, .little));
@@ -287,13 +287,13 @@ pub fn deserializeValueAlloc(reader: anytype, comptime Value: type, maybe_alloca
                 break :blk value;
             }
         },
-        .Array => |info| blk: {
+        .array => |info| blk: {
             var value: Value = undefined;
             for (&value) |*e| e.* = try deserializeValueAlloc(reader, info.child, maybe_allocator);
             break :blk value;
         },
-        .Pointer => |info| switch (info.size) {
-            .Slice => if (maybe_allocator) |allocator| blk: {
+        .pointer => |info| switch (info.size) {
+            .slice => if (maybe_allocator) |allocator| blk: {
                 const len = try reader.readInt(u32, .little);
                 const values = try allocator.alloc(info.child, len);
                 errdefer allocator.free(values);
@@ -308,7 +308,7 @@ pub fn deserializeValueAlloc(reader: anytype, comptime Value: type, maybe_alloca
 
 fn getAlignedInt(comptime Int: type) type {
     return switch (@typeInfo(Int)) {
-        .Int => |info| std.meta.Int(info.signedness, std.mem.alignForward(u16, info.bits, 8)),
+        .int => |info| std.meta.Int(info.signedness, std.mem.alignForward(u16, info.bits, 8)),
         else => unreachable,
     };
 }

@@ -130,7 +130,7 @@ pub const Terrain = enum(u8) {
     };
 
     pub const Attributes = packed struct(u10) {
-        pub const Integer = @typeInfo(Attributes).Struct.backing_integer.?;
+        pub const Integer = @typeInfo(Attributes).@"struct".backing_integer.?;
 
         is_water: bool = false,
         is_deep_water: bool = false,

@@ -168,7 +168,7 @@ pub fn main() !void {
         .spacing = 4,
         .nullable = .not_nullable,
     }).newEmpty(true, .none);
-    inline for (@typeInfo(EditMode).Enum.fields) |field| {
+    inline for (@typeInfo(EditMode).@"enum".fields) |field| {
         edit_window.addItem(@enumFromInt(field.value), field.name);
     }
 

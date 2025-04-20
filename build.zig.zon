@@ -1,19 +1,21 @@
 .{
-    .name = "ziv",
+    .name = .ziv,
     .version = "0.0.0",
+
+    .fingerprint = 0xab7e3073995719ed,
 
     .dependencies = .{
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/ec95ee85a386db29f059b9738cd5ec9329f1661e.tar.gz",
-            .hash = "1220ef5d947d0bb41d19fe32f4308143bdd650038f9f439e4366bca9e97e7e46ec84",
+            .url = "https://github.com/raysan5/raylib/archive/61a026f7ef54f17428ee6fdf079b0d2e7bdbca73.tar.gz",
+            .hash = "raylib-5.5.0-whq8uGZGzQDi3_L7tJzgEINoZN-HwmOs0zkkc2g7ysIZ",
         },
         .raygui = .{
-            .url = "https://github.com/raysan5/raygui/archive/7fe39be75af7d166c50afb6e6b9013398d66a7e1.tar.gz",
-            .hash = "12205b5293d62a48e0c111011f5832f72d4dad0594097eeae10a3a9edcda5bf17612",
+            .url = "https://github.com/raysan5/raygui/archive/9a95871701a5fc63bea35eab73fef6414e048b73.tar.gz",
+            .hash = "N-V-__8AAPZ7UgBpukXNy27vajQpyiPrEZpV6jOLzI6-Otc_",
         },
         .@"zig-clap" = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.9.0.tar.gz",
-            .hash = "12207ee987ce045596cb992cfb15b0d6d9456e50d4721c3061c69dabc2962053644d",
+            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.10.0.tar.gz",
+            .hash = "clap-0.10.0-oBajB434AQBDh-Ei3YtoKIRxZacVPF1iSwp3IX_ZB8f0",
         },
     },
 

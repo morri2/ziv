@@ -1,18 +1,22 @@
 const std = @import("std");
-const raylib_dep = @import("raylib");
+const raylib = @import("raylib");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const raylib_lib = try raylib_dep.addRaylib(
-        b,
-        target,
-        optimize,
-        .{
-            .raygui = true,
-        },
-    );
+    const raylib_dep = b.dependency("raylib", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const raylib_lib = raylib_dep.artifact("raylib");
+
+    const raygui_dep = b.dependency("raygui", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    raylib.addRaygui(b, raylib_lib, raygui_dep);
 
     const zig_clap_dep = b.dependency("zig-clap", .{
         .target = target,

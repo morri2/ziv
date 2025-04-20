@@ -2,7 +2,7 @@
   description = "Civ V clone environment";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     flake-utils.url = "github:numtide/flake-utils";
 
     zig-overlay = {
@@ -11,11 +11,10 @@
     };
 
     zls = {
-      url = "github:zigtools/zls/0.13.0";
+      url = "github:zigtools/zls/0.14.0";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-utils.follows = "flake-utils";
-        zig-overlay.follows = "zig-overlay";
       };
     };
   };
@@ -32,7 +31,7 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        zigpkg = zig-overlay.packages.${system}."0.13.0";
+        zigpkg = zig-overlay.packages.${system}."0.14.0";
         zlspkg = zls.packages.${system}.zls;
       in
       {
@@ -46,6 +45,9 @@
             xorg.libXrandr
             xorg.libXinerama
             xorg.libXi
+            libxkbcommon
+            wayland
+            wayland-scanner
           ];
 
           hardeningDisable = [ "all" ];

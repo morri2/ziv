@@ -251,7 +251,7 @@ fn parseTerrain(
 
                 var new_tile = tile;
                 new_tile.unpacked.feature = @enumFromInt(feature_index);
-                inline for (@typeInfo(Terrain.Attributes).Struct.fields) |field| {
+                inline for (@typeInfo(Terrain.Attributes).@"struct".fields) |field| {
                     @field(new_tile.attributes, field.name) =
                         @field(tile.attributes, field.name) or
                         @field(feature.attributes, field.name);
@@ -288,7 +288,7 @@ fn parseTerrain(
 
                 var new_tile = tile;
                 new_tile.unpacked.vegetation = @enumFromInt(vegetation_index);
-                inline for (@typeInfo(Terrain.Attributes).Struct.fields) |field| {
+                inline for (@typeInfo(Terrain.Attributes).@"struct".fields) |field| {
                     @field(new_tile.attributes, field.name) =
                         @field(tile.attributes, field.name) or
                         @field(vegetation.attributes, field.name);
@@ -355,7 +355,7 @@ fn parseTerrain(
                 if (tile.unpacked.vegetation != override_vegetation) continue;
             } else if (tile.unpacked.vegetation != .none) continue;
 
-            inline for (@typeInfo(Terrain.Attributes).Struct.fields) |field| {
+            inline for (@typeInfo(Terrain.Attributes).@"struct".fields) |field| {
                 if (@field(override.attributes, field.name) and !@field(tile.attributes, field.name)) continue :loop;
             }
 

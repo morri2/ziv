@@ -47,7 +47,7 @@ pub fn renderWorld(
 pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet) void {
     const view = maybe_view orelse return;
 
-    const fow_color = .{ .a = 90, .r = 150, .g = 150, .b = 150 };
+    const fow_color = raylib.Color{ .a = 90, .r = 150, .g = 150, .b = 150 };
     for (bbox.x_min..bbox.x_max) |x| {
         for (bbox.y_min..bbox.y_max) |y| {
             const idx = grid.idxFromCoords(@intCast(x), @intCast(y));
@@ -62,7 +62,7 @@ pub fn renderTerraIncognita(grid: Grid, bbox: BoundingBox, maybe_view: ?*const V
 
 /// For rendering all the shit in the tile, split up into sub function for when rendering from player persepectives
 pub fn renderTerrainLayer(world: *const World, bbox: BoundingBox, maybe_view: ?*const View, ts: TextureSet, rules: *const Rules) void {
-    const outline_color = .{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
+    const outline_color = render.RenderTextureArgs{ .tint = .{ .a = 60, .r = 250, .g = 250, .b = 150 } };
     for (bbox.y_min..bbox.y_max) |y| {
         for (bbox.x_min..bbox.x_max) |x| {
             const idx = world.grid.idxFromCoords(@intCast(x), @intCast(y));
